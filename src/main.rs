@@ -1,9 +1,11 @@
 use eframe::egui;
+use eframe::{egui::{CentralPanel,ScrollArea,Separator,TopBottomPanel,SidePanel,Context}};
 use egui::text::LayoutJob;
 use egui::{ TextFormat, FontId, Color32, Stroke, TextStyle, RichText };
+use egui_demo_lib::easy_mark;
 
 mod files;
-mod syntax_highlighting;
+
 
 
 
@@ -33,33 +35,35 @@ impl Default for Marmol {
 
 impl eframe::App for Marmol {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        let mut job2 = LayoutJob::default();
-         let mut layouter = |ui: &egui::Ui, string: &str, wrap_width: f32| {
-            let mut layout_job = LayoutJob::default();//crate::syntax_highlighting::highlight(ui.ctx(), &theme, string, language);
-            println!("{}",string);
-            layout_job.append(
-                string,
-    10.0,
-    TextFormat {
-        color: Color32::WHITE,
-        ..Default::default()
-    },
-);
-            layout_job.wrap.max_width = wrap_width;
-            ui.fonts().layout_job(layout_job)
-        };
-        egui::CentralPanel::default().show(ctx, |ui| {
-            ui.add(
-                egui::TextEdit::multiline(&mut self.buffer)
-                    .font(egui::TextStyle::Monospace) // for cursor height
-                    .code_editor()
-                    .desired_rows(10)
-                    .lock_focus(true)
-                    .desired_width(f32::INFINITY)
-                    .layouter(&mut layouter),
-                );
-           // syntax_highlighting::word_to_canvas(files::read_file("test.md"),&mut job2,ui);
-        });
+/////////////////////////////////////////////////////////////////////////////////
+        left_side_settings(ctx);
+        let mut edit=easy_mark::EasyMarkEditor::default();
+        CentralPanel::default().show(ctx, |ui| edit.ui(ui));
+        right_side_settings(ctx);
+/////////////////////////////////////////////////////////////////////////////////
     }
 }
 
+fn left_side_settings(ctx:&Context,){
+    SidePanel::left("my_side_panel").show(ctx,|ui| {
+         ui.label("lalal aqui van los contactos y grupos");
+         for i in 0..10 {
+            ui.horizontal(|ui| {
+                ui.label(format!("{} aaaa papu",i));
+            });
+            ui.add(Separator::default().spacing(3.).horizontal());
+        }
+    });
+}
+
+fn right_side_settings(ctx:&Context,){
+    SidePanel::right("my_right_panel").show(ctx,|ui| {
+         ui.label("lalal aqui van los contactos y grupos");
+         for i in 0..10 {
+            ui.horizontal(|ui| {
+                ui.label(format!("{} aaaa papu",i));
+            });
+            ui.add(Separator::default().spacing(3.).horizontal());
+        }
+    });
+}
