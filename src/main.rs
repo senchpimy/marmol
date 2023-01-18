@@ -22,27 +22,35 @@ fn main() {
 
 
 struct Marmol {
-    buffer: String,
+    //buffer: String,
     //tabs: Vec<tabs::Tab>,
     left_collpased:bool,
-    right_collpased:bool,
+    //right_collpased:bool,
     colapse_image:RetainedImage,
+    files_image:RetainedImage,
     search_image:RetainedImage,
     new_file:RetainedImage,
     starred_image:RetainedImage,
+    config_image:RetainedImage,
+    vault_image:RetainedImage,
+    help_image:RetainedImage,
 }
 
 impl Default for Marmol {
     fn default() -> Self {
         Self {
-            buffer: "Arthur".to_owned(),
+            //buffer: "Arthur".to_owned(),
             //tabs:vec![tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),],
             left_collpased:true,
-            right_collpased:true,
+            //right_collpased:true,
             colapse_image: RetainedImage::from_image_bytes("colapse",include_bytes!("../colapse.png"),).unwrap(),
             search_image: RetainedImage::from_image_bytes("search",include_bytes!("../search.png"),).unwrap(),
             new_file: RetainedImage::from_image_bytes("search",include_bytes!("../new_file.png"),).unwrap(),
             starred_image: RetainedImage::from_image_bytes("starred",include_bytes!("../starred.png"),).unwrap(),
+            files_image: RetainedImage::from_image_bytes("files",include_bytes!("../files.png"),).unwrap(),
+            config_image: RetainedImage::from_image_bytes("cpnfiguration",include_bytes!("../configuration.png"),).unwrap(),
+            help_image: RetainedImage::from_image_bytes("help",include_bytes!("../help.png"),).unwrap(),
+            vault_image: RetainedImage::from_image_bytes("vault",include_bytes!("../vault.png"),).unwrap(),
             
         }
     }
@@ -51,8 +59,8 @@ impl Default for Marmol {
 impl eframe::App for Marmol {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
 /////////////////////////////////////////////////////////////////////////////////
-        left_side_settings(ctx,&mut self.left_collpased,&self.colapse_image);
-        left_side_menu(ctx,&self.left_collpased, &self.new_file, &self.search_image, &self.starred_image);
+        left_side_settings(ctx,&mut self.left_collpased,&self.colapse_image,&self.vault_image, &self.help_image, &self.config_image);
+        left_side_menu(ctx,&self.left_collpased, &self.files_image, &self.search_image, &self.starred_image);
  //       let mut edit=easy_mark::EasyMarkEditor::default();
 //        CentralPanel::default().show(ctx, |ui| edit.ui(ui));
 //        egui::Area::new("my_area")
@@ -80,13 +88,13 @@ fn top_panel_menu_left (ui:&mut egui::Ui, new_file:&RetainedImage, search:&Retai
     });
 }
 
-fn left_side_settings(ctx:&Context, colapse:&mut bool,image:&RetainedImage,){
+fn left_side_settings(ctx:&Context, colapse:&mut bool,colapse_img:&RetainedImage, vault:&RetainedImage, help:&RetainedImage, configuration:&RetainedImage){
     let left_panel = SidePanel::left("buttons left").resizable(false).default_width(1.);
     let space = 10.;
     left_panel.show(ctx,|ui| {
         ui.add_space(5.);
         ui.vertical(|ui| {
-        if ui.add(egui::ImageButton::new(image.texture_id(ctx), egui::vec2(18.0, 18.0)).frame(false)).clicked(){
+        if ui.add(egui::ImageButton::new(colapse_img.texture_id(ctx), egui::vec2(18.0, 18.0)).frame(false)).clicked(){
             if *colapse{
                 *colapse=false;
             }else{
@@ -102,7 +110,16 @@ fn left_side_settings(ctx:&Context, colapse:&mut bool,image:&RetainedImage,){
         ui.add_space(space);
         ui.add(egui::Button::new("D").frame(true)); //dayli note
         ui.add_space(space);
-        ui.add(egui::Button::new("P").frame(true)); //Command palete
+        ui.add(egui::Button::new("P").frame(true)); //Command palette
+        ui.with_layout(Layout::bottom_up(Align::Max),|ui|{
+        ui.add_space(5.);
+             if ui.add(egui::ImageButton::new(configuration.texture_id(ctx), egui::vec2(18.0, 18.0)).frame(false)).clicked(){println!("conf")}
+        ui.add_space(5.);
+             if ui.add(egui::ImageButton::new(help.texture_id(ctx), egui::vec2(18.0, 18.0)).frame(false)).clicked(){println!("help")}
+        ui.add_space(5.);
+             if ui.add(egui::ImageButton::new(vault.texture_id(ctx), egui::vec2(18.0, 18.0)).frame(false)).clicked(){println!("vault")}
+
+        });
         });
     });
 }
