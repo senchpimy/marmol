@@ -34,6 +34,11 @@ struct Marmol {
     config_image:RetainedImage,
     vault_image:RetainedImage,
     help_image:RetainedImage,
+    switcher_image:RetainedImage,
+    graph_image:RetainedImage,
+    canvas_image:RetainedImage,
+    daynote_image:RetainedImage,
+    command_image:RetainedImage,
 }
 
 impl Default for Marmol {
@@ -51,6 +56,11 @@ impl Default for Marmol {
             config_image: RetainedImage::from_image_bytes("cpnfiguration",include_bytes!("../configuration.png"),).unwrap(),
             help_image: RetainedImage::from_image_bytes("help",include_bytes!("../help.png"),).unwrap(),
             vault_image: RetainedImage::from_image_bytes("vault",include_bytes!("../vault.png"),).unwrap(),
+            switcher_image: RetainedImage::from_image_bytes("switcher",include_bytes!("../switcher.png"),).unwrap(),
+            graph_image: RetainedImage::from_image_bytes("graph",include_bytes!("../graph.png"),).unwrap(),
+            canvas_image: RetainedImage::from_image_bytes("canvas",include_bytes!("../canvas.png"),).unwrap(),
+            daynote_image: RetainedImage::from_image_bytes("daynote",include_bytes!("../daynote.png"),).unwrap(),
+            command_image: RetainedImage::from_image_bytes("command",include_bytes!("../command.png"),).unwrap(),
             
         }
     }
@@ -59,7 +69,17 @@ impl Default for Marmol {
 impl eframe::App for Marmol {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
 /////////////////////////////////////////////////////////////////////////////////
-        left_side_settings(ctx,&mut self.left_collpased,&self.colapse_image,&self.vault_image, &self.help_image, &self.config_image);
+        let side_settings_images = [&self.colapse_image,
+                                    &self.switcher_image,
+                                    &self.graph_image,
+                                    &self.canvas_image,
+                                    &self.daynote_image,
+                                    &self.command_image,
+                                    &self.vault_image,
+                                    &self.help_image,
+                                    &self.config_image];
+
+        left_side_settings(ctx,&mut self.left_collpased, &side_settings_images);
         left_side_menu(ctx,&self.left_collpased, &self.files_image, &self.search_image, &self.starred_image);
  //       let mut edit=easy_mark::EasyMarkEditor::default();
 //        CentralPanel::default().show(ctx, |ui| edit.ui(ui));
@@ -81,20 +101,20 @@ fn top_panel_menu_left (ui:&mut egui::Ui, new_file:&RetainedImage, search:&Retai
     TopBottomPanel::top("Left Menu").show_inside(ui, |ui|{
         ui.add_space(5.);
         ui.with_layout(Layout::left_to_right(Align::Max),|ui| {
-     if ui.add(egui::ImageButton::new(new_file.texture_id(ctx), egui::vec2(18.0, 18.0)).frame(false)).clicked(){println!("new file")}
+     if ui.add(egui::ImageButton::new(new_file.texture_id(ctx), egui::vec2(18.0, 18.0)).frame(false)).clicked(){println!("files")}
      if ui.add(egui::ImageButton::new(search.texture_id(ctx), egui::vec2(18.0, 18.0)).frame(false)).clicked(){println!("search")}
      if ui.add(egui::ImageButton::new(starred_image.texture_id(ctx), egui::vec2(18.0, 18.0)).frame(false)).clicked(){println!("starred")}
         });
     });
 }
 
-fn left_side_settings(ctx:&Context, colapse:&mut bool,colapse_img:&RetainedImage, vault:&RetainedImage, help:&RetainedImage, configuration:&RetainedImage){
+fn left_side_settings(ctx:&Context, colapse:&mut bool, images:&[&RetainedImage]){
     let left_panel = SidePanel::left("buttons left").resizable(false).default_width(1.);
     let space = 10.;
     left_panel.show(ctx,|ui| {
         ui.add_space(5.);
         ui.vertical(|ui| {
-        if ui.add(egui::ImageButton::new(colapse_img.texture_id(ctx), egui::vec2(18.0, 18.0)).frame(false)).clicked(){
+        if ui.add(egui::ImageButton::new(images[0].texture_id(ctx), egui::vec2(18.0, 18.0)).frame(false)).clicked(){
             if *colapse{
                 *colapse=false;
             }else{
@@ -102,22 +122,22 @@ fn left_side_settings(ctx:&Context, colapse:&mut bool,colapse_img:&RetainedImage
             }
         }
         ui.separator();
-        ui.add(egui::Button::new("q").frame(true)); //quick switcher
+        if ui.add(egui::ImageButton::new(images[1].texture_id(ctx), egui::vec2(18.0, 18.0)).frame(false)).clicked(){println!("switcher")} //quick switcher
         ui.add_space(space);
-        ui.add(egui::Button::new("g").frame(true)); //graph
+        if ui.add(egui::ImageButton::new(images[2].texture_id(ctx), egui::vec2(18.0, 18.0)).frame(false)).clicked(){println!("graph")}//graph
         ui.add_space(space);
-        ui.add(egui::Button::new("C").frame(true)); //canvas
+        if ui.add(egui::ImageButton::new(images[3].texture_id(ctx), egui::vec2(18.0, 18.0)).frame(false)).clicked(){println!("canvas")}//canvas
         ui.add_space(space);
-        ui.add(egui::Button::new("D").frame(true)); //dayli note
+        if ui.add(egui::ImageButton::new(images[4].texture_id(ctx), egui::vec2(18.0, 18.0)).frame(false)).clicked(){println!("daynote")}//note
         ui.add_space(space);
-        ui.add(egui::Button::new("P").frame(true)); //Command palette
+        if ui.add(egui::ImageButton::new(images[5].texture_id(ctx), egui::vec2(18.0, 18.0)).frame(false)).clicked(){println!("commandpale")}//palette
         ui.with_layout(Layout::bottom_up(Align::Max),|ui|{
         ui.add_space(5.);
-             if ui.add(egui::ImageButton::new(configuration.texture_id(ctx), egui::vec2(18.0, 18.0)).frame(false)).clicked(){println!("conf")}
+             if ui.add(egui::ImageButton::new(images[6].texture_id(ctx), egui::vec2(18.0, 18.0)).frame(false)).clicked(){println!("conf")}
         ui.add_space(5.);
-             if ui.add(egui::ImageButton::new(help.texture_id(ctx), egui::vec2(18.0, 18.0)).frame(false)).clicked(){println!("help")}
+             if ui.add(egui::ImageButton::new(images[7].texture_id(ctx), egui::vec2(18.0, 18.0)).frame(false)).clicked(){println!("help")}
         ui.add_space(5.);
-             if ui.add(egui::ImageButton::new(vault.texture_id(ctx), egui::vec2(18.0, 18.0)).frame(false)).clicked(){println!("vault")}
+             if ui.add(egui::ImageButton::new(images[8].texture_id(ctx), egui::vec2(18.0, 18.0)).frame(false)).clicked(){println!("vault")}
 
         });
         });
