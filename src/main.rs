@@ -23,21 +23,27 @@ fn main() {
 
 struct Marmol {
     buffer: String,
-    tabs: Vec<tabs::Tab>,
+    //tabs: Vec<tabs::Tab>,
     left_collpased:bool,
     right_collpased:bool,
-    colapseImage:RetainedImage,
+    colapse_image:RetainedImage,
+    search_image:RetainedImage,
+    new_file:RetainedImage,
+    starred_image:RetainedImage,
 }
 
 impl Default for Marmol {
     fn default() -> Self {
         Self {
             buffer: "Arthur".to_owned(),
-            tabs:vec![tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),],
+            //tabs:vec![tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),],
             left_collpased:true,
             right_collpased:true,
-            colapseImage: RetainedImage::from_image_bytes("colapse",include_bytes!("../colapse.png"),)
-            .unwrap(),
+            colapse_image: RetainedImage::from_image_bytes("colapse",include_bytes!("../colapse.png"),).unwrap(),
+            search_image: RetainedImage::from_image_bytes("search",include_bytes!("../search.png"),).unwrap(),
+            new_file: RetainedImage::from_image_bytes("search",include_bytes!("../new_file.png"),).unwrap(),
+            starred_image: RetainedImage::from_image_bytes("starred",include_bytes!("../starred.png"),).unwrap(),
+            
         }
     }
 }
@@ -45,8 +51,8 @@ impl Default for Marmol {
 impl eframe::App for Marmol {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
 /////////////////////////////////////////////////////////////////////////////////
-        left_side_settings(ctx,&mut self.left_collpased,&self.colapseImage);
-        left_side_menu(ctx,&self.left_collpased);
+        left_side_settings(ctx,&mut self.left_collpased,&self.colapse_image);
+        left_side_menu(ctx,&self.left_collpased, &self.new_file, &self.search_image, &self.starred_image);
  //       let mut edit=easy_mark::EasyMarkEditor::default();
 //        CentralPanel::default().show(ctx, |ui| edit.ui(ui));
 //        egui::Area::new("my_area")
@@ -56,27 +62,30 @@ impl eframe::App for Marmol {
 /////////////////////////////////////////////////////////////////////////////////
     }
 }
-
-fn left_side_settings(ctx:&Context, colapse:&mut bool,image:&RetainedImage,){
-    let left_panel = SidePanel::left("buttons left").resizable(false).default_width(10.);
-    left_panel.show(ctx,|ui| {
-        top_panel_left(ui,colapse,image,ctx);
-        ui.button("q"); //quick switcher
-        ui.button("g"); //graph
-        ui.button("C"); //Canvas
-        ui.button("D"); //Dayle note
-        ui.button("P"); //Command Palette
+fn left_side_menu(ctx:&Context, colapse:&bool, new_file:&RetainedImage, search:&RetainedImage, starred_image:&RetainedImage){
+    let left_panel = SidePanel::left("buttons left menu").resizable(false).default_width(150.);
+    left_panel.show_animated(ctx, *colapse,|ui| {
+        top_panel_menu_left(ui,new_file,search,starred_image,ctx);
     });
 }
-fn top_panel_menu_left (ui:&mut egui::Ui,)  {
-        TopBottomPanel::top("Left Menu").show_inside(ui, |ui|{
-        if ui.button("files").clicked(){println!("Files");}; 
-        if ui.button("search").clicked(){println!("search")};
-        if ui.button("starred").clicked(){println!("starred")};
+
+fn top_panel_menu_left (ui:&mut egui::Ui, new_file:&RetainedImage, search:&RetainedImage, starred_image:&RetainedImage, ctx:&Context)  {
+    TopBottomPanel::top("Left Menu").show_inside(ui, |ui|{
+        ui.add_space(5.);
+        ui.with_layout(Layout::left_to_right(Align::Max),|ui| {
+     if ui.add(egui::ImageButton::new(new_file.texture_id(ctx), egui::vec2(18.0, 18.0)).frame(false)).clicked(){println!("new file")}
+     if ui.add(egui::ImageButton::new(search.texture_id(ctx), egui::vec2(18.0, 18.0)).frame(false)).clicked(){println!("search")}
+     if ui.add(egui::ImageButton::new(starred_image.texture_id(ctx), egui::vec2(18.0, 18.0)).frame(false)).clicked(){println!("starred")}
         });
+    });
 }
-fn top_panel_left (ui:&mut egui::Ui, colapse:&mut bool,image:&RetainedImage, ctx:&Context)  {
-        TopBottomPanel::top("configuraciones").show_inside(ui, |ui|{
+
+fn left_side_settings(ctx:&Context, colapse:&mut bool,image:&RetainedImage,){
+    let left_panel = SidePanel::left("buttons left").resizable(false).default_width(1.);
+    let space = 10.;
+    left_panel.show(ctx,|ui| {
+        ui.add_space(5.);
+        ui.vertical(|ui| {
         if ui.add(egui::ImageButton::new(image.texture_id(ctx), egui::vec2(18.0, 18.0)).frame(false)).clicked(){
             if *colapse{
                 *colapse=false;
@@ -84,12 +93,16 @@ fn top_panel_left (ui:&mut egui::Ui, colapse:&mut bool,image:&RetainedImage, ctx
                 *colapse=true;
             }
         }
+        ui.separator();
+        ui.add(egui::Button::new("q").frame(true)); //quick switcher
+        ui.add_space(space);
+        ui.add(egui::Button::new("g").frame(true)); //graph
+        ui.add_space(space);
+        ui.add(egui::Button::new("C").frame(true)); //canvas
+        ui.add_space(space);
+        ui.add(egui::Button::new("D").frame(true)); //dayli note
+        ui.add_space(space);
+        ui.add(egui::Button::new("P").frame(true)); //Command palete
         });
-}
-fn left_side_menu(ctx:&Context, colapse:&bool){
-    let left_panel = SidePanel::left("buttons left menu").resizable(false).default_width(100.);
-    left_panel.show_animated(ctx, *colapse,|ui| {
-        top_panel_menu_left(ui);
     });
 }
-
