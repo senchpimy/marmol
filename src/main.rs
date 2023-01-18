@@ -3,7 +3,10 @@ use eframe::{egui::{CentralPanel,ScrollArea,Separator,TopBottomPanel,SidePanel,C
 use egui_extras::RetainedImage;
 //use egui::text::LayoutJob;
 //use egui::{ TextFormat, FontId, Color32, Stroke, TextStyle, RichText };
-use egui_demo_lib::easy_mark;
+//use egui_demo_lib::easy_mark;
+
+use std::path::{PathBuf,Path};
+use std::fs;
 
 mod files;
 mod tabs;
@@ -14,17 +17,18 @@ fn main() {
         ..Default::default()
     };
     eframe::run_native(
-        "My egui App",
+        "Marmol",
         options,
         Box::new(|_cc| Box::new(Marmol::default())),
     )
 }
 
 
-struct Marmol {
+struct Marmol{
     //buffer: String,
     //tabs: Vec<tabs::Tab>,
     left_collpased:bool,
+    vault: PathBuf,
     //right_collpased:bool,
     colapse_image:RetainedImage,
     files_image:RetainedImage,
@@ -46,6 +50,7 @@ impl Default for Marmol {
         Self {
             //buffer: "Arthur".to_owned(),
             //tabs:vec![tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),],
+            vault:PathBuf::new(),
             left_collpased:true,
             //right_collpased:true,
             colapse_image: RetainedImage::from_image_bytes("colapse",include_bytes!("../colapse.png"),).unwrap(),
@@ -91,7 +96,7 @@ impl eframe::App for Marmol {
     }
 }
 fn left_side_menu(ctx:&Context, colapse:&bool, new_file:&RetainedImage, search:&RetainedImage, starred_image:&RetainedImage){
-    let left_panel = SidePanel::left("buttons left menu").resizable(false).default_width(150.);
+    let left_panel = SidePanel::left("buttons left menu").default_width(150.);
     left_panel.show_animated(ctx, *colapse,|ui| {
         top_panel_menu_left(ui,new_file,search,starred_image,ctx);
     });
@@ -99,13 +104,22 @@ fn left_side_menu(ctx:&Context, colapse:&bool, new_file:&RetainedImage, search:&
 
 fn top_panel_menu_left (ui:&mut egui::Ui, new_file:&RetainedImage, search:&RetainedImage, starred_image:&RetainedImage, ctx:&Context)  {
     TopBottomPanel::top("Left Menu").show_inside(ui, |ui|{
-        ui.add_space(5.);
-        ui.with_layout(Layout::left_to_right(Align::Max),|ui| {
-     if ui.add(egui::ImageButton::new(new_file.texture_id(ctx), egui::vec2(18.0, 18.0)).frame(false)).clicked(){println!("files")}
-     if ui.add(egui::ImageButton::new(search.texture_id(ctx), egui::vec2(18.0, 18.0)).frame(false)).clicked(){println!("search")}
-     if ui.add(egui::ImageButton::new(starred_image.texture_id(ctx), egui::vec2(18.0, 18.0)).frame(false)).clicked(){println!("starred")}
+        ui.with_layout(Layout::left_to_right(Align::Min),|ui| {
+     if ui.add(ImageButton::new(new_file.texture_id(ctx), egui::vec2(18.0, 18.0)).frame(false)).clicked(){println!("files")}
+     if ui.add(ImageButton::new(search.texture_id(ctx), egui::vec2(18.0, 18.0)).frame(false)).clicked(){println!("search")}
+     if ui.add(ImageButton::new(starred_image.texture_id(ctx), egui::vec2(18.0, 18.0)).frame(false)).clicked(){println!("starred")}
         });
     });
+
+        for entry in fs::read_dir("/home/plof/Documents/1er-semestre-Fes/1er semestre/").unwrap(){
+            let file_name = entry.unwrap().file_name().to_str().unwrap().to_string();
+            if file_name.len()>21{
+                let (file_name, _) =file_name.split_at(18);
+                ui.label(format!("{}...",file_name)); //21
+            }else{
+                ui.label(file_name);
+            }
+        }
 }
 
 fn left_side_settings(ctx:&Context, colapse:&mut bool, images:&[&RetainedImage]){
@@ -114,30 +128,30 @@ fn left_side_settings(ctx:&Context, colapse:&mut bool, images:&[&RetainedImage])
     left_panel.show(ctx,|ui| {
         ui.add_space(5.);
         ui.vertical(|ui| {
-        if ui.add(egui::ImageButton::new(images[0].texture_id(ctx), egui::vec2(18.0, 18.0)).frame(false)).clicked(){
+        if ui.add(ImageButton::new(images[0].texture_id(ctx), egui::vec2(18.0, 18.0)).frame(false)).clicked(){
             if *colapse{
                 *colapse=false;
             }else{
                 *colapse=true;
             }
         }
-        ui.separator();
-        if ui.add(egui::ImageButton::new(images[1].texture_id(ctx), egui::vec2(18.0, 18.0)).frame(false)).clicked(){println!("switcher")} //quick switcher
+        ui.add(Separator::default());
+        if ui.add(ImageButton::new(images[1].texture_id(ctx), egui::vec2(18.0, 18.0)).frame(false)).clicked(){println!("switcher")} //quick switcher
         ui.add_space(space);
-        if ui.add(egui::ImageButton::new(images[2].texture_id(ctx), egui::vec2(18.0, 18.0)).frame(false)).clicked(){println!("graph")}//graph
+        if ui.add(ImageButton::new(images[2].texture_id(ctx), egui::vec2(18.0, 18.0)).frame(false)).clicked(){println!("graph")}//graph
         ui.add_space(space);
-        if ui.add(egui::ImageButton::new(images[3].texture_id(ctx), egui::vec2(18.0, 18.0)).frame(false)).clicked(){println!("canvas")}//canvas
+        if ui.add(ImageButton::new(images[3].texture_id(ctx), egui::vec2(18.0, 18.0)).frame(false)).clicked(){println!("canvas")}//canvas
         ui.add_space(space);
-        if ui.add(egui::ImageButton::new(images[4].texture_id(ctx), egui::vec2(18.0, 18.0)).frame(false)).clicked(){println!("daynote")}//note
+        if ui.add(ImageButton::new(images[4].texture_id(ctx), egui::vec2(18.0, 18.0)).frame(false)).clicked(){println!("daynote")}//note
         ui.add_space(space);
-        if ui.add(egui::ImageButton::new(images[5].texture_id(ctx), egui::vec2(18.0, 18.0)).frame(false)).clicked(){println!("commandpale")}//palette
+        if ui.add(ImageButton::new(images[5].texture_id(ctx), egui::vec2(18.0, 18.0)).frame(false)).clicked(){println!("commandpale")}//palette
         ui.with_layout(Layout::bottom_up(Align::Max),|ui|{
         ui.add_space(5.);
-             if ui.add(egui::ImageButton::new(images[6].texture_id(ctx), egui::vec2(18.0, 18.0)).frame(false)).clicked(){println!("conf")}
+             if ui.add(ImageButton::new(images[6].texture_id(ctx), egui::vec2(18.0, 18.0)).frame(false)).clicked(){println!("conf")}
         ui.add_space(5.);
-             if ui.add(egui::ImageButton::new(images[7].texture_id(ctx), egui::vec2(18.0, 18.0)).frame(false)).clicked(){println!("help")}
+             if ui.add(ImageButton::new(images[7].texture_id(ctx), egui::vec2(18.0, 18.0)).frame(false)).clicked(){println!("help")}
         ui.add_space(5.);
-             if ui.add(egui::ImageButton::new(images[8].texture_id(ctx), egui::vec2(18.0, 18.0)).frame(false)).clicked(){println!("vault")}
+             if ui.add(ImageButton::new(images[8].texture_id(ctx), egui::vec2(18.0, 18.0)).frame(false)).clicked(){println!("vault")}
 
         });
         });
