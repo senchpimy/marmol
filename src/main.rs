@@ -29,6 +29,8 @@ struct Marmol{
     //tabs: Vec<tabs::Tab>,
     left_collpased:bool,
     vault: String,
+    current_file: String,
+    current_left_tab: i8,
     //right_collpased:bool,
     colapse_image:RetainedImage,
     files_image:RetainedImage,
@@ -51,6 +53,8 @@ impl Default for Marmol {
             //buffer: "Arthur".to_owned(),
             //tabs:vec![tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),],
             vault:String::from("/home/plof/Documents/1er-semestre-Fes/1er semestre/"),
+            current_file:String::new(),
+            current_left_tab:0,
             left_collpased:true,
             //right_collpased:true,
             colapse_image: RetainedImage::from_image_bytes("colapse",include_bytes!("../colapse.png"),).unwrap(),
@@ -73,7 +77,6 @@ impl Default for Marmol {
 
 impl eframe::App for Marmol {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-/////////////////////////////////////////////////////////////////////////////////
         let side_settings_images = [&self.colapse_image,
                                     &self.switcher_image,
                                     &self.graph_image,
@@ -83,9 +86,13 @@ impl eframe::App for Marmol {
                                     &self.vault_image,
                                     &self.help_image,
                                     &self.config_image];
-
         left_side_settings(ctx,&mut self.left_collpased, &side_settings_images);
-        left_side_menu(ctx,&self.left_collpased, &self.files_image, &self.search_image, &self.starred_image,&self.vault);
+
+        let menu_images = vec![&self.files_image, 
+                               &self.search_image, 
+                               &self.starred_image,];
+        left_side_menu(ctx,&self.left_collpased,menu_images, &self.vault, &self.current_file, &mut self.current_left_tab);
+
  //       let mut edit=easy_mark::EasyMarkEditor::default();
 //        CentralPanel::default().show(ctx, |ui| edit.ui(ui));
 //        egui::Area::new("my_area")
@@ -95,38 +102,47 @@ impl eframe::App for Marmol {
 /////////////////////////////////////////////////////////////////////////////////
     }
 }
-fn left_side_menu(ctx:&Context, colapse:&bool, files:&RetainedImage, search:&RetainedImage, starred_image:&RetainedImage, path:&str){
+fn left_side_menu(ctx:&Context, colapse:&bool, images:Vec<&RetainedImage> , path:&str, current_file:&str,left_tab:&mut i8){
     let left_panel = SidePanel::left("buttons left menu").default_width(100.).min_width(100.).max_width(300.);
-    let textures = vec![files.texture_id(ctx), search.texture_id(ctx),starred_image.texture_id(ctx)];
+    let textures = vec![images[0].texture_id(ctx), images[1].texture_id(ctx), images[2].texture_id(ctx)];
     left_panel.show_animated(ctx, *colapse,|ui| {
-        top_panel_menu_left(ui,textures, path);
+        top_panel_menu_left(ui,textures, path, current_file,left_tab);
     });
 }
 
-fn top_panel_menu_left (ui:&mut egui::Ui, textures:Vec<TextureId>, path:&str){
+fn top_panel_menu_left (ui:&mut egui::Ui, textures:Vec<TextureId>, path:&str, current_file:&str,left_tab:&mut i8){
     TopBottomPanel::top("Left Menu").show_inside(ui, |ui|{
         ui.with_layout(Layout::left_to_right(Align::Min),|ui| {
-     if ui.add(ImageButton::new(textures[0], egui::vec2(18.0, 18.0)).frame(false)).clicked(){println!("files")}
-     if ui.add(ImageButton::new(textures[1], egui::vec2(18.0, 18.0)).frame(false)).clicked(){println!("search")}
-     if ui.add(ImageButton::new(textures[2], egui::vec2(18.0, 18.0)).frame(false)).clicked(){println!("starred")}
+     if ui.add(ImageButton::new(textures[0], egui::vec2(18.0, 18.0)).frame(false)).clicked(){println!("files");*left_tab=0;}
+     if ui.add(ImageButton::new(textures[1], egui::vec2(18.0, 18.0)).frame(false)).clicked(){println!("search"); *left_tab=1;}
+     if ui.add(ImageButton::new(textures[2], egui::vec2(18.0, 18.0)).frame(false)).clicked(){println!("starred"); *left_tab=2;}
         });
     });
-    let scrolling_files = ScrollArea::vertical();
-    scrolling_files.show(ui,|ui| {
-        render_files(ui,path);
+    if *left_tab==0{
+        let scrolling_files = ScrollArea::vertical();
+        scrolling_files.show(ui,|ui| {
+        render_files(ui,path, &current_file);
         });
+    }else if *left_tab==1{
+        println!("searching")
+    }else if *left_tab==2{
+        println!("stars")
+    }
 }
- fn render_files(ui:&mut egui::Ui, path:&str){
+fn render_files(ui:&mut egui::Ui, path:&str, current_file:&str){
         for entry in fs::read_dir(path).unwrap(){
             let file_location = entry.unwrap().path().to_str().unwrap().to_string();
             let file_name=Path::new(&file_location).file_name().expect("No fails").to_str().unwrap();
             if Path::new(&file_location).is_dir(){
                 let col = egui::containers::collapsing_header::CollapsingHeader::new(file_name);
                 col.show(ui, |ui| {
-                render_files(ui,&file_location);
+                render_files(ui,&file_location, current_file);
                 });
             }else{
-                ui.label(file_name);
+                if ui.add(egui::SelectableLabel::new(true, file_name)).clicked() {
+                    let current_file = &file_location;
+                    println!("{}",current_file);
+                }
             }
         }
 
