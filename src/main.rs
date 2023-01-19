@@ -1,5 +1,5 @@
-use eframe::egui;
-use eframe::{egui::{CentralPanel,ScrollArea,Separator,TopBottomPanel,SidePanel,Context,Layout,Align,ImageButton}};
+//use eframe::egui;
+use eframe::{egui::{CentralPanel,ScrollArea,Separator,TopBottomPanel,SidePanel,Context,Layout,Align,ImageButton,TextureId}};
 use egui_extras::RetainedImage;
 //use egui::text::LayoutJob;
 //use egui::{ TextFormat, FontId, Color32, Stroke, TextStyle, RichText };
@@ -8,8 +8,8 @@ use egui_extras::RetainedImage;
 use std::path::{PathBuf,Path};
 use std::fs;
 
-mod files;
-mod tabs;
+//mod files;
+//mod tabs;
 
 fn main() {
     let options = eframe::NativeOptions {
@@ -28,7 +28,7 @@ struct Marmol{
     //buffer: String,
     //tabs: Vec<tabs::Tab>,
     left_collpased:bool,
-    vault: PathBuf,
+    vault: String,
     //right_collpased:bool,
     colapse_image:RetainedImage,
     files_image:RetainedImage,
@@ -50,7 +50,7 @@ impl Default for Marmol {
         Self {
             //buffer: "Arthur".to_owned(),
             //tabs:vec![tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),],
-            vault:PathBuf::new(),
+            vault:String::from("/home/plof/Documents/1er-semestre-Fes/1er semestre/"),
             left_collpased:true,
             //right_collpased:true,
             colapse_image: RetainedImage::from_image_bytes("colapse",include_bytes!("../colapse.png"),).unwrap(),
@@ -85,7 +85,7 @@ impl eframe::App for Marmol {
                                     &self.config_image];
 
         left_side_settings(ctx,&mut self.left_collpased, &side_settings_images);
-        left_side_menu(ctx,&self.left_collpased, &self.files_image, &self.search_image, &self.starred_image);
+        left_side_menu(ctx,&self.left_collpased, &self.files_image, &self.search_image, &self.starred_image,&self.vault);
  //       let mut edit=easy_mark::EasyMarkEditor::default();
 //        CentralPanel::default().show(ctx, |ui| edit.ui(ui));
 //        egui::Area::new("my_area")
@@ -95,32 +95,42 @@ impl eframe::App for Marmol {
 /////////////////////////////////////////////////////////////////////////////////
     }
 }
-fn left_side_menu(ctx:&Context, colapse:&bool, new_file:&RetainedImage, search:&RetainedImage, starred_image:&RetainedImage){
-    let left_panel = SidePanel::left("buttons left menu").default_width(150.);
+fn left_side_menu(ctx:&Context, colapse:&bool, files:&RetainedImage, search:&RetainedImage, starred_image:&RetainedImage, path:&str){
+    let left_panel = SidePanel::left("buttons left menu").default_width(100.).min_width(100.).max_width(300.);
+    let textures = vec![files.texture_id(ctx), search.texture_id(ctx),starred_image.texture_id(ctx)];
     left_panel.show_animated(ctx, *colapse,|ui| {
-        top_panel_menu_left(ui,new_file,search,starred_image,ctx);
+        top_panel_menu_left(ui,textures, path);
     });
 }
 
-fn top_panel_menu_left (ui:&mut egui::Ui, new_file:&RetainedImage, search:&RetainedImage, starred_image:&RetainedImage, ctx:&Context)  {
+fn top_panel_menu_left (ui:&mut egui::Ui, textures:Vec<TextureId>, path:&str){
     TopBottomPanel::top("Left Menu").show_inside(ui, |ui|{
         ui.with_layout(Layout::left_to_right(Align::Min),|ui| {
-     if ui.add(ImageButton::new(new_file.texture_id(ctx), egui::vec2(18.0, 18.0)).frame(false)).clicked(){println!("files")}
-     if ui.add(ImageButton::new(search.texture_id(ctx), egui::vec2(18.0, 18.0)).frame(false)).clicked(){println!("search")}
-     if ui.add(ImageButton::new(starred_image.texture_id(ctx), egui::vec2(18.0, 18.0)).frame(false)).clicked(){println!("starred")}
+     if ui.add(ImageButton::new(textures[0], egui::vec2(18.0, 18.0)).frame(false)).clicked(){println!("files")}
+     if ui.add(ImageButton::new(textures[1], egui::vec2(18.0, 18.0)).frame(false)).clicked(){println!("search")}
+     if ui.add(ImageButton::new(textures[2], egui::vec2(18.0, 18.0)).frame(false)).clicked(){println!("starred")}
         });
     });
-
-        for entry in fs::read_dir("/home/plof/Documents/1er-semestre-Fes/1er semestre/").unwrap(){
-            let file_name = entry.unwrap().file_name().to_str().unwrap().to_string();
-            if file_name.len()>21{
-                let (file_name, _) =file_name.split_at(18);
-                ui.label(format!("{}...",file_name)); //21
+    let scrolling_files = ScrollArea::vertical();
+    scrolling_files.show(ui,|ui| {
+        render_files(ui,path);
+        });
+}
+ fn render_files(ui:&mut egui::Ui, path:&str){
+        for entry in fs::read_dir(path).unwrap(){
+            let file_location = entry.unwrap().path().to_str().unwrap().to_string();
+            let file_name=Path::new(&file_location).file_name().expect("No fails").to_str().unwrap();
+            if Path::new(&file_location).is_dir(){
+                let col = egui::containers::collapsing_header::CollapsingHeader::new(file_name);
+                col.show(ui, |ui| {
+                render_files(ui,&file_location);
+                });
             }else{
                 ui.label(file_name);
             }
         }
-}
+
+ }
 
 fn left_side_settings(ctx:&Context, colapse:&mut bool, images:&[&RetainedImage]){
     let left_panel = SidePanel::left("buttons left").resizable(false).default_width(1.);
