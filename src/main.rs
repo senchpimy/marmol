@@ -1,14 +1,15 @@
 //use eframe::egui;
-use eframe::{egui::{CentralPanel,ScrollArea,Separator,TopBottomPanel,SidePanel,Context,Layout,Align,ImageButton,TextureId, Link}};
+use eframe::{egui::{CentralPanel,ScrollArea,Separator,TopBottomPanel,SidePanel,Context,Layout,Align,ImageButton,TextureId, Link,Style,Ui,Frame,Sense}};
 use egui_extras::RetainedImage;
 use json;
 //use egui::text::LayoutJob;
 //use egui::{ TextFormat, FontId, Color32, Stroke, TextStyle, RichText };
 //use egui_demo_lib::easy_mark;
 
-use std::path::{PathBuf,Path};
+use std::path::Path;
 use std::fs;
 
+mod search;
 //mod files;
 //mod tabs;
 
@@ -33,6 +34,9 @@ struct Marmol{
     current_file: String,
     current_left_tab: i8,
     search_string_menu:String,
+    prev_search_string_menu:String,
+    search_results:Vec<search::MenuItem>,
+    //regex_search:bool,
     //right_collpased:bool,
     colapse_image:RetainedImage,
     files_image:RetainedImage,
@@ -56,7 +60,11 @@ impl Default for Marmol {
             //tabs:vec![tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),],
             vault:String::from("/home/plof/Documents/1er-semestre-Fes/1er semestre/"),
             current_file:String::new(),
+
             search_string_menu:"".to_owned(),
+            prev_search_string_menu:"".to_owned(),
+            search_results:vec![],
+
             current_left_tab:0,
             left_collpased:true,
             //right_collpased:true,
@@ -95,7 +103,8 @@ impl eframe::App for Marmol {
                                &self.search_image, 
                                &self.starred_image,];
         left_side_menu(ctx,&self.left_collpased,menu_images, 
-                       &self.vault, &self.current_file, &mut self.current_left_tab,&mut self.search_string_menu);
+                       &self.vault, &self.current_file, &mut self.current_left_tab,
+                       &mut self.search_string_menu,&mut self.prev_search_string_menu, &mut self.search_results);
 
  //       let mut edit=easy_mark::EasyMarkEditor::default();
 //        CentralPanel::default().show(ctx, |ui| edit.ui(ui));
@@ -107,15 +116,17 @@ impl eframe::App for Marmol {
     }
 }
 fn left_side_menu(ctx:&Context, colapse:&bool, images:Vec<&RetainedImage> , 
-                  path:&str, current_file:&str, left_tab:&mut i8, search_string_menu:&mut String){
+                  path:&str, current_file:&str, left_tab:&mut i8, search_string_menu:&mut String,
+                  prev_search_string_menu:&mut String, search_results:&mut Vec<search::MenuItem>){
     let left_panel = SidePanel::left("buttons left menu").default_width(100.).min_width(100.).max_width(300.);
     let textures = vec![images[0].texture_id(ctx), images[1].texture_id(ctx), images[2].texture_id(ctx)];
     left_panel.show_animated(ctx, *colapse,|ui| {
-        top_panel_menu_left(ui,textures, path, current_file,left_tab,search_string_menu);
+        top_panel_menu_left(ui,textures, path, current_file,left_tab,search_string_menu,prev_search_string_menu,search_results);
     });
 }
 
-fn top_panel_menu_left (ui:&mut egui::Ui, textures:Vec<TextureId>, path:&str, current_file:&str,left_tab:&mut i8, search_string_menu:&mut String){
+fn top_panel_menu_left (ui:&mut egui::Ui, textures:Vec<TextureId>, path:&str, current_file:&str,left_tab:&mut i8, 
+                        search_string_menu:&mut String,prev_search_string_menu:&mut String, search_results:&mut Vec<search::MenuItem>){
     TopBottomPanel::top("Left Menu").show_inside(ui, |ui|{
         ui.with_layout(Layout::left_to_right(Align::Min),|ui| {
      if ui.add(ImageButton::new(textures[0], egui::vec2(18.0, 18.0)).frame(false)).clicked(){println!("files");*left_tab=0;}
@@ -130,11 +141,27 @@ fn top_panel_menu_left (ui:&mut egui::Ui, textures:Vec<TextureId>, path:&str, cu
         });
     }else if *left_tab==1{
         ui.text_edit_singleline(search_string_menu);
+        if search_string_menu!=prev_search_string_menu{
+            *search_results = search::check_dir(path,search_string_menu,&false);
+            *prev_search_string_menu=search_string_menu.to_string();
+        }
+        let style_frame = Style::default();
+        let frame = Frame::group(&style_frame);
+        if search_string_menu.len()<1{
+            *search_results = vec![];
+        }
+            for i in search_results{
+                frame.show(ui, |ui|{
+                    ui.label(&i.path);
+                    ui.label(&i.text);
+                    ui.button("test");
+                });
+            }
     }else if *left_tab==2{
         let contents = fs::read_to_string(format!("{}/.obsidian/starred.json",path))
             .expect("Should have been able to read the file");
         let parsed = json::parse(&contents).unwrap();
-        for (key, value) in parsed.entries() {
+        for (_key, value) in parsed.entries() {
             for i in 0..value.len(){
                 let text=format!("{}",parsed["items"][i]["path"]);
                 ui.label(&text);
