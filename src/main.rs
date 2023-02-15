@@ -1,4 +1,5 @@
 use egui_extras::RetainedImage;
+use egui::CentralPanel;
 //use egui::text::LayoutJob;
 //use egui_demo_lib::easy_mark;
 
@@ -89,8 +90,12 @@ impl Default for Marmol {
 impl eframe::App for Marmol {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         if self.current_window==0 { //welcome screen
+            CentralPanel::default().show(ctx,|ui|{
+                ui.heading("Marmol");
+                ui.label("select a vault");
+                ui.label("configuration");
+            });
             
-            unimplemented!()
         }   else if self.current_window==1{
             let side_settings_images = [&self.colapse_image,
                                         &self.switcher_image,
@@ -110,8 +115,11 @@ impl eframe::App for Marmol {
                            &self.vault, &self.current_file, &mut self.current_left_tab,
                            &mut self.search_string_menu,&mut self.prev_search_string_menu, &mut self.search_results,
                            &mut self.regex_search);
+
+        }else if self.current_window==2{ //configuration
+            
         };
- //       let mut edit=easy_mark::EasyMarkEditor::default();
+//       let mut edit=easy_mark::EasyMarkEditor::default();
 //        CentralPanel::default().show(ctx, |ui| edit.ui(ui));
 //        egui::Area::new("my_area")
 //    .show(ctx, |ui| {
