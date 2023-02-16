@@ -12,10 +12,12 @@
 #![allow(clippy::manual_range_contains)]
 
 mod color_test;
+mod demo;
 pub mod easy_mark;
 pub mod syntax_highlighting;
 
 pub use color_test::ColorTest;
+pub use demo::DemoWindows;
 
 // ----------------------------------------------------------------------------
 
@@ -56,11 +58,51 @@ pub const LOREM_IPSUM_LONG: &str = "Lorem ipsum dolor sit amet, consectetur adip
 Curabitur pretium tincidunt lacus. Nulla gravida orci a odio. Nullam varius, turpis et commodo pharetra, est eros bibendum elit, nec luctus magna felis sollicitudin mauris. Integer in mauris eu nibh euismod gravida. Duis ac tellus et risus vulputate vehicula. Donec lobortis risus a elit. Etiam tempor. Ut ullamcorper, ligula eu tempor congue, eros est euismod turpis, id tincidunt sapien risus a quam. Maecenas fermentum consequat mi. Donec fermentum. Pellentesque malesuada nulla a mi. Duis sapien sem, aliquet nec, commodo eget, consequat quis, neque. Aliquam faucibus, elit ut dictum aliquet, felis nisl adipiscing sapien, sed malesuada diam lacus eget erat. Cras mollis scelerisque nunc. Nullam arcu. Aliquam consequat. Curabitur augue lorem, dapibus quis, laoreet et, pretium ac, nisi. Aenean magna nisl, mollis quis, molestie eu, feugiat in, orci. In hac habitasse platea dictumst.";
 
 // ----------------------------------------------------------------------------
+
+#[test]
+fn test_egui_e2e() {
+    let mut demo_windows = crate::DemoWindows::default();
+    let ctx = egui::Context::default();
+    let raw_input = egui::RawInput::default();
+
+    const NUM_FRAMES: usize = 5;
+    for _ in 0..NUM_FRAMES {
+        let full_output = ctx.run(raw_input.clone(), |ctx| {
+            demo_windows.ui(ctx);
+        });
+        let clipped_primitives = ctx.tessellate(full_output.shapes);
+        assert!(!clipped_primitives.is_empty());
+    }
+}
+
+#[test]
+fn test_egui_zero_window_size() {
+    let mut demo_windows = crate::DemoWindows::default();
+    let ctx = egui::Context::default();
+    let raw_input = egui::RawInput {
+        screen_rect: Some(egui::Rect::from_min_max(egui::Pos2::ZERO, egui::Pos2::ZERO)),
+        ..Default::default()
+    };
+
+    const NUM_FRAMES: usize = 5;
+    for _ in 0..NUM_FRAMES {
+        let full_output = ctx.run(raw_input.clone(), |ctx| {
+            demo_windows.ui(ctx);
+        });
+        let clipped_primitives = ctx.tessellate(full_output.shapes);
+        assert!(
+            clipped_primitives.is_empty(),
+            "There should be nothing to show, has at least one primitive with clip_rect: {:?}",
+            clipped_primitives[0].clip_rect
+        );
+    }
+}
+
 // ----------------------------------------------------------------------------
 
 /// Detect narrow screens. This is used to show a simpler UI on mobile devices,
 /// especially for the web demo at <https://egui.rs>.
 pub fn is_mobile(ctx: &egui::Context) -> bool {
-    let screen_size = ctx.input().screen_rect().size();
+    let screen_size = ctx.screen_rect().size();
     screen_size.x < 550.0
 }

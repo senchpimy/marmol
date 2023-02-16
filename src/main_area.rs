@@ -8,7 +8,7 @@ use std::path::Path;
 
 
 pub fn left_side_menu(ctx:&Context, colapse:&bool, images:Vec<&RetainedImage> , 
-                  path:&str, current_file:&str, left_tab:&mut i8, search_string_menu:&mut String,
+                  path:&str, current_file:&mut String, left_tab:&mut i8, search_string_menu:&mut String,
                   prev_search_string_menu:&mut String, search_results:&mut Vec<search::MenuItem>,
                   regex_search:&mut bool){
     let left_panel = SidePanel::left("buttons left menu").default_width(100.).min_width(100.).max_width(300.);
@@ -18,7 +18,7 @@ pub fn left_side_menu(ctx:&Context, colapse:&bool, images:Vec<&RetainedImage> ,
     });
 }
 
-fn top_panel_menu_left (ui:&mut egui::Ui, textures:Vec<TextureId>, path:&str, current_file:&str,left_tab:&mut i8, 
+fn top_panel_menu_left (ui:&mut egui::Ui, textures:Vec<TextureId>, path:&str, current_file:&mut String,left_tab:&mut i8, 
                         search_string_menu:&mut String,prev_search_string_menu:&mut String, search_results:&mut Vec<search::MenuItem>,
                         regex_search:&mut bool){
     TopBottomPanel::top("Left Menu").show_inside(ui, |ui|{
@@ -31,7 +31,7 @@ fn top_panel_menu_left (ui:&mut egui::Ui, textures:Vec<TextureId>, path:&str, cu
     if *left_tab==0{
         let scrolling_files = ScrollArea::vertical();
         scrolling_files.show(ui,|ui| {
-        render_files(ui,path, &current_file);
+        render_files(ui,path, current_file);
         });
     }else if *left_tab==1{
         ui.text_edit_singleline(search_string_menu);
@@ -75,9 +75,9 @@ fn top_panel_menu_left (ui:&mut egui::Ui, textures:Vec<TextureId>, path:&str, cu
     }
 }
 
-fn render_files(ui:&mut egui::Ui, path:&str, current_file:&str){
+fn render_files(ui:&mut egui::Ui, path:&str,current_file:&mut String){
         for entry in fs::read_dir(path).unwrap(){
-            let file_location = entry.unwrap().path().to_str().unwrap().to_string();
+            let mut file_location = entry.unwrap().path().to_str().unwrap().to_string();
             let file_name=Path::new(&file_location).file_name().expect("No fails").to_str().unwrap();
             if Path::new(&file_location).is_dir(){
                 let col = egui::containers::collapsing_header::CollapsingHeader::new(file_name);
@@ -87,7 +87,7 @@ fn render_files(ui:&mut egui::Ui, path:&str, current_file:&str){
             }else{
                 let clickable = Link::new(file_name);
                 if ui.add(clickable).clicked() {
-                    let current_file = &file_location;
+                    *current_file = file_location;
                     println!("{}",current_file);
                 }
             }

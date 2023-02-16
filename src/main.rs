@@ -1,12 +1,13 @@
 use egui_extras::RetainedImage;
 use egui::CentralPanel;
 //use egui::text::LayoutJob;
-//use egui_demo_lib::easy_mark;
+use egui_demo_lib::easy_mark;
+use std::io;
 
 
 mod search;
 mod main_area;
-//mod files;
+mod files;
 //mod tabs;
 
 fn main() {
@@ -23,7 +24,8 @@ fn main() {
 
 
 struct Marmol{
-    //buffer: String,
+    buffer: String,
+    prev_current_file: String,
     //tabs: Vec<tabs::Tab>,
     current_window: i8,
 
@@ -54,12 +56,14 @@ struct Marmol{
 
 impl Default for Marmol {
     fn default() -> Self {
+        let current="/home/plof/Documents/1er-semestre-Fes/1er semestre/Tareas.md";
         Self {
             current_window:1,
-            //buffer: "Arthur".to_owned(),
+            prev_current_file: current.to_owned(),
+            buffer: files::read_file(current),
             //tabs:vec![tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),],
             vault:String::from("/home/plof/Documents/1er-semestre-Fes/1er semestre/"),
-            current_file:String::new(),
+            current_file:current.to_owned(),
 
             search_string_menu:"".to_owned(),
             prev_search_string_menu:"".to_owned(),
@@ -96,7 +100,7 @@ impl eframe::App for Marmol {
                 ui.label("configuration");
             });
             
-        }   else if self.current_window==1{
+        }   else if self.current_window==1{ //Main screen
             let side_settings_images = [&self.colapse_image,
                                         &self.switcher_image,
                                         &self.graph_image,
@@ -112,10 +116,20 @@ impl eframe::App for Marmol {
                                    &self.search_image, 
                                    &self.starred_image,];
             main_area::left_side_menu(ctx,&self.left_collpased,menu_images, 
-                           &self.vault, &self.current_file, &mut self.current_left_tab,
+                           &self.vault, &mut self.current_file, &mut self.current_left_tab,
                            &mut self.search_string_menu,&mut self.prev_search_string_menu, &mut self.search_results,
                            &mut self.regex_search);
 
+            CentralPanel::default().show(ctx, |ui|{
+               if self.prev_current_file!=self.current_file{
+                self.buffer = files::read_file(&self.current_file);
+                self.prev_current_file = String::from(&self.current_file);
+
+                //println!("{}",files::read_file(&self.current_file));
+               }
+                easy_mark::easy_mark(ui,&self.buffer);
+                //println!("{}",&self.current_file);
+            });
         }else if self.current_window==2{ //configuration
             
         };

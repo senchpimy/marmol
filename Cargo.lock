@@ -706,6 +706,8 @@ dependencies = [
 [[package]]
 name = "egui_demo_lib"
 version = "0.20.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b191e5870e6cff885cf56d4e6c3a10ce0c66d9d855a92c1eaca96b0f1111c0aa"
 dependencies = [
  "egui",
  "egui_extras",

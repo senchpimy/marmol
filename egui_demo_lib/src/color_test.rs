@@ -460,24 +460,21 @@ fn paint_fine_lines_and_text(painter: &egui::Painter, mut rect: Rect, color: Col
                 Align2::LEFT_TOP,
                 format!("{:.0}% white", 100.0 * opacity),
                 FontId::proportional(14.0),
-                //Color32::WHITE.gamma_multiply(opacity),
-                Color32::WHITE,
+                Color32::WHITE.gamma_multiply(opacity),
             );
             painter.text(
                 rect.center_top() + vec2(80.0, y),
                 Align2::LEFT_TOP,
                 format!("{:.0}% gray", 100.0 * opacity),
                 FontId::proportional(14.0),
-                //Color32::GRAY.gamma_multiply(opacity),
-                Color32::GRAY,
+                Color32::GRAY.gamma_multiply(opacity),
             );
             painter.text(
                 rect.center_top() + vec2(160.0, y),
                 Align2::LEFT_TOP,
                 format!("{:.0}% black", 100.0 * opacity),
                 FontId::proportional(14.0),
-                //Color32::BLACK.gamma_multiply(opacity),
-                Color32::BLACK,
+                Color32::BLACK.gamma_multiply(opacity),
             );
             y += 20.0;
         }
