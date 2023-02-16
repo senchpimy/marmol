@@ -1,5 +1,5 @@
 use crate::search;
-use eframe::{egui::{CentralPanel,ScrollArea,Separator,TopBottomPanel,SidePanel,Context,Layout,Align,ImageButton,TextureId, Link,Style,Frame}};
+use eframe::{egui::{ScrollArea,Separator,TopBottomPanel,SidePanel,Context,Layout,Align,ImageButton,TextureId, Link,Style,Frame}};
 use egui_extras::RetainedImage;
 use json;
 use egui::{ TextFormat, Color32,text::LayoutJob, };
@@ -142,7 +142,7 @@ fn create_date_file(path:&String, current_file: &mut String) {
     if Path::new(&file_name).exists(){
         *current_file=file_name.to_string();
     }else{
-        let file = File::create(&file_name).expect("Unable to create file");
+        File::create(&file_name).expect("Unable to create file");
         *current_file=file_name.to_string();
     }
 }

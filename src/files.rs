@@ -1,6 +1,5 @@
 use std::fs::File;
 use std::io::Read;
-use yaml_rust::{YamlLoader, Yaml};
 
 
 pub fn read_file(file_name: &str) -> String {
@@ -14,15 +13,13 @@ pub fn read_image(path: &str) ->Vec<u8>{
     std::fs::read(path).unwrap()
 }
 
-pub fn contents(contents:&String)->(String,Yaml){
-    let metadata= Yaml::from_str("-123");
+pub fn contents(contents:&String)->(String,String){
+    let metadata= String::new();
     if contents.starts_with("---"){
-        let test = contents.split("---");
+        let test = contents.splitn(3,"---");
         let test: Vec<&str> = test.collect();
-        let tags = test[1];
-        let docs = YamlLoader::load_from_str(tags).unwrap();
-        let metadata = &docs[0];
-        //dbg!(&metadata["tags"]);
+        return (test[2].to_string(),test[1].to_string());
+    }else{
+    return (contents.to_string(), metadata);
     }
-    (contents.to_string(), metadata)
 }

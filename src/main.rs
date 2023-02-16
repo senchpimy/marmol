@@ -3,7 +3,7 @@ use std::path::Path;
 use egui::{CentralPanel,ScrollArea,Image};
 //use egui::text::LayoutJob;
 use egui_demo_lib::easy_mark;
-use std::io;
+use yaml_rust::{YamlLoader, Yaml};
 
 
 mod search;
@@ -65,8 +65,8 @@ impl Default for Marmol {
             buffer: files::read_file(current),
             buffer_image: RetainedImage::from_image_bytes("colapse",include_bytes!("../colapse.png"),).unwrap(),
             //tabs:vec![tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),],
-            //vault:String::from("/home/plof/Documents/1er-semestre-Fes/1er semestre/"),
-            vault:String::from("/home/plof/Pictures/"),
+            vault:String::from("/home/plof/Documents/1er-semestre-Fes/1er semestre/"),
+//            vault:String::from("/home/plof/Pictures/"),
             current_file:current.to_owned(),
 
             search_string_menu:"".to_owned(),
@@ -151,7 +151,10 @@ impl eframe::App for Marmol {
                     let header = Path::new(&self.current_file).file_name().unwrap();
                     ui.heading(header.to_str().unwrap());
                     let (content, metadata)=files::contents(&self.buffer);
-                    //metadata
+                    if metadata.len()!=0{
+                        let docs = YamlLoader::load_from_str(&metadata).unwrap();
+                        let metadata = &docs[0];
+                    }
                     easy_mark::easy_mark(ui,&content);
                 });
                }
