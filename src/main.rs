@@ -65,7 +65,8 @@ impl Default for Marmol {
             buffer: files::read_file(current),
             buffer_image: RetainedImage::from_image_bytes("colapse",include_bytes!("../colapse.png"),).unwrap(),
             //tabs:vec![tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),],
-            vault:String::from("/home/plof/Documents/1er-semestre-Fes/1er semestre/"),
+            //vault:String::from("/home/plof/Documents/1er-semestre-Fes/1er semestre/"),
+            vault:String::from("/home/plof/Pictures/"),
             current_file:current.to_owned(),
 
             search_string_menu:"".to_owned(),
@@ -113,7 +114,7 @@ impl eframe::App for Marmol {
                                         &self.vault_image,
                                         &self.help_image,
                                         &self.config_image];
-            main_area::left_side_settings(ctx,&mut self.left_collpased, &side_settings_images);
+            main_area::left_side_settings(ctx,&mut self.left_collpased, &side_settings_images,&mut self.vault ,&mut self.current_file);
     
             let menu_images = vec![&self.files_image, 
                                    &self.search_image, 

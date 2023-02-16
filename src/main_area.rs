@@ -5,6 +5,9 @@ use json;
 use egui::{ TextFormat, Color32,text::LayoutJob, };
 use std::fs;
 use std::path::Path;
+use chrono::prelude::*;
+use std::fs::File;
+
 
 
 pub fn left_side_menu(ctx:&Context, colapse:&bool, images:Vec<&RetainedImage> , 
@@ -95,7 +98,7 @@ fn render_files(ui:&mut egui::Ui, path:&str,current_file:&mut String){
 
  }
 
-pub fn left_side_settings(ctx:&Context, colapse:&mut bool, images:&[&RetainedImage]){
+pub fn left_side_settings(ctx:&Context, colapse:&mut bool, images:&[&RetainedImage], vault:&mut String,current_file:&mut String ){
     let left_panel = SidePanel::left("buttons left").resizable(false).default_width(1.);
     let space = 10.;
     left_panel.show(ctx,|ui| {
@@ -115,7 +118,9 @@ pub fn left_side_settings(ctx:&Context, colapse:&mut bool, images:&[&RetainedIma
         ui.add_space(space);
         if ui.add(ImageButton::new(images[3].texture_id(ctx), egui::vec2(18.0, 18.0)).frame(false)).clicked(){println!("canvas")}//canvas
         ui.add_space(space);
-        if ui.add(ImageButton::new(images[4].texture_id(ctx), egui::vec2(18.0, 18.0)).frame(false)).clicked(){println!("daynote")}//note
+        if ui.add(ImageButton::new(images[4].texture_id(ctx), egui::vec2(18.0, 18.0)).frame(false)).clicked(){
+            create_date_file(vault, current_file);
+        }//note
         ui.add_space(space);
         if ui.add(ImageButton::new(images[5].texture_id(ctx), egui::vec2(18.0, 18.0)).frame(false)).clicked(){println!("commandpale")}//palette
         ui.with_layout(Layout::bottom_up(Align::Max),|ui|{
@@ -129,4 +134,15 @@ pub fn left_side_settings(ctx:&Context, colapse:&mut bool, images:&[&RetainedIma
         });
         });
     });
+}
+
+fn create_date_file(path:&String, current_file: &mut String) {
+    let date = Local::now().format("%Y-%m-%d").to_string();
+    let file_name = format!("{}{}.md",path,date);
+    if Path::new(&file_name).exists(){
+        *current_file=file_name.to_string();
+    }else{
+        let file = File::create(&file_name).expect("Unable to create file");
+        *current_file=file_name.to_string();
+    }
 }
