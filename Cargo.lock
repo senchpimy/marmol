@@ -1255,6 +1255,7 @@ dependencies = [
  "syntect",
  "tracing-subscriber",
  "walkdir",
+ "yaml-rust",
 ]
 
 [[package]]

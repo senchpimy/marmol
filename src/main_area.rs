@@ -77,7 +77,7 @@ fn top_panel_menu_left (ui:&mut egui::Ui, textures:Vec<TextureId>, path:&str, cu
 
 fn render_files(ui:&mut egui::Ui, path:&str,current_file:&mut String){
         for entry in fs::read_dir(path).unwrap(){
-            let mut file_location = entry.unwrap().path().to_str().unwrap().to_string();
+            let file_location = entry.unwrap().path().to_str().unwrap().to_string();
             let file_name=Path::new(&file_location).file_name().expect("No fails").to_str().unwrap();
             if Path::new(&file_location).is_dir(){
                 let col = egui::containers::collapsing_header::CollapsingHeader::new(file_name);

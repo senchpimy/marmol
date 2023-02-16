@@ -1,5 +1,6 @@
 use egui_extras::RetainedImage;
-use egui::CentralPanel;
+use std::path::Path;
+use egui::{CentralPanel,ScrollArea,Image};
 //use egui::text::LayoutJob;
 use egui_demo_lib::easy_mark;
 use std::io;
@@ -28,6 +29,7 @@ struct Marmol{
     prev_current_file: String,
     //tabs: Vec<tabs::Tab>,
     current_window: i8,
+    buffer_image:RetainedImage,
 
     left_collpased:bool,
     vault: String,
@@ -61,6 +63,7 @@ impl Default for Marmol {
             current_window:1,
             prev_current_file: current.to_owned(),
             buffer: files::read_file(current),
+            buffer_image: RetainedImage::from_image_bytes("colapse",include_bytes!("../colapse.png"),).unwrap(),
             //tabs:vec![tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),],
             vault:String::from("/home/plof/Documents/1er-semestre-Fes/1er semestre/"),
             current_file:current.to_owned(),
@@ -122,13 +125,35 @@ impl eframe::App for Marmol {
 
             CentralPanel::default().show(ctx, |ui|{
                if self.prev_current_file!=self.current_file{
-                self.buffer = files::read_file(&self.current_file);
-                self.prev_current_file = String::from(&self.current_file);
-
-                //println!("{}",files::read_file(&self.current_file));
+                    self.prev_current_file = String::from(&self.current_file);
+                    if self.current_file.ends_with(".png") || 
+                       self.current_file.ends_with("jpeg") ||
+                       self.current_file.ends_with("jpg"){
+                        self.buffer_image=RetainedImage::from_image_bytes("buffer_image",&files::read_image(&self.current_file)).unwrap()
+                    }
                }
-                easy_mark::easy_mark(ui,&self.buffer);
-                //println!("{}",&self.current_file);
+
+               if self.current_file.ends_with(".png")||
+                       self.current_file.ends_with("jpeg") ||
+                       self.current_file.ends_with("jpg"){
+                    let image_size = self.buffer_image.size_vec2();
+                    dbg!(image_size[0]);
+                    //(Horizontal, Vertical)
+                   let size = egui::vec2(1000.0, 500.0);
+                   ui.add(
+                    Image::new(self.buffer_image.texture_id(ctx), size),
+                );
+               }else{
+                self.buffer = files::read_file(&self.current_file);
+                let scrolling_buffer = ScrollArea::vertical();
+                scrolling_buffer.show(ui,|ui| {
+                    let header = Path::new(&self.current_file).file_name().unwrap();
+                    ui.heading(header.to_str().unwrap());
+                    let (content, metadata)=files::contents(&self.buffer);
+                    //metadata
+                    easy_mark::easy_mark(ui,&content);
+                });
+               }
             });
         }else if self.current_window==2{ //configuration
             
