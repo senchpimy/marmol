@@ -3,6 +3,7 @@ use std::path::Path;
 use egui::{CentralPanel,ScrollArea,Image};
 //use egui::text::LayoutJob;
 use egui_demo_lib::easy_mark;
+use egui_extras::{Size,StripBuilder};
 use yaml_rust::{YamlLoader, Yaml};
 
 
@@ -97,6 +98,7 @@ impl Default for Marmol {
 
 impl eframe::App for Marmol {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        //dbg!(Size::exact(50.0));
         if self.current_window==0 { //welcome screen
             CentralPanel::default().show(ctx,|ui|{
                 ui.heading("Marmol");
@@ -135,28 +137,38 @@ impl eframe::App for Marmol {
                }
 
                if self.current_file.ends_with(".png")||
-                       self.current_file.ends_with("jpeg") ||
-                       self.current_file.ends_with("jpg"){
-                    let image_size = self.buffer_image.size_vec2();
-                    dbg!(image_size[0]);
-                    //(Horizontal, Vertical)
-                   let size = egui::vec2(1000.0, 500.0);
-                   ui.add(
-                    Image::new(self.buffer_image.texture_id(ctx), size),
-                );
+                   self.current_file.ends_with("jpeg") ||
+                   self.current_file.ends_with("jpg"){
+                       let image_size = self.buffer_image.size_vec2();
+                       dbg!(image_size[0]);
+                       //(Horizontal, Vertical)
+                       let size = egui::vec2(1000.0, 1000.0);
+                       let scrolling_buffer = ScrollArea::vertical();
+                           scrolling_buffer.show(ui,|ui| {
+                               ui.add(
+                                   Image::new(self.buffer_image.texture_id(ctx), size)
+                                );
+                           });
                }else{
                 self.buffer = files::read_file(&self.current_file);
-                let scrolling_buffer = ScrollArea::vertical();
-                scrolling_buffer.show(ui,|ui| {
-                    let header = Path::new(&self.current_file).file_name().unwrap();
-                    ui.heading(header.to_str().unwrap());
-                    let (content, metadata)=files::contents(&self.buffer);
-                    if metadata.len()!=0{
-                        let docs = YamlLoader::load_from_str(&metadata).unwrap();
-                        let metadata = &docs[0];
-                    }
-                    easy_mark::easy_mark(ui,&content);
-                });
+                //Comienza loop
+                CentralPanel::default().show(ctx, |ui| {
+                ui.columns(3, |columns|{
+                for i in 0..3{
+                        ScrollArea::vertical().id_source(format!("{}",i)).show(&mut columns[i],|ui| {
+                            let header = Path::new(&self.current_file).file_name().unwrap();
+                            ui.heading(header.to_str().unwrap());
+                            let (content, metadata)=files::contents(&self.buffer);
+                            if metadata.len()!=0{
+                                let docs = YamlLoader::load_from_str(&metadata).unwrap();
+                                let metadata = &docs[0];
+                            }
+                            easy_mark::easy_mark(ui,&content);
+                        });
+                }//termina for
+                });//termina coluns
+                    }); //termina CentralPanel
+                //termina loop
                }
             });
         }else if self.current_window==2{ //configuration

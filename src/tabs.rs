@@ -8,8 +8,7 @@ impl Into<Color32> for Tab{
 
 #[derive (Debug)]
 pub struct Tab {
-    content:String,
-    path:String,
+    pub content: Vec<HorizontalBuffers>,
     pub title:String,
     selected:bool,
     pub color:Color32,
@@ -17,8 +16,46 @@ pub struct Tab {
 
 impl Tab{
     pub fn new()->Self{
-Tab{content:"hola".to_string(), path: "/home/test/path".to_string(),title:"Titulo".to_string(),selected:false,color:Color32::BLUE}
+    Tab{content:vec![], title:"Titulo".to_string(),selected:false,color:Color32::BLUE}
     }
+    pub fn default(path:String)->Self{
+    Tab{
+        content:vec![HorizontalBuffers::default(path)],
+        title:"Titulo".to_string(),
+        selected:false,
+        color:Color32::BLUE
+    }
+    }
+}
+
+#[derive(Debug)]
+pub struct HorizontalBuffers {
+    buffers : Vec<Buffer>
+}
+
+impl HorizontalBuffers{
+    pub fn default(path:String)->Self{
+        HorizontalBuffers { buffers: vec![Buffer::new(path)] }
+    }
+    pub fn new()->Self{
+        HorizontalBuffers { buffers: vec![] }
+    }
+} 
+
+#[derive(Debug)]
+struct Buffer {
+    path : String,
+    content: String,
+}
+
+impl Buffer{
+    pub fn new(path_in:String)->Self{
+        Buffer { path: path_in, content:String::new() }
+    }
+} 
+
+pub fn start(path:String){
+    let _i = Buffer::new(path);
 }
 
 pub fn create_tab(ui: &mut Ui,tab:&mut Tab){
