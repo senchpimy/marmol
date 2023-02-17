@@ -1,6 +1,6 @@
 use egui_extras::RetainedImage;
 use std::path::Path;
-use eframe::egui::{CentralPanel,ScrollArea,Image};
+use egui::*;
 //use egui::text::LayoutJob;
 use egui_demo_lib::easy_mark;
 use egui_extras::{Size,StripBuilder};
@@ -154,9 +154,10 @@ impl eframe::App for Marmol {
                 self.buffer = files::read_file(&self.current_file);
                 //Comienza loop
                 CentralPanel::default().show(ctx, |ui| {
-                ui.columns(1, |columns|{
-                for i in 0..1{
-                        ScrollArea::vertical().id_source(format!("{}",i)).show(&mut columns[i],|ui| {
+              //  ui.columns(1, |columns|{
+              //  for i in 0..1{
+                        //ScrollArea::vertical().id_source(format!("{}",i)).show(&mut columns[i],|ui| {
+                        egui::ScrollArea::vertical().show(ui,|ui| {
                             let header = Path::new(&self.current_file).file_name().unwrap();
                             ui.heading(header.to_str().unwrap());
                             let (content, metadata)=files::contents(&self.buffer);
@@ -164,11 +165,12 @@ impl eframe::App for Marmol {
                                 let docs = YamlLoader::load_from_str(&metadata).unwrap();
                                 let metadata = &docs[0];
                             }
-                            let mut cache = CommonMarkCache::default();
-                            CommonMarkViewer::new("viewer").show(ui, &mut cache, &content);
+                                easy_mark::easy_mark(ui,&content);
+                          //  let mut cache = CommonMarkCache::default();
+                          //  CommonMarkViewer::new("viewer").show(ui, &mut cache, &content);
                         });
-                }//termina for
-                });//termina coluns
+                //}//termina for
+                //});//termina coluns
                     }); //termina CentralPanel
                 //termina loop
                }
