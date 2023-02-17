@@ -1,5 +1,5 @@
 use crate::search;
-use eframe::{egui::{ScrollArea,Separator,TopBottomPanel,SidePanel,Context,Layout,Align,ImageButton,TextureId, Link,Style,Frame}};
+use eframe::egui::{ScrollArea,Separator,TopBottomPanel,SidePanel,Context,Layout,Align,ImageButton,TextureId, Link,Style,Frame};
 use egui_extras::RetainedImage;
 use json;
 use egui::{ TextFormat, Color32,text::LayoutJob, };
