@@ -7,6 +7,7 @@ use std::fs;
 use std::path::Path;
 use chrono::prelude::*;
 use std::fs::File;
+use yaml_rust::{YamlLoader, Yaml};
 
 
 
@@ -145,4 +146,12 @@ fn create_date_file(path:&String, current_file: &mut String) {
         File::create(&file_name).expect("Unable to create file");
         *current_file=file_name.to_string();
     }
+}
+
+pub fn create_metadata(metadata:String, ui:&mut egui::Ui){
+    let docs = YamlLoader::load_from_str(&metadata).unwrap();
+    let metadata_parsed = &docs[0];
+    //dbg!(metadata_parsed);
+    ui.heading("papu");
+
 }

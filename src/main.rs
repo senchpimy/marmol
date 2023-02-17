@@ -4,8 +4,7 @@ use egui::*;
 //use egui::text::LayoutJob;
 use egui_demo_lib::easy_mark;
 use egui_extras::{Size,StripBuilder};
-use yaml_rust::{YamlLoader, Yaml};
-use egui_commonmark::*;
+//use egui_commonmark::*;
 
 
 mod search;
@@ -162,8 +161,7 @@ impl eframe::App for Marmol {
                             ui.heading(header.to_str().unwrap());
                             let (content, metadata)=files::contents(&self.buffer);
                             if metadata.len()!=0{
-                                let docs = YamlLoader::load_from_str(&metadata).unwrap();
-                                let metadata = &docs[0];
+                                main_area::create_metadata(metadata,ui);
                             }
                                 easy_mark::easy_mark(ui,&content);
                           //  let mut cache = CommonMarkCache::default();
