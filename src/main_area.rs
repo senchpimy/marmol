@@ -2,12 +2,12 @@ use crate::search;
 use eframe::egui::{ScrollArea,Separator,TopBottomPanel,SidePanel,Context,Layout,Align,ImageButton,TextureId, Link,Style,Frame};
 use egui_extras::RetainedImage;
 use json;
-use egui::{ TextFormat, Color32,text::LayoutJob, };
+use egui::{ TextFormat, Color32,text::LayoutJob, FontId};
 use std::fs;
 use std::path::Path;
 use chrono::prelude::*;
 use std::fs::File;
-use yaml_rust::{YamlLoader,Yaml,YamlEmitter};
+use yaml_rust::{YamlLoader,YamlEmitter};
 
 pub fn left_side_menu(ctx:&Context, colapse:&bool, images:Vec<&RetainedImage> , 
                   path:&str, current_file:&mut String, left_tab:&mut i8, search_string_menu:&mut String,
@@ -149,15 +149,46 @@ fn create_date_file(path:&String, current_file: &mut String) {
 pub fn create_metadata(metadata:String, ui:&mut egui::Ui){
     let docs = YamlLoader::load_from_str(&metadata).unwrap();
     let metadata_parsed = &docs[0];
+    let mut job = LayoutJob::default();
 
     let mut out_str = String::new();
     let mut emitter = YamlEmitter::new(&mut out_str);
     emitter.dump(metadata_parsed).unwrap();
     out_str.split("\n").skip(1).for_each(|s|{
-        dbg!(s);
-        //if s!="---"{
-          //  if s.as_bytes()[s.len()-1]==58 {
-          //  }
-       // }
+        //dbg!(s);
+        if s.as_bytes()[s.len()-1]==58 {
+            job.append(
+                &(s.to_owned()+"\n"),0.0,
+                 TextFormat {
+                 color: Color32::GRAY,
+                 ..Default::default()
+                 },
+                )
+        }else if  s.as_bytes()[0]==32 {
+            job.append(
+                &(s.to_owned()+"\n"),0.0,
+                 TextFormat {
+                 color: Color32::WHITE,
+                 ..Default::default()
+                 },
+                )
+        }else{
+            let mut test =s.split(" ");
+            job.append(
+                test.next().unwrap(),0.0,
+                 TextFormat {
+                 color: Color32::GRAY,
+                 ..Default::default()
+                 },
+                );
+            job.append(
+                &(test.next().unwrap().to_owned()+"\n"),0.0,
+                 TextFormat {
+                 color: Color32::WHITE,
+                 ..Default::default()
+                 },
+                );
+        }
     });
+    ui.label(job);
 }

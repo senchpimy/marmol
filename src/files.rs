@@ -1,7 +1,5 @@
 use std::fs::File;
-use std::io::{Read, Seek, SeekFrom};
-use std::fs;
-use std::thread;
+use std::io::Read;
 use filebuffer::FileBuffer;
 
 
