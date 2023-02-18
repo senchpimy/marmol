@@ -782,7 +782,7 @@ checksum = "1f99fe3cac305af9d6d92971af60d0f7ea4d783201ef1673571567b6699964d9"
 [[package]]
 name = "ecolor"
 version = "0.21.0"
-source = "git+https://github.com/senchpimy/egui?rev=8362abd#8362abd8fe917a5ec43541c423769969ec4af4a5"
+source = "git+https://github.com/senchpimy/egui?rev=d99fac7#d99fac7138e64b8eb25209fd22e47915f0e8b638"
 dependencies = [
  "bytemuck",
 ]
@@ -790,10 +790,10 @@ dependencies = [
 [[package]]
 name = "eframe"
 version = "0.21.3"
-source = "git+https://github.com/senchpimy/egui?rev=8362abd#8362abd8fe917a5ec43541c423769969ec4af4a5"
+source = "git+https://github.com/senchpimy/egui?rev=d99fac7#d99fac7138e64b8eb25209fd22e47915f0e8b638"
 dependencies = [
  "bytemuck",
- "egui 0.21.0 (git+https://github.com/senchpimy/egui?rev=8362abd)",
+ "egui 0.21.0 (git+https://github.com/senchpimy/egui?rev=d99fac7)",
  "egui-winit",
  "egui_glow",
  "glow",
@@ -824,11 +824,11 @@ dependencies = [
 [[package]]
 name = "egui"
 version = "0.21.0"
-source = "git+https://github.com/senchpimy/egui?rev=8362abd#8362abd8fe917a5ec43541c423769969ec4af4a5"
+source = "git+https://github.com/senchpimy/egui?rev=d99fac7#d99fac7138e64b8eb25209fd22e47915f0e8b638"
 dependencies = [
  "accesskit",
  "ahash",
- "epaint 0.21.0 (git+https://github.com/senchpimy/egui?rev=8362abd)",
+ "epaint 0.21.0 (git+https://github.com/senchpimy/egui?rev=d99fac7)",
  "nohash-hasher",
  "tracing",
 ]
@@ -836,12 +836,12 @@ dependencies = [
 [[package]]
 name = "egui-winit"
 version = "0.21.1"
-source = "git+https://github.com/senchpimy/egui?rev=8362abd#8362abd8fe917a5ec43541c423769969ec4af4a5"
+source = "git+https://github.com/senchpimy/egui?rev=d99fac7#d99fac7138e64b8eb25209fd22e47915f0e8b638"
 dependencies = [
  "accesskit_winit",
  "android-activity",
  "arboard",
- "egui 0.21.0 (git+https://github.com/senchpimy/egui?rev=8362abd)",
+ "egui 0.21.0 (git+https://github.com/senchpimy/egui?rev=d99fac7)",
  "instant",
  "smithay-clipboard",
  "tracing",
@@ -869,9 +869,9 @@ dependencies = [
 [[package]]
 name = "egui_demo_lib"
 version = "0.21.0"
-source = "git+https://github.com/senchpimy/egui?rev=8362abd#8362abd8fe917a5ec43541c423769969ec4af4a5"
+source = "git+https://github.com/senchpimy/egui?rev=d99fac7#d99fac7138e64b8eb25209fd22e47915f0e8b638"
 dependencies = [
- "egui 0.21.0 (git+https://github.com/senchpimy/egui?rev=8362abd)",
+ "egui 0.21.0 (git+https://github.com/senchpimy/egui?rev=d99fac7)",
  "egui_extras",
  "enum-map",
  "tracing",
@@ -881,9 +881,9 @@ dependencies = [
 [[package]]
 name = "egui_extras"
 version = "0.21.0"
-source = "git+https://github.com/senchpimy/egui?rev=8362abd#8362abd8fe917a5ec43541c423769969ec4af4a5"
+source = "git+https://github.com/senchpimy/egui?rev=d99fac7#d99fac7138e64b8eb25209fd22e47915f0e8b638"
 dependencies = [
- "egui 0.21.0 (git+https://github.com/senchpimy/egui?rev=8362abd)",
+ "egui 0.21.0 (git+https://github.com/senchpimy/egui?rev=d99fac7)",
  "image",
  "serde",
 ]
@@ -891,10 +891,10 @@ dependencies = [
 [[package]]
 name = "egui_glow"
 version = "0.21.0"
-source = "git+https://github.com/senchpimy/egui?rev=8362abd#8362abd8fe917a5ec43541c423769969ec4af4a5"
+source = "git+https://github.com/senchpimy/egui?rev=d99fac7#d99fac7138e64b8eb25209fd22e47915f0e8b638"
 dependencies = [
  "bytemuck",
- "egui 0.21.0 (git+https://github.com/senchpimy/egui?rev=8362abd)",
+ "egui 0.21.0 (git+https://github.com/senchpimy/egui?rev=d99fac7)",
  "glow",
  "memoffset",
  "tracing",
@@ -924,7 +924,7 @@ checksum = "b8ecd80612937e0267909d5351770fe150004e24dab93954f69ca62eecd3f77e"
 [[package]]
 name = "emath"
 version = "0.21.0"
-source = "git+https://github.com/senchpimy/egui?rev=8362abd#8362abd8fe917a5ec43541c423769969ec4af4a5"
+source = "git+https://github.com/senchpimy/egui?rev=d99fac7#d99fac7138e64b8eb25209fd22e47915f0e8b638"
 dependencies = [
  "bytemuck",
 ]
@@ -989,14 +989,14 @@ dependencies = [
 [[package]]
 name = "epaint"
 version = "0.21.0"
-source = "git+https://github.com/senchpimy/egui?rev=8362abd#8362abd8fe917a5ec43541c423769969ec4af4a5"
+source = "git+https://github.com/senchpimy/egui?rev=d99fac7#d99fac7138e64b8eb25209fd22e47915f0e8b638"
 dependencies = [
  "ab_glyph",
  "ahash",
  "atomic_refcell",
  "bytemuck",
- "ecolor 0.21.0 (git+https://github.com/senchpimy/egui?rev=8362abd)",
- "emath 0.21.0 (git+https://github.com/senchpimy/egui?rev=8362abd)",
+ "ecolor 0.21.0 (git+https://github.com/senchpimy/egui?rev=d99fac7)",
+ "emath 0.21.0 (git+https://github.com/senchpimy/egui?rev=d99fac7)",
  "nohash-hasher",
  "parking_lot",
 ]
@@ -1034,6 +1034,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e51093e27b0797c359783294ca4f0a911c270184cb10f85783b118614a1501be"
 dependencies = [
  "instant",
+]
+
+[[package]]
+name = "filebuffer"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1b41bfe1d74263ea9d084be951077614b3b98b4e59a9dafab1467645a9e52305"
+dependencies = [
+ "libc",
+ "winapi",
 ]
 
 [[package]]
@@ -1510,10 +1520,11 @@ version = "0.1.1"
 dependencies = [
  "chrono",
  "eframe",
- "egui 0.21.0 (git+https://github.com/senchpimy/egui?rev=8362abd)",
+ "egui 0.21.0 (git+https://github.com/senchpimy/egui?rev=d99fac7)",
  "egui_commonmark",
  "egui_demo_lib",
  "egui_extras",
+ "filebuffer",
  "fstream",
  "image",
  "json",

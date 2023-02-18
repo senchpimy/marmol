@@ -4,7 +4,7 @@ use egui::*;
 //use egui::text::LayoutJob;
 use egui_demo_lib::easy_mark;
 use egui_extras::{Size,StripBuilder};
-//use egui_commonmark::*;
+use egui_commonmark::*;
 
 
 mod search;
@@ -163,8 +163,10 @@ impl eframe::App for Marmol {
                             if metadata.len()!=0{
                                 main_area::create_metadata(metadata,ui);
                             }
-                                easy_mark::easy_mark(ui,&content);
-                          //  let mut cache = CommonMarkCache::default();
+//                           let mut edit=easy_mark::EasyMarkEditor::default();
+//                            edit.ui(ui);
+                           easy_mark::easy_mark(ui,&content);
+                           // let mut cache = CommonMarkCache::default();
                           //  CommonMarkViewer::new("viewer").show(ui, &mut cache, &content);
                         });
                 //}//termina for

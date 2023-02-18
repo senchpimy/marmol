@@ -1,5 +1,8 @@
 use std::fs::File;
-use std::io::Read;
+use std::io::{Read, Seek, SeekFrom};
+use std::fs;
+use std::thread;
+use filebuffer::FileBuffer;
 
 
 pub fn read_file(file_name: &str) -> String {
@@ -10,7 +13,9 @@ contents
 }
 
 pub fn read_image(path: &str) ->Vec<u8>{
-    std::fs::read(path).unwrap()
+// 30% faster
+let fbuffer = FileBuffer::open(path).expect("failed to open file");
+fbuffer.leak().to_vec()
 }
 
 pub fn contents(contents:&String)->(String,String){
