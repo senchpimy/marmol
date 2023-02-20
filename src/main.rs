@@ -31,6 +31,7 @@ struct Marmol{
     //tabs: Vec<tabs::Tab>,
     current_window: i8,
     buffer_image:RetainedImage,
+    commoncache:CommonMarkCache,
 
     left_collpased:bool,
     vault: String,
@@ -65,9 +66,10 @@ impl Default for Marmol {
             prev_current_file: current.to_owned(),
             buffer: files::read_file(current),
             buffer_image: RetainedImage::from_image_bytes("colapse",include_bytes!("../colapse.png"),).unwrap(),
+            commoncache:CommonMarkCache::default(),
             //tabs:vec![tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),],
             vault:String::from("/home/plof/Documents/1er-semestre-Fes/1er semestre/"),
-//            vault:String::from("/home/plof/Pictures/"),
+            //vault:String::from("/home/plof/Pictures/"),
             current_file:current.to_owned(),
 
             search_string_menu:"".to_owned(),
@@ -123,7 +125,8 @@ impl eframe::App for Marmol {
                                    &self.starred_image,];
             main_area::left_side_menu(ctx,&self.left_collpased,menu_images, 
                            &self.vault, &mut self.current_file, &mut self.current_left_tab,
-                           &mut self.search_string_menu,&mut self.prev_search_string_menu, &mut self.search_results,
+                           &mut self.search_string_menu,&mut self.prev_search_string_menu, 
+                           &mut self.search_results,
                            &mut self.regex_search);
 
             CentralPanel::default().show(ctx, |ui|{
@@ -142,7 +145,7 @@ impl eframe::App for Marmol {
                        let image_size = self.buffer_image.size_vec2();
                        dbg!(image_size[0]);
                        //(Horizontal, Vertical)
-                       let size = egui::vec2(1000.0, 1000.0);
+                       let size = egui::vec2(900.0, 1000.0);
                        let scrolling_buffer = ScrollArea::vertical();
                            scrolling_buffer.show(ui,|ui| {
                                ui.add(
@@ -165,9 +168,7 @@ impl eframe::App for Marmol {
                             }
 //                           let mut edit=easy_mark::EasyMarkEditor::default();
 //                            edit.ui(ui);
-                           easy_mark::easy_mark(ui,&content);
-                           // let mut cache = CommonMarkCache::default();
-                          //  CommonMarkViewer::new("viewer").show(ui, &mut cache, &content);
+                           CommonMarkViewer::new("viewer").show(ui, &mut self.commoncache, &content);
                         });
                 //}//termina for
                 //});//termina coluns

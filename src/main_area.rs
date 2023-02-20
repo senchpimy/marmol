@@ -1,4 +1,5 @@
 use crate::search;
+use crate::files;
 use eframe::egui::{ScrollArea,Separator,TopBottomPanel,SidePanel,Context,Layout,Align,ImageButton,TextureId, Link,Style,Frame};
 use egui_extras::RetainedImage;
 use json;
@@ -20,8 +21,7 @@ pub fn left_side_menu(ctx:&Context, colapse:&bool, images:Vec<&RetainedImage> ,
     });
 }
 
-fn top_panel_menu_left (ui:&mut egui::Ui, textures:Vec<TextureId>, path:&str, current_file:&mut String,left_tab:&mut i8, 
-                        search_string_menu:&mut String,prev_search_string_menu:&mut String, search_results:&mut Vec<search::MenuItem>,
+fn top_panel_menu_left (ui:&mut egui::Ui, textures:Vec<TextureId>, path:&str, current_file:&mut String,left_tab:&mut i8, search_string_menu:&mut String,prev_search_string_menu:&mut String, search_results:&mut Vec<search::MenuItem>,
                         regex_search:&mut bool){
     TopBottomPanel::top("Left Menu").show_inside(ui, |ui|{
         ui.with_layout(Layout::left_to_right(Align::Min),|ui| {
@@ -57,10 +57,12 @@ fn top_panel_menu_left (ui:&mut egui::Ui, textures:Vec<TextureId>, path:&str, cu
             for i in search_results{
                 frame.show(ui, |ui|{
                     let mut title = LayoutJob::default();
-                    title.append(&i.path,0.0,TextFormat{color:Color32::RED,..Default::default()});
+                    title.append(&i.path.strip_prefix(&path).unwrap(),0.0,TextFormat{color:Color32::RED,..Default::default()});
                     ui.label(title);
                     ui.label(&i.text);
-                    ui.button("open file");
+                    if ui.button("open file").clicked(){
+                        *current_file=String::from(&i.path);
+                    };
                 });
             }
         });

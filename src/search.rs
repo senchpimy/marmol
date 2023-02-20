@@ -24,8 +24,11 @@ pub fn check_dir(path: &str, query: &str, regexp: &bool) -> Vec<MenuItem>{
         .filter_map(|file| match fstream::contains(file.path(), query) {
             Some(b) => if b {
                 let mut result = MenuItem::new();
-                result.path = file.file_name().to_str().unwrap().to_string();
-                check_file(file.path(), query, regexp, &mut result);
+                result.path = file.path().to_str().unwrap().to_string();
+                check_file(file.path(), query, regexp, &mut result); //Se pueden evitar muchas
+                                                                     //comparaciones guardando el
+                                                                     //valor se regexp en un caso
+                                                                     //especial
                 Some(result)
             } else {
                 None

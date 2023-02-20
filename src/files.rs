@@ -4,10 +4,11 @@ use filebuffer::FileBuffer;
 
 
 pub fn read_file(file_name: &str) -> String {
-let mut file = File::open(file_name).expect("Unable to open file");
-let mut contents = String::new();
-file.read_to_string(&mut contents).expect("Unable to read from file");
-contents
+println!("{}",file_name);
+    let mut file2 = File::open(file_name).expect("Unable to open file");
+    let mut contents = String::new();
+    file2.read_to_string(&mut contents).expect("Unable to read from file");
+    contents
 }
 
 pub fn read_image(path: &str) ->Vec<u8>{

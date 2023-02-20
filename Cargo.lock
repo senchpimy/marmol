@@ -778,11 +778,6 @@ name = "ecolor"
 version = "0.21.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1f99fe3cac305af9d6d92971af60d0f7ea4d783201ef1673571567b6699964d9"
-
-[[package]]
-name = "ecolor"
-version = "0.21.0"
-source = "git+https://github.com/senchpimy/egui?rev=d99fac7#d99fac7138e64b8eb25209fd22e47915f0e8b638"
 dependencies = [
  "bytemuck",
 ]
@@ -790,10 +785,11 @@ dependencies = [
 [[package]]
 name = "eframe"
 version = "0.21.3"
-source = "git+https://github.com/senchpimy/egui?rev=d99fac7#d99fac7138e64b8eb25209fd22e47915f0e8b638"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3df3ce60931e5f2d83bab4484d1a283908534d5308cc6b0c5c22c59cd15ee7cc"
 dependencies = [
  "bytemuck",
- "egui 0.21.0 (git+https://github.com/senchpimy/egui?rev=d99fac7)",
+ "egui",
  "egui-winit",
  "egui_glow",
  "glow",
@@ -816,19 +812,9 @@ version = "0.21.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6412a21e0bde7c0918f7fb44bbbb86b5e1f88e63c026a4e747cc7af02f76dfbe"
 dependencies = [
- "ahash",
- "epaint 0.21.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "nohash-hasher",
-]
-
-[[package]]
-name = "egui"
-version = "0.21.0"
-source = "git+https://github.com/senchpimy/egui?rev=d99fac7#d99fac7138e64b8eb25209fd22e47915f0e8b638"
-dependencies = [
  "accesskit",
  "ahash",
- "epaint 0.21.0 (git+https://github.com/senchpimy/egui?rev=d99fac7)",
+ "epaint",
  "nohash-hasher",
  "tracing",
 ]
@@ -836,12 +822,13 @@ dependencies = [
 [[package]]
 name = "egui-winit"
 version = "0.21.1"
-source = "git+https://github.com/senchpimy/egui?rev=d99fac7#d99fac7138e64b8eb25209fd22e47915f0e8b638"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ab43597ba41f0ce39a364ad83185594578bfd8b3409b99dbcbb01df23afc3dbb"
 dependencies = [
  "accesskit_winit",
  "android-activity",
  "arboard",
- "egui 0.21.0 (git+https://github.com/senchpimy/egui?rev=d99fac7)",
+ "egui",
  "instant",
  "smithay-clipboard",
  "tracing",
@@ -855,7 +842,7 @@ version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "92e8ed95e1c57b970522e8c55ae3fa8d9dae507118cfa96370f2538a6e3771e7"
 dependencies = [
- "egui 0.21.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "egui",
  "ehttp",
  "image",
  "pulldown-cmark",
@@ -869,9 +856,10 @@ dependencies = [
 [[package]]
 name = "egui_demo_lib"
 version = "0.21.0"
-source = "git+https://github.com/senchpimy/egui?rev=d99fac7#d99fac7138e64b8eb25209fd22e47915f0e8b638"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "86ac92d1776423b835012ac316bb0c27cd32bf0e21d82d183260732f0580a547"
 dependencies = [
- "egui 0.21.0 (git+https://github.com/senchpimy/egui?rev=d99fac7)",
+ "egui",
  "egui_extras",
  "enum-map",
  "tracing",
@@ -881,9 +869,10 @@ dependencies = [
 [[package]]
 name = "egui_extras"
 version = "0.21.0"
-source = "git+https://github.com/senchpimy/egui?rev=d99fac7#d99fac7138e64b8eb25209fd22e47915f0e8b638"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8f051342e97dfa2445107cb7d2e720617f5c840199b5cb4fe0ffcf481fcf5cce"
 dependencies = [
- "egui 0.21.0 (git+https://github.com/senchpimy/egui?rev=d99fac7)",
+ "egui",
  "image",
  "serde",
 ]
@@ -891,10 +880,11 @@ dependencies = [
 [[package]]
 name = "egui_glow"
 version = "0.21.0"
-source = "git+https://github.com/senchpimy/egui?rev=d99fac7#d99fac7138e64b8eb25209fd22e47915f0e8b638"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8257332fb168a965b3dca81d6a344e053153773c889cabdba0b3b76f1629ae81"
 dependencies = [
  "bytemuck",
- "egui 0.21.0 (git+https://github.com/senchpimy/egui?rev=d99fac7)",
+ "egui",
  "glow",
  "memoffset",
  "tracing",
@@ -920,11 +910,6 @@ name = "emath"
 version = "0.21.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b8ecd80612937e0267909d5351770fe150004e24dab93954f69ca62eecd3f77e"
-
-[[package]]
-name = "emath"
-version = "0.21.0"
-source = "git+https://github.com/senchpimy/egui?rev=d99fac7#d99fac7138e64b8eb25209fd22e47915f0e8b638"
 dependencies = [
  "bytemuck",
 ]
@@ -980,23 +965,9 @@ dependencies = [
  "ab_glyph",
  "ahash",
  "atomic_refcell",
- "ecolor 0.21.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "emath 0.21.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "nohash-hasher",
- "parking_lot",
-]
-
-[[package]]
-name = "epaint"
-version = "0.21.0"
-source = "git+https://github.com/senchpimy/egui?rev=d99fac7#d99fac7138e64b8eb25209fd22e47915f0e8b638"
-dependencies = [
- "ab_glyph",
- "ahash",
- "atomic_refcell",
  "bytemuck",
- "ecolor 0.21.0 (git+https://github.com/senchpimy/egui?rev=d99fac7)",
- "emath 0.21.0 (git+https://github.com/senchpimy/egui?rev=d99fac7)",
+ "ecolor",
+ "emath",
  "nohash-hasher",
  "parking_lot",
 ]
@@ -1520,7 +1491,7 @@ version = "0.1.1"
 dependencies = [
  "chrono",
  "eframe",
- "egui 0.21.0 (git+https://github.com/senchpimy/egui?rev=d99fac7)",
+ "egui",
  "egui_commonmark",
  "egui_demo_lib",
  "egui_extras",

@@ -6,19 +6,19 @@ resolver = "2"
 
 
 [dependencies]
-#eframe="0.21"
-eframe = { git = "https://github.com/senchpimy/egui", rev="d99fac7"}
+eframe="0.21"
+#eframe = { git = "https://github.com/senchpimy/egui", rev="d99fac7"}
 chrono = "0.4.23"
 syntect = "5.0"
-#egui_demo_lib = "0.21.0"
-egui_demo_lib = { git = "https://github.com/senchpimy/egui", rev="d99fac7" }
+egui_demo_lib = "0.21.0"
+#egui_demo_lib = { git = "https://github.com/senchpimy/egui", rev="d99fac7" }
 
 
-#egui="0.21"
-egui = { git = "https://github.com/senchpimy/egui", rev="d99fac7" }
+egui="0.21"
+#egui = { git = "https://github.com/senchpimy/egui", rev="d99fac7" }
 tracing-subscriber = "0.3"
-#egui_extras = {version = "0.21.0", features = ["image"]}
-egui_extras = {git = "https://github.com/senchpimy/egui", rev="d99fac7", features = ["image"]}
+egui_extras = {version = "0.21.0", features = ["image"]}
+#egui_extras = {git = "https://github.com/senchpimy/egui", rev="d99fac7", features = ["image"]}
 filebuffer = "0.4.0"
 image = { version = "0.24.5", default-features = false, features = ["png","jpeg"] }
 json="0.12.4"
