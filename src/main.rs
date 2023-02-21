@@ -30,6 +30,7 @@ struct Marmol{
     current_window: i8,
     buffer_image:RetainedImage,
     commoncache:CommonMarkCache,
+    renderfile:bool,
 
     left_collpased:bool,
     vault: String,
@@ -60,6 +61,7 @@ impl Default for Marmol {
     fn default() -> Self {
         let current="/home/plof/Documents/1er-semestre-Fes/1er semestre/Tareas.md";
         Self {
+            renderfile:true,
             current_window:1,
             prev_current_file: current.to_owned(),
             buffer: files::read_file(current),
@@ -142,7 +144,7 @@ impl eframe::App for Marmol {
                    self.current_file.ends_with("jpg"){
                        let image_size = self.buffer_image.size_vec2();
                        //(Horizontal, Vertical)
-                       let mut size:egui::Vec2;
+                       let size:egui::Vec2;
                        if image_size[0]>800.0{
                             let vertical = (800.0*image_size[1])/image_size[0];
                             size = egui::vec2(800.0, vertical);
@@ -157,11 +159,22 @@ impl eframe::App for Marmol {
                            });
                }else{
                 self.buffer = files::read_file(&self.current_file);
-                //Comienza loop
+                //Principal
                 CentralPanel::default().show(ctx, |ui| {
+                    if self.renderfile{
               //  ui.columns(1, |columns|{
               //  for i in 0..1{
                         //ScrollArea::vertical().id_source(format!("{}",i)).show(&mut columns[i],|ui| {
+                        egui::TopBottomPanel::top("tabs").show_inside(ui,|ui| {
+                            let tabs= StripBuilder::new(ui);
+                            tabs.size(Size::exact(1.0))
+                            .vertical(|mut strip|{
+                                strip.cell(|ui|{
+                                    ui.label("here be a tab");
+                                });
+                            });
+                            //ui.label("here be tabs")
+                        });
                         egui::ScrollArea::vertical().show(ui,|ui| {
                             let header = Path::new(&self.current_file).file_name().unwrap();
                             ui.heading(header.to_str().unwrap());
@@ -169,14 +182,14 @@ impl eframe::App for Marmol {
                             if metadata.len()!=0{
                                 main_area::create_metadata(metadata,ui);
                             }
-//                           let mut edit=easy_mark::EasyMarkEditor::default();
-//                            edit.ui(ui);
                            CommonMarkViewer::new("viewer").show(ui, &mut self.commoncache, &content);
                         });
                 //}//termina for
                 //});//termina coluns
+                }else{
+                }
                     }); //termina CentralPanel
-                //termina loop
+                //Termina Principal
                }
             });
         }else if self.current_window==2{ //configuration

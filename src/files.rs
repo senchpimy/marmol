@@ -13,8 +13,11 @@ println!("{}",file_name);
 
 pub fn read_image(path: &str) ->Vec<u8>{
 // 30% faster
+ println!("empieza a leer");
 let fbuffer = FileBuffer::open(path).expect("failed to open file");
-fbuffer.leak().to_vec()
+let test =fbuffer.leak().to_vec();
+ println!("termina de leer");
+test
 }
 
 pub fn contents(contents:&String)->(String,String){

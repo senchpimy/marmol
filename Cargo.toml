@@ -11,6 +11,7 @@ eframe="0.21"
 chrono = "0.4.23"
 syntect = "5.0"
 egui_demo_lib = "0.21.0"
+serde = "1.0.152"
 #egui_demo_lib = { git = "https://github.com/senchpimy/egui", rev="d99fac7" }
 
 
