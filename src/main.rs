@@ -66,8 +66,8 @@ impl Default for Marmol {
             buffer_image: RetainedImage::from_image_bytes("colapse",include_bytes!("../colapse.png"),).unwrap(),
             commoncache:CommonMarkCache::default(),
             //tabs:vec![tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),],
- //           vault:String::from("/home/plof/Documents/1er-semestre-Fes/1er semestre/"),
-            vault:String::from("/home/plof/Pictures/"),
+            vault:String::from("/home/plof/Documents/1er-semestre-Fes/1er semestre/"),
+            //vault:String::from("/home/plof/Pictures/"),
             current_file:current.to_owned(),
 
             search_string_menu:"".to_owned(),

@@ -43,8 +43,13 @@ fn top_panel_menu_left (ui:&mut egui::Ui, textures:Vec<TextureId>, path:&str, cu
             }
         }
         if search_string_menu!=prev_search_string_menu{
-            *search_results = search::check_dir(path,search_string_menu,regex_search);
-            *prev_search_string_menu=search_string_menu.to_string();
+            if *regex_search{
+                *search_results = search::check_dir_regex(path,search_string_menu);
+                *prev_search_string_menu=search_string_menu.to_string();
+            }else{
+                *search_results = search::check_dir(path,search_string_menu);
+                *prev_search_string_menu=search_string_menu.to_string();
+            }
         }
         let style_frame = Style::default();
         let frame = Frame::group(&style_frame);
