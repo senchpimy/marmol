@@ -1,9 +1,8 @@
 use crate::search;
-use crate::files;
 use eframe::egui::{ScrollArea,Separator,TopBottomPanel,SidePanel,Context,Layout,Align,ImageButton,TextureId, Link,Style,Frame};
 use egui_extras::RetainedImage;
 use json;
-use egui::{ TextFormat, Color32,text::LayoutJob, FontId};
+use egui::{ TextFormat, Color32,text::LayoutJob};
 use std::fs;
 use std::path::Path;
 use chrono::prelude::*;

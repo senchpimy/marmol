@@ -1,8 +1,6 @@
 use egui_extras::RetainedImage;
 use std::path::Path;
 use egui::*;
-//use egui::text::LayoutJob;
-use egui_demo_lib::easy_mark;
 use egui_extras::{Size,StripBuilder};
 use egui_commonmark::*;
 
@@ -68,8 +66,8 @@ impl Default for Marmol {
             buffer_image: RetainedImage::from_image_bytes("colapse",include_bytes!("../colapse.png"),).unwrap(),
             commoncache:CommonMarkCache::default(),
             //tabs:vec![tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),],
-            vault:String::from("/home/plof/Documents/1er-semestre-Fes/1er semestre/"),
-            //vault:String::from("/home/plof/Pictures/"),
+ //           vault:String::from("/home/plof/Documents/1er-semestre-Fes/1er semestre/"),
+            vault:String::from("/home/plof/Pictures/"),
             current_file:current.to_owned(),
 
             search_string_menu:"".to_owned(),
@@ -143,9 +141,14 @@ impl eframe::App for Marmol {
                    self.current_file.ends_with("jpeg") ||
                    self.current_file.ends_with("jpg"){
                        let image_size = self.buffer_image.size_vec2();
-                       dbg!(image_size[0]);
                        //(Horizontal, Vertical)
-                       let size = egui::vec2(900.0, 1000.0);
+                       let mut size:egui::Vec2;
+                       if image_size[0]>800.0{
+                            let vertical = (800.0*image_size[1])/image_size[0];
+                            size = egui::vec2(800.0, vertical);
+                       }else{
+                            size = image_size;
+                       }
                        let scrolling_buffer = ScrollArea::vertical();
                            scrolling_buffer.show(ui,|ui| {
                                ui.add(
