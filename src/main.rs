@@ -3,7 +3,9 @@ use std::path::Path;
 use egui::*;
 use egui_extras::{Size,StripBuilder};
 use egui_commonmark::*;
-
+use directories::BaseDirs;
+use std::fs;
+use yaml_rust::{YamlLoader,Yaml};
 
 mod search;
 mod main_area;
@@ -34,6 +36,7 @@ struct Marmol{
 
     left_collpased:bool,
     vault: String,
+    vault_vec: Vec<Yaml>,
     current_file: String,
     current_left_tab: i8,
     search_string_menu:String,
@@ -60,6 +63,31 @@ struct Marmol{
 impl Default for Marmol {
     fn default() -> Self {
         let current="/home/plof/Documents/1er-semestre-Fes/1er semestre/Tareas.md";
+        let mut vault_var:String=String::from("/home/plof/Pictures/");
+        let mut vault_vec_var:Vec<Yaml> = vec![];
+        let binding = BaseDirs::new().unwrap();
+        let home_dir = binding.home_dir().to_str().unwrap();
+        let mut config_path = String::from(home_dir);
+        config_path=config_path+"/.config/marmol";
+        let dir = Path::new(&config_path);
+        if dir.exists(){
+            let file_saved = config_path+"/ProgramState";
+            let dir2 = Path::new(&file_saved);
+                if dir2.exists(){
+                        let data = fs::read_to_string(file_saved)
+                            .expect("Unable to read file");
+                        let docs = YamlLoader::load_from_str(&data).unwrap();
+                        let docs = &docs[0];
+                        vault_var = docs["vault"].as_str().unwrap().to_string();
+                        vault_vec_var = docs["vault_vec"].as_vec().unwrap().to_vec();
+                    println!("Estado anterior cargado");
+                    //return load_file(file_saved, 0).unwrap()
+                }
+        }else{
+            fs::create_dir(&dir);
+            println!("Dir created");
+        }
+
         Self {
             renderfile:true,
             current_window:1,
@@ -68,8 +96,8 @@ impl Default for Marmol {
             buffer_image: RetainedImage::from_image_bytes("colapse",include_bytes!("../colapse.png"),).unwrap(),
             commoncache:CommonMarkCache::default(),
             //tabs:vec![tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),],
-            vault:String::from("/home/plof/Documents/1er-semestre-Fes/1er semestre/"),
-            //vault:String::from("/home/plof/Pictures/"),
+            vault:vault_var,
+            vault_vec:vault_vec_var,
             current_file:current.to_owned(),
 
             search_string_menu:"".to_owned(),
@@ -202,5 +230,17 @@ impl eframe::App for Marmol {
 //        ui.label("Floating text!");
 //    });
 /////////////////////////////////////////////////////////////////////////////////
+    }
+    fn on_close_event(&mut self) -> bool {
+        let vault_str = format!("vault: '{}'\n",&self.vault);
+        let mut vec_str=String::new();
+        dbg!(vault_str);
+        for i in &self.vault_vec{
+            let u =i.as_str().unwrap();
+            vec_str = vec_str.to_owned() + format!(" '{}' ,",&u).as_str();
+        }
+        let vault_vec_str = format!("vault_vec: [ {} ]",vec_str);
+            dbg!(vault_vec_str);
+        true
     }
 }
