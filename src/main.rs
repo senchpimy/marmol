@@ -6,13 +6,15 @@ use egui_commonmark::*;
 use directories::BaseDirs;
 use std::fs;
 use yaml_rust::{YamlLoader,Yaml};
+use std::io::Write;
 
 mod search;
 mod main_area;
 mod files;
 //mod tabs;
 
-fn main() {
+//fn main() -> std::io::Result<()>{
+fn main() -> Result<(), eframe::Error>{
     let options = eframe::NativeOptions {
         initial_window_size: Some(egui::vec2(320.0, 240.0)),
         ..Default::default()
@@ -21,7 +23,7 @@ fn main() {
         "Marmol",
         options,
         Box::new(|_cc| Box::new(Marmol::default())),
-    );
+    )
 }
 
 
@@ -33,6 +35,7 @@ struct Marmol{
     buffer_image:RetainedImage,
     commoncache:CommonMarkCache,
     renderfile:bool,
+    config_path:String,
 
     left_collpased:bool,
     vault: String,
@@ -67,11 +70,11 @@ impl Default for Marmol {
         let mut vault_vec_var:Vec<Yaml> = vec![];
         let binding = BaseDirs::new().unwrap();
         let home_dir = binding.home_dir().to_str().unwrap();
-        let mut config_path = String::from(home_dir);
-        config_path=config_path+"/.config/marmol";
-        let dir = Path::new(&config_path);
+        let mut config_path_var = String::from(home_dir);
+        config_path_var=config_path_var+"/.config/marmol";
+        let dir = Path::new(&config_path_var);
         if dir.exists(){
-            let file_saved = config_path+"/ProgramState";
+            let file_saved = String::from(&config_path_var)+"/ProgramState";
             let dir2 = Path::new(&file_saved);
                 if dir2.exists(){
                         let data = fs::read_to_string(file_saved)
@@ -89,6 +92,7 @@ impl Default for Marmol {
         }
 
         Self {
+            config_path:config_path_var.to_owned(),
             renderfile:true,
             current_window:1,
             prev_current_file: current.to_owned(),
@@ -231,16 +235,22 @@ impl eframe::App for Marmol {
 //    });
 /////////////////////////////////////////////////////////////////////////////////
     }
-    fn on_close_event(&mut self) -> bool {
-        let vault_str = format!("vault: '{}'\n",&self.vault);
+
+
+    fn on_close_event(&mut self) -> bool{
+        let vault_str = format!("vault: '{}'",&self.vault);
         let mut vec_str=String::new();
-        dbg!(vault_str);
+        //dbg!(vault_str);
         for i in &self.vault_vec{
             let u =i.as_str().unwrap();
             vec_str = vec_str.to_owned() + format!(" '{}' ,",&u).as_str();
         }
+
         let vault_vec_str = format!("vault_vec: [ {} ]",vec_str);
-            dbg!(vault_vec_str);
-        true
+            let file_path = String::from(&self.config_path) + "/ProgramState";
+            let new_content= format!("{}\n{}",&vault_vec_str,vault_str);
+            let mut file = fs::File::create(&file_path).unwrap();
+            file.write_all(new_content.as_bytes());
+            true
     }
 }
