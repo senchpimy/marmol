@@ -67,10 +67,10 @@ pub fn check_dir(path: &str, query: &str) -> Vec<MenuItem>{
 
 
 fn check_file_regex(file_path: &Path, query: &str, result: &mut MenuItem) {
+    let re = Regex::new(query).unwrap();
     match fstream::read_lines(file_path) {
         Some(lines) => {
             for line in lines {
-                let re = Regex::new(query).unwrap();
                 if re.is_match(&line){
                     let line: String = line.trim().chars().take(200).collect();
                     result.text=line.as_str().to_string();

@@ -11,6 +11,7 @@ use std::io::Write;
 mod search;
 mod main_area;
 mod files;
+mod default_screen;
 //mod tabs;
 
 //fn main() -> std::io::Result<()>{
@@ -94,7 +95,7 @@ impl Default for Marmol {
         Self {
             config_path:config_path_var.to_owned(),
             renderfile:true,
-            current_window:1,
+            current_window:0,
             prev_current_file: current.to_owned(),
             buffer: files::read_file(current),
             buffer_image: RetainedImage::from_image_bytes("colapse",include_bytes!("../colapse.png"),).unwrap(),
@@ -134,11 +135,7 @@ impl eframe::App for Marmol {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         //dbg!(Size::exact(50.0));
         if self.current_window==0 { //welcome screen
-            CentralPanel::default().show(ctx,|ui|{
-                ui.heading("Marmol");
-                ui.label("select a vault");
-                ui.label("configuration");
-            });
+            default_screen::default(ctx)
             
         }   else if self.current_window==1{ //Main screen
             let side_settings_images = [&self.colapse_image,
