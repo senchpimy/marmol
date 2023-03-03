@@ -36,6 +36,7 @@ struct Marmol{
     buffer_image:RetainedImage,
     commoncache:CommonMarkCache,
     renderfile:bool,
+    is_image:bool,
     config_path:String,
 
     left_collpased:bool,
@@ -95,11 +96,12 @@ impl Default for Marmol {
         Self {
             config_path:config_path_var.to_owned(),
             renderfile:true,
-            current_window:0,
+            current_window:1,
             prev_current_file: current.to_owned(),
             buffer: files::read_file(current),
             buffer_image: RetainedImage::from_image_bytes("colapse",include_bytes!("../colapse.png"),).unwrap(),
             commoncache:CommonMarkCache::default(),
+            is_image:false,
             //tabs:vec![tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),],
             vault:vault_var,
             vault_vec:vault_vec_var,
@@ -164,13 +166,14 @@ impl eframe::App for Marmol {
                     if self.current_file.ends_with(".png") || 
                        self.current_file.ends_with("jpeg") ||
                        self.current_file.ends_with("jpg"){
-                        self.buffer_image=RetainedImage::from_image_bytes("buffer_image",&files::read_image(&self.current_file)).unwrap()
+                        self.buffer_image=RetainedImage::from_image_bytes("buffer_image",&files::read_image(&self.current_file)).unwrap();
+                        self.is_image=true;
+                    }else{
+                        self.is_image=false;
                     }
                }
 
-               if self.current_file.ends_with(".png")||
-                   self.current_file.ends_with("jpeg") ||
-                   self.current_file.ends_with("jpg"){
+               if self.is_image {
                        let image_size = self.buffer_image.size_vec2();
                        //(Horizontal, Vertical)
                        let size:egui::Vec2;
