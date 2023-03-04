@@ -103,7 +103,7 @@ fn render_files(ui:&mut egui::Ui, path:&str,current_file:&mut String){
 
  }
 
-pub fn left_side_settings(ctx:&Context, colapse:&mut bool, images:&[&RetainedImage], vault:&mut String,current_file:&mut String ){
+pub fn left_side_settings(ctx:&Context, colapse:&mut bool, images:&[&RetainedImage], vault:&mut String,current_file:&mut String, current_window:&mut i8){
     let left_panel = SidePanel::left("buttons left").resizable(false).default_width(1.);
     let space = 10.;
     left_panel.show(ctx,|ui| {
@@ -130,11 +130,11 @@ pub fn left_side_settings(ctx:&Context, colapse:&mut bool, images:&[&RetainedIma
         if ui.add(ImageButton::new(images[5].texture_id(ctx), egui::vec2(18.0, 18.0)).frame(false)).clicked(){println!("commandpale")}//palette
         ui.with_layout(Layout::bottom_up(Align::Max),|ui|{
         ui.add_space(5.);
-             if ui.add(ImageButton::new(images[6].texture_id(ctx), egui::vec2(18.0, 18.0)).frame(false)).clicked(){println!("conf")}
+             if ui.add(ImageButton::new(images[8].texture_id(ctx), egui::vec2(18.0, 18.0)).frame(false)).clicked(){*current_window=2;}
         ui.add_space(5.);
              if ui.add(ImageButton::new(images[7].texture_id(ctx), egui::vec2(18.0, 18.0)).frame(false)).clicked(){println!("help")}
         ui.add_space(5.);
-             if ui.add(ImageButton::new(images[8].texture_id(ctx), egui::vec2(18.0, 18.0)).frame(false)).clicked(){println!("vault")}
+             if ui.add(ImageButton::new(images[6].texture_id(ctx), egui::vec2(18.0, 18.0)).frame(false)).clicked(){println!("vault")}
 
         });
         });

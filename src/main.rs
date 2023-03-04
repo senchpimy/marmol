@@ -11,13 +11,12 @@ use std::io::Write;
 mod search;
 mod main_area;
 mod files;
-mod default_screen;
-//mod tabs;
+mod screens;
+mod configuraciones;
 
-//fn main() -> std::io::Result<()>{
 fn main() -> Result<(), eframe::Error>{
     let options = eframe::NativeOptions {
-        initial_window_size: Some(egui::vec2(320.0, 240.0)),
+        initial_window_size: Some(egui::vec2(500.0, 600.0)),
         ..Default::default()
     };
     eframe::run_native(
@@ -31,6 +30,8 @@ fn main() -> Result<(), eframe::Error>{
 struct Marmol{
     buffer: String,
     prev_current_file: String,
+    open_vault_str:String,
+    new_vault_str:String,
     //tabs: Vec<tabs::Tab>,
     current_window: i8,
     buffer_image:RetainedImage,
@@ -67,38 +68,16 @@ struct Marmol{
 
 impl Default for Marmol {
     fn default() -> Self {
-        let current="/home/plof/Documents/1er-semestre-Fes/1er semestre/Tareas.md";
-        let mut vault_var:String=String::from("/home/plof/Pictures/");
-        let mut vault_vec_var:Vec<Yaml> = vec![];
-        let binding = BaseDirs::new().unwrap();
-        let home_dir = binding.home_dir().to_str().unwrap();
-        let mut config_path_var = String::from(home_dir);
-        config_path_var=config_path_var+"/.config/marmol";
-        let dir = Path::new(&config_path_var);
-        if dir.exists(){
-            let file_saved = String::from(&config_path_var)+"/ProgramState";
-            let dir2 = Path::new(&file_saved);
-                if dir2.exists(){
-                        let data = fs::read_to_string(file_saved)
-                            .expect("Unable to read file");
-                        let docs = YamlLoader::load_from_str(&data).unwrap();
-                        let docs = &docs[0];
-                        vault_var = docs["vault"].as_str().unwrap().to_string();
-                        vault_vec_var = docs["vault_vec"].as_vec().unwrap().to_vec();
-                    println!("Estado anterior cargado");
-                    //return load_file(file_saved, 0).unwrap()
-                }
-        }else{
-            fs::create_dir(&dir);
-            println!("Dir created");
-        }
 
+        let (_,vault_var, vault_vec_var, current, config_path_var)=configuraciones::load_vault();
         Self {
+            open_vault_str:String::from(""),
+            new_vault_str:String::from(""),
             config_path:config_path_var.to_owned(),
             renderfile:true,
             current_window:1,
             prev_current_file: current.to_owned(),
-            buffer: files::read_file(current),
+            buffer: files::read_file(&current),
             buffer_image: RetainedImage::from_image_bytes("colapse",include_bytes!("../colapse.png"),).unwrap(),
             commoncache:CommonMarkCache::default(),
             is_image:false,
@@ -137,8 +116,7 @@ impl eframe::App for Marmol {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         //dbg!(Size::exact(50.0));
         if self.current_window==0 { //welcome screen
-            default_screen::default(ctx)
-            
+            screens::default(ctx,&mut self.current_window,&mut self.open_vault_str,&mut self.new_vault_str);
         }   else if self.current_window==1{ //Main screen
             let side_settings_images = [&self.colapse_image,
                                         &self.switcher_image,
@@ -149,7 +127,7 @@ impl eframe::App for Marmol {
                                         &self.vault_image,
                                         &self.help_image,
                                         &self.config_image];
-            main_area::left_side_settings(ctx,&mut self.left_collpased, &side_settings_images,&mut self.vault ,&mut self.current_file);
+            main_area::left_side_settings(ctx,&mut self.left_collpased, &side_settings_images,&mut self.vault ,&mut self.current_file,&mut self.current_window);
     
             let menu_images = vec![&self.files_image, 
                                    &self.search_image, 
@@ -225,7 +203,7 @@ impl eframe::App for Marmol {
                }
             });
         }else if self.current_window==2{ //configuration
-            
+                            screens::configuracion(ctx,&mut self.current_window);
         };
 //       let mut edit=easy_mark::EasyMarkEditor::default();
 //        CentralPanel::default().show(ctx, |ui| edit.ui(ui));
