@@ -1,7 +1,14 @@
 use eframe::egui::{CentralPanel,RichText,Color32};
 use std::path::Path;
 
-pub fn default(ctx:&egui::Context, current_window : &mut i8, contenido:&mut String, nuevo:&mut String){
+#[derive(PartialEq)]
+pub enum Screen{
+Main,
+Configuracion,
+Default,
+}
+
+pub fn default(ctx:&egui::Context, current_window : &mut Screen, contenido:&mut String, nuevo:&mut String){
             let mut  open_bool=false;
             let mut  nuevo_bool=false;
             CentralPanel::default().show(ctx,|ui|{
@@ -55,12 +62,12 @@ pub fn default(ctx:&egui::Context, current_window : &mut i8, contenido:&mut Stri
                 };
                     ui.add_space(30.0);
                 if ui.button("configuration").clicked(){
-                    *current_window=2;
+                    *current_window=Screen::Configuracion;
                 };
                  });
             });
 }
-pub fn configuracion(ctx:&egui::Context, current_window : &mut i8){
+pub fn configuracion(ctx:&egui::Context, current_window : &mut Screen){
             CentralPanel::default().show(ctx,|ui|{
                 if ui.button("Select theme").clicked(){
                 }
@@ -71,7 +78,7 @@ pub fn configuracion(ctx:&egui::Context, current_window : &mut i8){
                 if ui.button("Open Vault").clicked(){
                 }
                 if ui.button("return").clicked(){
-                    *current_window=1;
+                    *current_window=Screen::Main;
                 };
             });
 }

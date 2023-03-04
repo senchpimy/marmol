@@ -33,7 +33,7 @@ struct Marmol{
     open_vault_str:String,
     new_vault_str:String,
     //tabs: Vec<tabs::Tab>,
-    current_window: i8,
+    current_window: screens::Screen,
     buffer_image:RetainedImage,
     commoncache:CommonMarkCache,
     renderfile:bool,
@@ -75,7 +75,7 @@ impl Default for Marmol {
             new_vault_str:String::from(""),
             config_path:config_path_var.to_owned(),
             renderfile:true,
-            current_window:1,
+            current_window: screens::Screen::Default,
             prev_current_file: current.to_owned(),
             buffer: files::read_file(&current),
             buffer_image: RetainedImage::from_image_bytes("colapse",include_bytes!("../colapse.png"),).unwrap(),
@@ -115,9 +115,9 @@ impl Default for Marmol {
 impl eframe::App for Marmol {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         //dbg!(Size::exact(50.0));
-        if self.current_window==0 { //welcome screen
+        if self.current_window == screens::Screen::Default { //welcome screen
             screens::default(ctx,&mut self.current_window,&mut self.open_vault_str,&mut self.new_vault_str);
-        }   else if self.current_window==1{ //Main screen
+        }else if self.current_window == screens::Screen::Main{ //Main screen
             let side_settings_images = [&self.colapse_image,
                                         &self.switcher_image,
                                         &self.graph_image,
@@ -202,7 +202,7 @@ impl eframe::App for Marmol {
                 //Termina Principal
                }
             });
-        }else if self.current_window==2{ //configuration
+        }else if self.current_window==screens::Screen::Configuracion { //configuration
                             screens::configuracion(ctx,&mut self.current_window);
         };
 //       let mut edit=easy_mark::EasyMarkEditor::default();
