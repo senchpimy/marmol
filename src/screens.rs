@@ -6,6 +6,7 @@ pub enum Screen{
 Main,
 Configuracion,
 Default,
+Server,
 }
 
 pub fn default(ctx:&egui::Context, current_window : &mut Screen, contenido:&mut String, nuevo:&mut String){
@@ -80,7 +81,11 @@ pub fn configuracion(ctx:&egui::Context, current_window : &mut Screen){
                 if ui.button("return").clicked(){
                     *current_window=Screen::Main;
                 };
+                if ui.button("Configure Backup Server").clicked(){
+                    *current_window=Screen::Server;
+                };
             });
 }
 
-
+pub fn set_server(){
+}

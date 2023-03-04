@@ -69,13 +69,13 @@ struct Marmol{
 impl Default for Marmol {
     fn default() -> Self {
 
-        let (_,vault_var, vault_vec_var, current, config_path_var)=configuraciones::load_vault();
+        let (vault_var, vault_vec_var, current, config_path_var,window)=configuraciones::load_vault();
         Self {
             open_vault_str:String::from(""),
             new_vault_str:String::from(""),
             config_path:config_path_var.to_owned(),
             renderfile:true,
-            current_window: screens::Screen::Default,
+            current_window: window,
             prev_current_file: current.to_owned(),
             buffer: files::read_file(&current),
             buffer_image: RetainedImage::from_image_bytes("colapse",include_bytes!("../colapse.png"),).unwrap(),
@@ -226,7 +226,8 @@ impl eframe::App for Marmol {
 
         let vault_vec_str = format!("vault_vec: [ {} ]",vec_str);
             let file_path = String::from(&self.config_path) + "/ProgramState";
-            let new_content= format!("{}\n{}",&vault_vec_str,vault_str);
+            let current_file = format!("current: {}", &self.current_file);
+            let new_content= format!("{}\n{}\n{}",&vault_vec_str,vault_str,current_file);
             let mut file = fs::File::create(&file_path).unwrap();
             file.write_all(new_content.as_bytes());
             true
