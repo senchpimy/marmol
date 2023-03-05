@@ -3,10 +3,10 @@ use std::path::Path;
 use egui::*;
 use egui_extras::{Size,StripBuilder};
 use egui_commonmark::*;
-use directories::BaseDirs;
 use std::fs;
-use yaml_rust::{YamlLoader,Yaml};
 use std::io::Write;
+use yaml_rust::Yaml;
+//use directories::BaseDirs;
 
 mod search;
 mod main_area;
@@ -39,31 +39,12 @@ struct Marmol{
     renderfile:bool,
     is_image:bool,
     config_path:String,
+    left_controls:main_area::LeftControls,
 
     left_collpased:bool,
     vault: String,
     vault_vec: Vec<Yaml>,
     current_file: String,
-    current_left_tab: i8,
-    search_string_menu:String,
-    prev_search_string_menu:String,
-    search_results:Vec<search::MenuItem>,
-    regex_search:bool,
-
-    //right_collpased:bool,
-    colapse_image:RetainedImage,
-    files_image:RetainedImage,
-    search_image:RetainedImage,
-    new_file:RetainedImage,
-    starred_image:RetainedImage,
-    config_image:RetainedImage,
-    vault_image:RetainedImage,
-    help_image:RetainedImage,
-    switcher_image:RetainedImage,
-    graph_image:RetainedImage,
-    canvas_image:RetainedImage,
-    daynote_image:RetainedImage,
-    command_image:RetainedImage,
 }
 
 impl Default for Marmol {
@@ -71,6 +52,7 @@ impl Default for Marmol {
 
         let (vault_var, vault_vec_var, current, config_path_var,window)=configuraciones::load_vault();
         Self {
+            left_controls:main_area::LeftControls::default(),
             open_vault_str:String::from(""),
             new_vault_str:String::from(""),
             config_path:config_path_var.to_owned(),
@@ -86,27 +68,8 @@ impl Default for Marmol {
             vault_vec:vault_vec_var,
             current_file:current.to_owned(),
 
-            search_string_menu:"".to_owned(),
-            prev_search_string_menu:"".to_owned(),
-            search_results:vec![],
-            regex_search:false,
-
-            current_left_tab:0,
             left_collpased:true,
             //right_collpased:true,
-            colapse_image: RetainedImage::from_image_bytes("colapse",include_bytes!("../colapse.png"),).unwrap(),
-            search_image: RetainedImage::from_image_bytes("search",include_bytes!("../search.png"),).unwrap(),
-            new_file: RetainedImage::from_image_bytes("search",include_bytes!("../new_file.png"),).unwrap(),
-            starred_image: RetainedImage::from_image_bytes("starred",include_bytes!("../starred.png"),).unwrap(),
-            files_image: RetainedImage::from_image_bytes("files",include_bytes!("../files.png"),).unwrap(),
-            config_image: RetainedImage::from_image_bytes("cpnfiguration",include_bytes!("../configuration.png"),).unwrap(),
-            help_image: RetainedImage::from_image_bytes("help",include_bytes!("../help.png"),).unwrap(),
-            vault_image: RetainedImage::from_image_bytes("vault",include_bytes!("../vault.png"),).unwrap(),
-            switcher_image: RetainedImage::from_image_bytes("switcher",include_bytes!("../switcher.png"),).unwrap(),
-            graph_image: RetainedImage::from_image_bytes("graph",include_bytes!("../graph.png"),).unwrap(),
-            canvas_image: RetainedImage::from_image_bytes("canvas",include_bytes!("../canvas.png"),).unwrap(),
-            daynote_image: RetainedImage::from_image_bytes("daynote",include_bytes!("../daynote.png"),).unwrap(),
-            command_image: RetainedImage::from_image_bytes("command",include_bytes!("../command.png"),).unwrap(),
             
         }
     }
@@ -118,25 +81,10 @@ impl eframe::App for Marmol {
         if self.current_window == screens::Screen::Default { //welcome screen
             screens::default(ctx,&mut self.current_window,&mut self.open_vault_str,&mut self.new_vault_str);
         }else if self.current_window == screens::Screen::Main{ //Main screen
-            let side_settings_images = [&self.colapse_image,
-                                        &self.switcher_image,
-                                        &self.graph_image,
-                                        &self.canvas_image,
-                                        &self.daynote_image,
-                                        &self.command_image,
-                                        &self.vault_image,
-                                        &self.help_image,
-                                        &self.config_image];
-            main_area::left_side_settings(ctx,&mut self.left_collpased, &side_settings_images,&mut self.vault ,&mut self.current_file,&mut self.current_window);
+            self.left_controls.left_side_settings(ctx,&mut self.left_collpased,&mut self.vault ,&mut self.current_file,&mut self.current_window);
     
-            let menu_images = vec![&self.files_image, 
-                                   &self.search_image, 
-                                   &self.starred_image,];
-            main_area::left_side_menu(ctx,&self.left_collpased,menu_images, 
-                           &self.vault, &mut self.current_file, &mut self.current_left_tab,
-                           &mut self.search_string_menu,&mut self.prev_search_string_menu, 
-                           &mut self.search_results,
-                           &mut self.regex_search);
+            self.left_controls.left_side_menu(ctx,&self.left_collpased, 
+                           &self.vault, &mut self.current_file);
 
             CentralPanel::default().show(ctx, |ui|{
                if self.prev_current_file!=self.current_file{
@@ -204,13 +152,9 @@ impl eframe::App for Marmol {
             });
         }else if self.current_window==screens::Screen::Configuracion { //configuration
                             screens::configuracion(ctx,&mut self.current_window);
+        }else if self.current_window == screens::Screen::Server{
+            screens::set_server(ctx);
         };
-//       let mut edit=easy_mark::EasyMarkEditor::default();
-//        CentralPanel::default().show(ctx, |ui| edit.ui(ui));
-//        egui::Area::new("my_area")
-//    .show(ctx, |ui| {
-//        ui.label("Floating text!");
-//    });
 /////////////////////////////////////////////////////////////////////////////////
     }
 

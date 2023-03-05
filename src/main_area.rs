@@ -10,56 +10,103 @@ use chrono::prelude::*;
 use std::fs::File;
 use yaml_rust::{YamlLoader,YamlEmitter};
 
-pub fn left_side_menu(ctx:&Context, colapse:&bool, images:Vec<&RetainedImage> , 
-                  path:&str, current_file:&mut String, left_tab:&mut i8, search_string_menu:&mut String,
-                  prev_search_string_menu:&mut String, search_results:&mut Vec<search::MenuItem>,
-                  regex_search:&mut bool){
+//#[derive(Debug)]
+pub struct LeftControls {
+    current_left_tab: i8,
+    search_string_menu:String,
+    prev_search_string_menu:String,
+    search_results:Vec<search::MenuItem>,
+    regex_search:bool,
+
+    //right_collpased:bool,
+    colapse_image:RetainedImage,
+    files_image:RetainedImage,
+    search_image:RetainedImage,
+    new_file:RetainedImage,
+    starred_image:RetainedImage,
+    config_image:RetainedImage,
+    vault_image:RetainedImage,
+    help_image:RetainedImage,
+    switcher_image:RetainedImage,
+    graph_image:RetainedImage,
+    canvas_image:RetainedImage,
+    daynote_image:RetainedImage,
+    command_image:RetainedImage,
+}
+
+impl Default for LeftControls{
+    fn default() -> Self {
+        Self{
+            current_left_tab:0,
+            search_string_menu:"".to_owned(),
+            prev_search_string_menu:"".to_owned(),
+            search_results:vec![],
+            regex_search:false,
+            colapse_image: RetainedImage::from_image_bytes("colapse",include_bytes!("../colapse.png"),).unwrap(),
+            files_image: RetainedImage::from_image_bytes("files",include_bytes!("../files.png"),).unwrap(),
+            search_image: RetainedImage::from_image_bytes("search",include_bytes!("../search.png"),).unwrap(),
+            new_file: RetainedImage::from_image_bytes("search",include_bytes!("../new_file.png"),).unwrap(),
+            starred_image: RetainedImage::from_image_bytes("starred",include_bytes!("../starred.png"),).unwrap(),
+            config_image: RetainedImage::from_image_bytes("cpnfiguration",include_bytes!("../configuration.png"),).unwrap(),
+            vault_image: RetainedImage::from_image_bytes("vault",include_bytes!("../vault.png"),).unwrap(),
+            help_image: RetainedImage::from_image_bytes("help",include_bytes!("../help.png"),).unwrap(),
+            switcher_image: RetainedImage::from_image_bytes("switcher",include_bytes!("../switcher.png"),).unwrap(),
+            graph_image: RetainedImage::from_image_bytes("graph",include_bytes!("../graph.png"),).unwrap(),
+            canvas_image: RetainedImage::from_image_bytes("canvas",include_bytes!("../canvas.png"),).unwrap(),
+            daynote_image: RetainedImage::from_image_bytes("daynote",include_bytes!("../daynote.png"),).unwrap(),
+            command_image: RetainedImage::from_image_bytes("command",include_bytes!("../command.png"),).unwrap(),
+        }
+    }
+}
+impl LeftControls{
+pub fn left_side_menu(&mut self, ctx:&Context, colapse:&bool, 
+                  path:&str, current_file:&mut String,){
     let left_panel = SidePanel::left("buttons left menu").default_width(100.).min_width(100.).max_width(300.);
-    let textures = vec![images[0].texture_id(ctx), images[1].texture_id(ctx), images[2].texture_id(ctx)];
+    let textures = vec![self.files_image.texture_id(ctx), self.search_image.texture_id(ctx), 
+                        self.starred_image.texture_id(ctx)];
     left_panel.show_animated(ctx, *colapse,|ui| {
-        top_panel_menu_left(ui,textures, path, current_file,left_tab,search_string_menu,prev_search_string_menu,search_results,regex_search);
+        self.top_panel_menu_left(ui,textures, path, current_file);
     });
 }
 
-fn top_panel_menu_left (ui:&mut egui::Ui, textures:Vec<TextureId>, path:&str, current_file:&mut String,left_tab:&mut i8, search_string_menu:&mut String,prev_search_string_menu:&mut String, search_results:&mut Vec<search::MenuItem>,
-                        regex_search:&mut bool){
+fn top_panel_menu_left (&mut self,ui:&mut egui::Ui, textures:Vec<TextureId>, path:&str, current_file:&mut String){
     TopBottomPanel::top("Left Menu").show_inside(ui, |ui|{
         ui.with_layout(Layout::left_to_right(Align::Min),|ui| {
-     if ui.add(ImageButton::new(textures[0], egui::vec2(18.0, 18.0)).frame(false)).clicked(){println!("files");*left_tab=0;}
-     if ui.add(ImageButton::new(textures[1], egui::vec2(18.0, 18.0)).frame(false)).clicked(){println!("search"); *left_tab=1;}
-     if ui.add(ImageButton::new(textures[2], egui::vec2(18.0, 18.0)).frame(false)).clicked(){println!("starred"); *left_tab=2;}
+     if ui.add(ImageButton::new(textures[0], egui::vec2(18.0, 18.0)).frame(false)).clicked(){self.current_left_tab=0;}
+     if ui.add(ImageButton::new(textures[1], egui::vec2(18.0, 18.0)).frame(false)).clicked(){self.current_left_tab=1;}
+     if ui.add(ImageButton::new(textures[2], egui::vec2(18.0, 18.0)).frame(false)).clicked(){self.current_left_tab=2;}
         });
     });
-    if *left_tab==0{
+    if self.current_left_tab==0{
         let scrolling_files = ScrollArea::vertical();
         scrolling_files.show(ui,|ui| {
-        render_files(ui,path, current_file);
+        Self::render_files(ui,path, current_file);
         });
-    }else if *left_tab==1{
-        ui.text_edit_singleline(search_string_menu);
-        ui.checkbox(regex_search,"regex");
-        if *regex_search{
+    }else if self.current_left_tab==1{
+        ui.text_edit_singleline(&mut self.search_string_menu);
+        ui.checkbox(&mut self.regex_search,"regex");
+        if self.regex_search{
             if ui.button("search").clicked(){
                 unimplemented!();
             }
         }
-        if search_string_menu!=prev_search_string_menu{
-            if *regex_search{
-                *search_results = search::check_dir_regex(path,search_string_menu);
-                *prev_search_string_menu=search_string_menu.to_string();
+        if self.search_string_menu!=self.prev_search_string_menu{
+            if self.regex_search{
+                self.search_results = search::check_dir_regex(path,&self.search_string_menu);
+                self.prev_search_string_menu=self.search_string_menu.to_string();
             }else{
-                *search_results = search::check_dir(path,search_string_menu);
-                *prev_search_string_menu=search_string_menu.to_string();
+                self.search_results = search::check_dir(path,&self.search_string_menu);
+                self.prev_search_string_menu=self.search_string_menu.to_string();
             }
         }
         let style_frame = Style::default();
         let frame = Frame::group(&style_frame);
-        if search_string_menu.len()<1{
-            *search_results = vec![];
+        if self.search_string_menu.len()<1{
+            self.search_results = vec![];
         }
         let scrolling_search = ScrollArea::vertical();
         scrolling_search.show(ui,|ui| {
-            for i in search_results{
+            for i in &self.search_results{
                 frame.show(ui, |ui|{
                     let mut title = LayoutJob::default();
                     title.append(&i.path.strip_prefix(&path).unwrap(),0.0,TextFormat{color:Color32::RED,..Default::default()});
@@ -71,14 +118,18 @@ fn top_panel_menu_left (ui:&mut egui::Ui, textures:Vec<TextureId>, path:&str, cu
                 });
             }
         });
-    }else if *left_tab==2{
+    }else if self.current_left_tab==2{
         let contents = fs::read_to_string(format!("{}/.obsidian/starred.json",path))
             .expect("Should have been able to read the file");
         let parsed = json::parse(&contents).unwrap();
         for (_key, value) in parsed.entries() {
             for i in 0..value.len(){
                 let text=format!("{}",parsed["items"][i]["path"]);
-                ui.label(&text);
+                let clickable_starred = Link::new(&text);
+          //      ui.label(&text);
+                if ui.add(clickable_starred).clicked() {
+                    *current_file = text;
+                }
             }
         }
     }
@@ -91,26 +142,25 @@ fn render_files(ui:&mut egui::Ui, path:&str,current_file:&mut String){
             if Path::new(&file_location).is_dir(){
                 let col = egui::containers::collapsing_header::CollapsingHeader::new(file_name);
                 col.show(ui, |ui| {
-                render_files(ui,&file_location, current_file);
+                Self::render_files(ui,&file_location, current_file);
                 });
             }else{
                 let clickable = Link::new(file_name);
                 if ui.add(clickable).clicked() {
                     *current_file = file_location;
-                    println!("{}",current_file);
                 }
             }
         }
 
  }
 
-pub fn left_side_settings(ctx:&Context, colapse:&mut bool, images:&[&RetainedImage], vault:&mut String,current_file:&mut String, current_window:&mut screens::Screen){
+pub fn left_side_settings(&self,ctx:&Context, colapse:&mut bool, vault:&mut String,current_file:&mut String, current_window:&mut screens::Screen){
     let left_panel = SidePanel::left("buttons left").resizable(false).default_width(1.);
     let space = 10.;
     left_panel.show(ctx,|ui| {
         ui.add_space(5.);
         ui.vertical(|ui| {
-        if ui.add(ImageButton::new(images[0].texture_id(ctx), egui::vec2(18.0, 18.0)).frame(false)).clicked(){
+        if ui.add(ImageButton::new(self.colapse_image.texture_id(ctx), egui::vec2(18.0, 18.0)).frame(false)).clicked(){
             if *colapse{
                 *colapse=false;
             }else{
@@ -118,24 +168,24 @@ pub fn left_side_settings(ctx:&Context, colapse:&mut bool, images:&[&RetainedIma
             }
         }
         ui.add(Separator::default());
-        if ui.add(ImageButton::new(images[1].texture_id(ctx), egui::vec2(18.0, 18.0)).frame(false)).clicked(){println!("switcher")} //quick switcher
+        if ui.add(ImageButton::new(self.switcher_image.texture_id(ctx), egui::vec2(18.0, 18.0)).frame(false)).clicked(){println!("switcher")} //quick switcher
         ui.add_space(space);
-        if ui.add(ImageButton::new(images[2].texture_id(ctx), egui::vec2(18.0, 18.0)).frame(false)).clicked(){println!("graph")}//graph
+        if ui.add(ImageButton::new(self.graph_image.texture_id(ctx), egui::vec2(18.0, 18.0)).frame(false)).clicked(){println!("graph")}//graph
         ui.add_space(space);
-        if ui.add(ImageButton::new(images[3].texture_id(ctx), egui::vec2(18.0, 18.0)).frame(false)).clicked(){println!("canvas")}//canvas
+        if ui.add(ImageButton::new(self.canvas_image.texture_id(ctx), egui::vec2(18.0, 18.0)).frame(false)).clicked(){println!("canvas")}//canvas
         ui.add_space(space);
-        if ui.add(ImageButton::new(images[4].texture_id(ctx), egui::vec2(18.0, 18.0)).frame(false)).clicked(){
-            create_date_file(vault, current_file);
+        if ui.add(ImageButton::new(self.daynote_image.texture_id(ctx), egui::vec2(18.0, 18.0)).frame(false)).clicked(){
+            Self::create_date_file(vault, current_file);
         }//note
         ui.add_space(space);
-        if ui.add(ImageButton::new(images[5].texture_id(ctx), egui::vec2(18.0, 18.0)).frame(false)).clicked(){println!("commandpale")}//palette
+        if ui.add(ImageButton::new(self.command_image.texture_id(ctx), egui::vec2(18.0, 18.0)).frame(false)).clicked(){println!("commandpale")}//palette
         ui.with_layout(Layout::bottom_up(Align::Max),|ui|{
         ui.add_space(5.);
-             if ui.add(ImageButton::new(images[8].texture_id(ctx), egui::vec2(18.0, 18.0)).frame(false)).clicked(){*current_window=screens::Screen::Configuracion;}
+             if ui.add(ImageButton::new(self.vault_image.texture_id(ctx), egui::vec2(18.0, 18.0)).frame(false)).clicked(){*current_window=screens::Screen::Configuracion;}
         ui.add_space(5.);
-             if ui.add(ImageButton::new(images[7].texture_id(ctx), egui::vec2(18.0, 18.0)).frame(false)).clicked(){println!("help")}
+             if ui.add(ImageButton::new(self.help_image.texture_id(ctx), egui::vec2(18.0, 18.0)).frame(false)).clicked(){println!("help")}
         ui.add_space(5.);
-             if ui.add(ImageButton::new(images[6].texture_id(ctx), egui::vec2(18.0, 18.0)).frame(false)).clicked(){println!("vault")}
+             if ui.add(ImageButton::new(self.config_image.texture_id(ctx), egui::vec2(18.0, 18.0)).frame(false)).clicked(){println!("vault")}
 
         });
         });
@@ -144,13 +194,15 @@ pub fn left_side_settings(ctx:&Context, colapse:&mut bool, images:&[&RetainedIma
 
 fn create_date_file(path:&String, current_file: &mut String) {
     let date = Local::now().format("%Y-%m-%d").to_string();
-    let file_name = format!("{}{}.md",path,date);
+    let file_name = format!("{}/{}.md",path,date);
     if Path::new(&file_name).exists(){
         *current_file=file_name.to_string();
     }else{
         File::create(&file_name).expect("Unable to create file");
         *current_file=file_name.to_string();
     }
+}
+
 }
 
 pub fn create_metadata(metadata:String, ui:&mut egui::Ui){

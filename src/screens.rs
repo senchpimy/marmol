@@ -87,5 +87,5 @@ pub fn configuracion(ctx:&egui::Context, current_window : &mut Screen){
             });
 }
 
-pub fn set_server(){
+pub fn set_server(ctx:&egui::Context){
 }
