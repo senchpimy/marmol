@@ -51,6 +51,17 @@ impl Default for Marmol {
     fn default() -> Self {
 
         let (vault_var, vault_vec_var, current, config_path_var,window)=configuraciones::load_vault();
+        let mut buf:String=Default::default();
+        let mut is_image_pre=false;
+        let mut buffer_image_pre:RetainedImage =  RetainedImage::from_image_bytes("colapse",include_bytes!("../colapse.png"),).unwrap();
+        println!("{}",current);
+        if current.ends_with(".md"){
+            buf = files::read_file(&current);
+        }else{
+            is_image_pre=true;
+            buf = String::from("file");
+            buffer_image_pre = RetainedImage::from_image_bytes("buffer_image",&files::read_image(&current)).unwrap();
+        }
         Self {
             left_controls:main_area::LeftControls::default(),
             open_vault_str:String::from(""),
@@ -59,10 +70,10 @@ impl Default for Marmol {
             renderfile:true,
             current_window: window,
             prev_current_file: current.to_owned(),
-            buffer: files::read_file(&current),
-            buffer_image: RetainedImage::from_image_bytes("colapse",include_bytes!("../colapse.png"),).unwrap(),
+            buffer: buf,
+            buffer_image: buffer_image_pre,
             commoncache:CommonMarkCache::default(),
-            is_image:false,
+            is_image:is_image_pre,
             //tabs:vec![tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),],
             vault:vault_var,
             vault_vec:vault_vec_var,
