@@ -4,7 +4,6 @@ use filebuffer::FileBuffer;
 
 
 pub fn read_file(file_name: &str) -> String {
-println!("{}",file_name);
     let mut file2 = File::open(file_name).expect("Unable to open file");
     let mut contents = String::new();
     file2.read_to_string(&mut contents).expect("Unable to read from file");

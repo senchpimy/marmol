@@ -128,7 +128,7 @@ fn top_panel_menu_left (&mut self,ui:&mut egui::Ui, textures:Vec<TextureId>, pat
                 let clickable_starred = Link::new(&text);
           //      ui.label(&text);
                 if ui.add(clickable_starred).clicked() {
-                    *current_file = text;
+                    *current_file = Path::new(&format!("{}/{}",path,text)).to_str().unwrap().to_owned();
                 }
             }
         }
