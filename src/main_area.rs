@@ -10,6 +10,13 @@ use chrono::prelude::*;
 use std::fs::File;
 use yaml_rust::{YamlLoader,YamlEmitter};
 
+#[derive(PartialEq)]
+pub enum Content {
+    Edit,
+    View,
+    NewFile,
+
+}
 //#[derive(Debug)]
 pub struct LeftControls {
     current_left_tab: i8,
@@ -154,7 +161,7 @@ fn render_files(ui:&mut egui::Ui, path:&str,current_file:&mut String){
 
  }
 
-pub fn left_side_settings(&self,ctx:&Context, colapse:&mut bool, vault:&mut String,current_file:&mut String, current_window:&mut screens::Screen){
+pub fn left_side_settings(&self,ctx:&Context, colapse:&mut bool, vault:&mut String,current_file:&mut String, current_window:&mut screens::Screen, current_content:&mut Content){
     let left_panel = SidePanel::left("buttons left").resizable(false).default_width(1.);
     let space = 10.;
     left_panel.show(ctx,|ui| {
@@ -180,7 +187,7 @@ pub fn left_side_settings(&self,ctx:&Context, colapse:&mut bool, vault:&mut Stri
         ui.add_space(space);
         if ui.add(ImageButton::new(self.command_image.texture_id(ctx), egui::vec2(18.0, 18.0)).frame(false)).clicked(){println!("commandpale")}//palette
         ui.add_space(space);
-        if ui.add(ImageButton::new(self.new_file.texture_id(ctx), egui::vec2(18.0, 18.0)).frame(false)).clicked(){println!("new file")}//new_file
+        if ui.add(ImageButton::new(self.new_file.texture_id(ctx), egui::vec2(18.0, 18.0)).frame(false)).clicked(){*current_content=Content::NewFile;}//new_file
         ui.with_layout(Layout::bottom_up(Align::Max),|ui|{
         ui.add_space(5.);
              if ui.add(ImageButton::new(self.config_image.texture_id(ctx), egui::vec2(18.0, 18.0)).frame(false)).clicked(){*current_window=screens::Screen::Configuracion;}
