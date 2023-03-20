@@ -33,6 +33,9 @@ struct Marmol{
     open_vault_str:String,
     new_vault_str:String,
     //tabs: Vec<tabs::Tab>,
+    edit_view:bool,
+    text_edit:String,
+
     current_window: screens::Screen,
     buffer_image:RetainedImage,
     commoncache:CommonMarkCache,
@@ -51,7 +54,7 @@ impl Default for Marmol {
     fn default() -> Self {
 
         let (vault_var, vault_vec_var, current, config_path_var,window)=configuraciones::load_vault();
-        let mut buf:String=Default::default();
+        let mut buf:String = Default::default();
         let mut is_image_pre=false;
         let mut buffer_image_pre:RetainedImage =  RetainedImage::from_image_bytes("colapse",include_bytes!("../colapse.png"),).unwrap();
         println!("{}",current);
@@ -63,6 +66,7 @@ impl Default for Marmol {
             buffer_image_pre = RetainedImage::from_image_bytes("buffer_image",&files::read_image(&current)).unwrap();
         }
         Self {
+            edit_view:true,
             left_controls:main_area::LeftControls::default(),
             open_vault_str:String::from(""),
             new_vault_str:String::from(""),
@@ -70,7 +74,8 @@ impl Default for Marmol {
             renderfile:true,
             current_window: window,
             prev_current_file: current.to_owned(),
-            buffer: buf,
+            buffer: buf.clone(),
+            text_edit: buf,
             buffer_image: buffer_image_pre,
             commoncache:CommonMarkCache::default(),
             is_image:is_image_pre,
@@ -142,17 +147,37 @@ impl eframe::App for Marmol {
                                     ui.label("here be a tab");
                                 });
                             });
-                            //ui.label("here be tabs")
+                            ui.with_layout(egui::Layout::right_to_left(egui::Align::TOP), |ui| {
+                                 if self.edit_view{
+                                     if ui
+                                         .add(Button::new("✏").frame(true))
+                                         .on_hover_text("View")
+                                         .clicked(){self.edit_view=false;}
+                                 }else{
+                                     if ui
+                                         .add(Button::new("👁").frame(true))
+                                         .on_hover_text("Edit")
+                                         .clicked(){self.edit_view=true;}
+                                 }
+                            });
                         });
-                        egui::ScrollArea::vertical().show(ui,|ui| {
-                            let header = Path::new(&self.current_file).file_name().unwrap();
-                            ui.heading(header.to_str().unwrap());
-                            let (content, metadata)=files::contents(&self.buffer);
-                            if metadata.len()!=0{
-                                main_area::create_metadata(metadata,ui);
-                            }
-                           CommonMarkViewer::new("viewer").show(ui, &mut self.commoncache, &content);
-                        });
+                        if self.edit_view{
+                            egui::ScrollArea::vertical().show(ui,|ui| {
+                                  ui.add_sized(ui.available_size(), 
+                                               egui::TextEdit::multiline(&mut self.text_edit));
+                            });
+                        }else{
+                            self.text_edit=self.buffer;
+                            egui::ScrollArea::vertical().show(ui,|ui| {
+                                let header = Path::new(&self.current_file).file_name().unwrap();
+                                ui.heading(header.to_str().unwrap());
+                                let (content, metadata)=files::contents(&self.buffer);
+                                if metadata.len()!=0{
+                                    main_area::create_metadata(metadata,ui);
+                                }
+                               CommonMarkViewer::new("viewer").show(ui, &mut self.commoncache, &content);
+                            });
+                        }
                 //}//termina for
                 //});//termina coluns
                 }else{
