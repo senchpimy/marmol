@@ -133,6 +133,7 @@ impl eframe::App for Marmol {
                            });
                }else{
                 self.buffer = files::read_file(&self.current_file);
+                self.text_edit = self.buffer.clone();
                 //Principal
                 CentralPanel::default().show(ctx, |ui| {
                     if self.renderfile{
@@ -163,11 +164,17 @@ impl eframe::App for Marmol {
                         });
                         if self.edit_view{
                             egui::ScrollArea::vertical().show(ui,|ui| {
-                                  ui.add_sized(ui.available_size(), 
+                                  let response = ui.add_sized(ui.available_size(), 
                                                egui::TextEdit::multiline(&mut self.text_edit));
+                            if response.changed(){
+                                let mut f = std::fs::OpenOptions::new().write(true).truncate(true)
+                                    .open(&self.current_file).unwrap();
+                                f.write_all(&self.text_edit.as_bytes()).unwrap();
+                                f.flush().unwrap();
+                            }
                             });
                         }else{
-                            self.text_edit=self.buffer;
+                            //self.text_edit=self.buffer;
                             egui::ScrollArea::vertical().show(ui,|ui| {
                                 let header = Path::new(&self.current_file).file_name().unwrap();
                                 ui.heading(header.to_str().unwrap());
