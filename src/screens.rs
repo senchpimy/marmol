@@ -1,5 +1,6 @@
 use eframe::egui::{CentralPanel,RichText,Color32};
 use std::path::Path;
+use yaml_rust::Yaml;
 
 #[derive(PartialEq)]
 pub enum Screen{
@@ -68,7 +69,8 @@ pub fn default(ctx:&egui::Context, current_window : &mut Screen, contenido:&mut 
                  });
             });
 }
-pub fn configuracion(ctx:&egui::Context, current_window : &mut Screen){
+pub fn configuracion(ctx:&egui::Context, current_window : &mut Screen, 
+                     vaults:&Vec<Yaml>, vault:&mut String,){
             CentralPanel::default().show(ctx,|ui|{
                 if ui.button("Select theme").clicked(){
                 }
@@ -76,8 +78,25 @@ pub fn configuracion(ctx:&egui::Context, current_window : &mut Screen){
                 }
                 if ui.button("Open new Vault").clicked(){
                 }
-                if ui.button("Open Vault").clicked(){
-                }
+                egui::CollapsingHeader::new("Open Vault").show(ui, |ui| {
+                    egui::ScrollArea::vertical().show(ui, |ui| {
+                        for i in vaults{
+                            let text= i.as_str();
+                            match text{
+                                None=>continue,
+                                Some(stri)=>{
+                                    if stri==vault{
+                                        ui.label(stri);
+                                    }else{
+                                        if ui.button(stri).clicked(){
+                                            *vault=String::from(stri);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    });
+                });
                 if ui.button("return").clicked(){
                     *current_window=Screen::Main;
                 };

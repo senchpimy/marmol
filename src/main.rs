@@ -209,7 +209,7 @@ impl eframe::App for Marmol {
                }
             });
         }else if self.current_window==screens::Screen::Configuracion { //configuration
-                            screens::configuracion(ctx,&mut self.current_window);
+            screens::configuracion(ctx,&mut self.current_window, &self.vault_vec, &mut self.vault);
         }else if self.current_window == screens::Screen::Server{
             screens::set_server(ctx);
         };

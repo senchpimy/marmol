@@ -87,7 +87,7 @@ fn top_panel_menu_left (&mut self,ui:&mut egui::Ui, textures:Vec<TextureId>, pat
     if self.current_left_tab==0{
         let scrolling_files = ScrollArea::vertical();
         scrolling_files.show(ui,|ui| {
-        Self::render_files(ui,path, current_file);
+        Self::render_files(ui, path, current_file);
         });
     }else if self.current_left_tab==1{
         ui.text_edit_singleline(&mut self.search_string_menu);
@@ -142,22 +142,32 @@ fn top_panel_menu_left (&mut self,ui:&mut egui::Ui, textures:Vec<TextureId>, pat
     }
 }
 
-fn render_files(ui:&mut egui::Ui, path:&str,current_file:&mut String){
-        for entry in fs::read_dir(path).unwrap(){
-            let file_location = entry.unwrap().path().to_str().unwrap().to_string();
-            let file_name=Path::new(&file_location).file_name().expect("No fails").to_str().unwrap();
-            if Path::new(&file_location).is_dir(){
-                let col = egui::containers::collapsing_header::CollapsingHeader::new(file_name);
-                col.show(ui, |ui| {
-                Self::render_files(ui,&file_location, current_file);
-                });
-            }else{
-                let clickable = Link::new(file_name);
-                if ui.add(clickable).clicked() {
-                    *current_file = file_location;
-                }
+fn render_files(ui:&mut egui::Ui, path:&str, current_file:&mut String){
+    let read_d =fs::read_dir(path);
+    let entrys:fs::ReadDir;
+    match read_d{
+            Ok(t)=> entrys = t,
+            Err(r)=>{
+            ui.label("Nothing to see here");
+            ui.label(egui::RichText::new(r.to_string()).strong());
+            return;
+        }
+    }
+    for entry in entrys{
+        let file_location = entry.unwrap().path().to_str().unwrap().to_string();
+        let file_name=Path::new(&file_location).file_name().expect("No fails").to_str().unwrap();
+        if Path::new(&file_location).is_dir(){
+            let col = egui::containers::collapsing_header::CollapsingHeader::new(file_name);
+            col.show(ui, |ui| {
+            Self::render_files(ui,&file_location, current_file);
+            });
+        }else{
+            let clickable = Link::new(file_name);
+            if ui.add(clickable).clicked() {
+                *current_file = file_location;
             }
         }
+    }
 
  }
 
