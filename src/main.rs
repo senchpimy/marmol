@@ -14,6 +14,7 @@ mod main_area;
 mod files;
 mod screens;
 mod configuraciones;
+mod toggle_switch;
 
 fn main() -> Result<(), eframe::Error>{
     let options = eframe::NativeOptions {
@@ -33,6 +34,7 @@ struct Marmol{
     prev_current_file: String,
     open_vault_str:String,
     new_vault_str:String,
+    view_edit:bool,
     //tabs: Vec<tabs::Tab>,
     content:main_area::Content,
     text_edit:String,
@@ -69,6 +71,7 @@ impl Default for Marmol {
             buffer_image_pre = RetainedImage::from_image_bytes("buffer_image",&files::read_image(&current)).unwrap();
         }
         Self {
+            view_edit:false,
             new_file_name:String::new(),
             content: main_area::Content::View,
             left_controls:main_area::LeftControls::default(),
@@ -153,30 +156,28 @@ impl eframe::App for Marmol {
                                 });
                             });
                             ui.with_layout(egui::Layout::right_to_left(egui::Align::TOP), |ui| {
-                                 if self.content == main_area::Content::View{
-                                     if ui
-                                         .add(Button::new("✏").frame(true))
-                                         .on_hover_text("View")
-                                         .clicked(){self.content=main_area::Content::Edit;}
-                                 }else if self.content == main_area::Content::Edit{
-                                     if ui
-                                         .add(Button::new("👁").frame(true))
-                                         .on_hover_text("Edit")
-                                         .clicked(){self.content=main_area::Content::View;}
-                                 }
+                                ui.label("✏");
+                                ui.add(toggle_switch::toggle(&mut self.view_edit));
+                                if self.view_edit{
+                                    self.content =  main_area::Content::Edit;
+                                }else{
+                                    self.content =  main_area::Content::View;
+                                }
+                                ui.label(RichText::new("👁").font(FontId::proportional(20.0)));
                             });
                         });
                         }
                         if self.content == main_area::Content::Edit{
                             egui::ScrollArea::vertical().show(ui,|ui| {
-                                  let response = ui.add_sized(ui.available_size(), 
-                                               egui::TextEdit::multiline(&mut self.text_edit));
-                            if response.changed(){
-                                let mut f = std::fs::OpenOptions::new().write(true).truncate(true)
+                                let zone = egui::TextEdit::multiline(&mut self.text_edit)
+                                    .font(FontId::proportional(15.0));
+                                let response = ui.add_sized(ui.available_size(), zone);
+                                if response.changed(){
+                                    let mut f = std::fs::OpenOptions::new().write(true).truncate(true)
                                     .open(&self.current_file).unwrap();
-                                f.write_all(&self.text_edit.as_bytes()).unwrap();
-                                f.flush().unwrap();
-                            }
+                                    f.write_all(&self.text_edit.as_bytes()).unwrap();
+                                    f.flush().unwrap();
+                                }
                             });
                         }else if self.content == main_area::Content::View{
                             egui::ScrollArea::vertical().show(ui,|ui| {

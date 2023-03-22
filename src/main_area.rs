@@ -162,9 +162,13 @@ fn render_files(ui:&mut egui::Ui, path:&str, current_file:&mut String){
             Self::render_files(ui,&file_location, current_file);
             });
         }else{
-            let clickable = Link::new(file_name);
-            if ui.add(clickable).clicked() {
-                *current_file = file_location;
+            if file_location.as_str() == current_file.as_str(){
+                ui.label(file_name);
+            }else{
+                let clickable = Link::new(file_name);
+                if ui.add(clickable).clicked() {
+                    *current_file = file_location;
+                }
             }
         }
     }
