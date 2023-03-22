@@ -1,9 +1,9 @@
 use crate::search;
 use crate::screens;
-use eframe::egui::{ScrollArea,Separator,TopBottomPanel,SidePanel,Context,Layout,Align,ImageButton,TextureId, Link,Style,Frame};
+use eframe::egui::{ScrollArea,Separator,TopBottomPanel,SidePanel,Context,Layout,Align,ImageButton,TextureId, Link,Style,Frame, Button,RichText};
 use egui_extras::RetainedImage;
 use json;
-use egui::{ TextFormat, Color32,text::LayoutJob};
+use egui::{ TextFormat, Color32,text::LayoutJob, Widget};
 use std::fs;
 use std::path::Path;
 use chrono::prelude::*;
@@ -163,10 +163,10 @@ fn render_files(ui:&mut egui::Ui, path:&str, current_file:&mut String){
             });
         }else{
             if file_location.as_str() == current_file.as_str(){
-                ui.label(file_name);
+                ui.label(RichText::new(file_name).color(ui.style().visuals.selection.bg_fill));
             }else{
-                let clickable = Link::new(file_name);
-                if ui.add(clickable).clicked() {
+                let btn = Button::new(file_name).frame(false);
+                if btn.ui(ui).context_menu(Self::nested_menus).clicked() {
                     *current_file = file_location;
                 }
             }
@@ -273,4 +273,29 @@ pub fn create_metadata(metadata:String, ui:&mut egui::Ui){
         }
     });
     ui.label(job);
+}
+impl LeftControls{
+    fn nested_menus(ui: &mut egui::Ui) {
+        if ui.button("Open...").clicked() {
+            ui.close_menu();
+        }
+        ui.menu_button("SubMenu", |ui| {
+            ui.menu_button("SubMenu", |ui| {
+                if ui.button("Open...").clicked() {
+                    ui.close_menu();
+                }
+                let _ = ui.button("Item");
+            });
+            ui.menu_button("SubMenu", |ui| {
+                if ui.button("Open...").clicked() {
+                    ui.close_menu();
+                }
+                let _ = ui.button("Item");
+            });
+            let _ = ui.button("Item");
+            if ui.button("Open...").clicked() {
+                ui.close_menu();
+            }
+        });
+    }
 }
