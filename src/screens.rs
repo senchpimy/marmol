@@ -26,7 +26,7 @@ pub fn default(ctx:&egui::Context, current_window : &mut Screen, contenido:&mut 
                 ui.add_space(10.0);
                 if contenido.len()>2{
                     let path = Path::new(contenido);
-                    let mut open_text = RichText::new("");
+                    let open_text:RichText;
                     if path.exists(){
                         if path.is_dir(){
                             open_text = RichText::new("Good!").color(Color32::GREEN);

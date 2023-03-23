@@ -14,8 +14,6 @@ use yaml_rust::{YamlLoader,YamlEmitter};
 pub enum Content {
     Edit,
     View,
-    NewFile,
-
 }
 //#[derive(Debug)]
 pub struct LeftControls {
@@ -166,7 +164,7 @@ fn render_files(ui:&mut egui::Ui, path:&str, current_file:&mut String){
                 ui.label(RichText::new(file_name).color(ui.style().visuals.selection.bg_fill));
             }else{
                 let btn = Button::new(file_name).frame(false);
-                if btn.ui(ui).context_menu(Self::nested_menus).clicked() {
+                if btn.ui(ui).context_menu(Self::file_options).clicked() {
                     *current_file = file_location;
                 }
             }
@@ -175,7 +173,7 @@ fn render_files(ui:&mut egui::Ui, path:&str, current_file:&mut String){
 
  }
 
-pub fn left_side_settings(&self,ctx:&Context, colapse:&mut bool, vault:&mut String,current_file:&mut String, current_window:&mut screens::Screen, current_content:&mut Content){
+pub fn left_side_settings(&self,ctx:&Context, colapse:&mut bool, vault:&mut String,current_file:&mut String, current_window:&mut screens::Screen,){
     let left_panel = SidePanel::left("buttons left").resizable(false).default_width(1.);
     let space = 10.;
     left_panel.show(ctx,|ui| {
@@ -201,7 +199,7 @@ pub fn left_side_settings(&self,ctx:&Context, colapse:&mut bool, vault:&mut Stri
         ui.add_space(space);
         if ui.add(ImageButton::new(self.command_image.texture_id(ctx), egui::vec2(18.0, 18.0)).frame(false)).clicked(){println!("commandpale")}//palette
         ui.add_space(space);
-        if ui.add(ImageButton::new(self.new_file.texture_id(ctx), egui::vec2(18.0, 18.0)).frame(false)).clicked(){*current_content=Content::NewFile;}//new_file
+        ui.menu_image_button(self.new_file.texture_id(ctx), egui::vec2(18.0, 18.0),Self::new_file_menu);//new_file
         ui.with_layout(Layout::bottom_up(Align::Max),|ui|{
         ui.add_space(5.);
              if ui.add(ImageButton::new(self.config_image.texture_id(ctx), egui::vec2(18.0, 18.0)).frame(false)).clicked(){*current_window=screens::Screen::Configuracion;}
@@ -275,27 +273,29 @@ pub fn create_metadata(metadata:String, ui:&mut egui::Ui){
     ui.label(job);
 }
 impl LeftControls{
-    fn nested_menus(ui: &mut egui::Ui) {
-        if ui.button("Open...").clicked() {
+    fn new_file_menu(ui: &mut egui::Ui) {
+        ui.label("Create a New File");
+        let response = ui.add(egui::TextEdit::singleline(&mut String::from("")).hint_text("Name"));
+        if response.changed(){
+        }
+        if ui.button("Create").clicked() {
             ui.close_menu();
         }
-        ui.menu_button("SubMenu", |ui| {
-            ui.menu_button("SubMenu", |ui| {
-                if ui.button("Open...").clicked() {
-                    ui.close_menu();
-                }
-                let _ = ui.button("Item");
-            });
-            ui.menu_button("SubMenu", |ui| {
-                if ui.button("Open...").clicked() {
-                    ui.close_menu();
-                }
-                let _ = ui.button("Item");
-            });
-            let _ = ui.button("Item");
-            if ui.button("Open...").clicked() {
-                ui.close_menu();
-            }
-        });
+        if ui.button("Cancel").clicked() {
+            ui.close_menu();
+        }
+    }
+
+    fn file_options(ui: &mut egui::Ui) {
+        let copy = egui::Button::new("Copy file").frame(false);
+        ui.label("Move");
+        if ui.add(copy).clicked() {
+        }
+        let response = ui.add(egui::TextEdit::singleline(&mut String::from("")).hint_text("Rename"));
+        if response.changed(){
+        }
+        let delete = egui::Button::new(RichText::new("Delete file").color(Color32::RED));//.frame(false);
+        if ui.add(delete).clicked() {
+        }
     }
 }

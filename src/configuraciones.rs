@@ -28,8 +28,11 @@ pub fn load_vault()->(String, Vec<Yaml>, String, String, screens::Screen){
                     vault_vec_var = docs["vault_vec"].as_vec().unwrap().to_vec();
                 println!("Estado anterior cargado");
     }else{
-        fs::create_dir(&dir);
-        println!("Dir created");
+        let res = fs::create_dir(&dir);
+        match res{
+            Ok(_)=>println!("Dir created"),
+            Err(r)=>println!("{}",r)
+        }
     }
     }
     return (vault_var.to_string(), vault_vec_var, current.to_string(),config_path_var.to_string(),window);

@@ -1,5 +1,4 @@
 use egui_extras::RetainedImage;
-use std::fs::File;
 use std::path::Path;
 use egui::*;
 use egui_extras::{Size,StripBuilder};
@@ -34,7 +33,6 @@ struct Marmol{
     prev_current_file: String,
     open_vault_str:String,
     new_vault_str:String,
-    view_edit:bool,
     //tabs: Vec<tabs::Tab>,
     content:main_area::Content,
     text_edit:String,
@@ -59,7 +57,7 @@ impl Default for Marmol {
     fn default() -> Self {
 
         let (vault_var, vault_vec_var, current, config_path_var,window)=configuraciones::load_vault();
-        let mut buf:String = Default::default();
+        let buf:String;
         let mut is_image_pre=false;
         let mut buffer_image_pre:RetainedImage =  RetainedImage::from_image_bytes("colapse",include_bytes!("../colapse.png"),).unwrap();
         println!("{}",current);
@@ -71,7 +69,6 @@ impl Default for Marmol {
             buffer_image_pre = RetainedImage::from_image_bytes("buffer_image",&files::read_image(&current)).unwrap();
         }
         Self {
-            view_edit:false,
             new_file_name:String::new(),
             content: main_area::Content::View,
             left_controls:main_area::LeftControls::default(),
@@ -104,7 +101,7 @@ impl eframe::App for Marmol {
         if self.current_window == screens::Screen::Default { //welcome screen
             screens::default(ctx,&mut self.current_window,&mut self.open_vault_str,&mut self.new_vault_str);
         }else if self.current_window == screens::Screen::Main{ //Main screen
-            self.left_controls.left_side_settings(ctx,&mut self.left_collpased,&mut self.vault ,&mut self.current_file,&mut self.current_window, &mut self.content);
+            self.left_controls.left_side_settings(ctx,&mut self.left_collpased,&mut self.vault ,&mut self.current_file,&mut self.current_window);
     
             self.left_controls.left_side_menu(ctx,&self.left_collpased, 
                            &self.vault, &mut self.current_file);
@@ -157,12 +154,7 @@ impl eframe::App for Marmol {
                             });
                             ui.with_layout(egui::Layout::right_to_left(egui::Align::TOP), |ui| {
                                 ui.label("✏");
-                                ui.add(toggle_switch::toggle(&mut self.view_edit));
-                                if self.view_edit{
-                                    self.content =  main_area::Content::Edit;
-                                }else{
-                                    self.content =  main_area::Content::View;
-                                }
+                                ui.add(toggle_switch::toggle(&mut self.content));
                                 ui.label(RichText::new("👁").font(FontId::proportional(20.0)));
                             });
                         });
@@ -189,22 +181,22 @@ impl eframe::App for Marmol {
                                 }
                                CommonMarkViewer::new("viewer").show(ui, &mut self.commoncache, &content);
                             });
-                        }else{
-                            //ui.with_layout(egui::Layout::right_to_left(egui::Align::TOP), |ui| {
-                                ui.label("Create New File");
-                                ui.add(egui::TextEdit::singleline(&mut self.new_file_name));
-                                if ui.button("Create").clicked(){
-                                    self.content = main_area::Content::View;
-                                    let new_path = format!("{}/{}",&self.vault, &self.new_file_name);
-                                    let new_file =Path::new(&new_path);
-                                    File::create(new_file);
-                                    self.new_file_name = String::new();
-                                }
-                                if ui.button("Cancel").clicked(){
-                                    self.content = main_area::Content::View;
-                                }
-                            //});
                         }
+                       // else if self.content == main_area::Content::NewFile{
+                       //     //ui.with_layout(egui::Layout::right_to_left(egui::Align::TOP), |ui| {
+                       //         ui.label("Create New File");
+                       //         ui.add(egui::TextEdit::singleline(&mut self.new_file_name));
+                       //         if ui.button("Create").clicked(){
+                       //             self.content = main_area::Content::View;
+                       //             let new_path = format!("{}/{}",&self.vault, &self.new_file_name);
+                       //             let new_file =Path::new(&new_path);
+                       //             File::create(new_file);
+                       //             self.new_file_name = String::new();
+                       //         }
+                       //         if ui.button("Cancel").clicked(){
+                       //             self.content = main_area::Content::View;
+                       //         }
+                       // }
                     }); //termina CentralPanel
                 //Termina Principal
                }
