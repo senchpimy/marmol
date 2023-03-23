@@ -90,11 +90,6 @@ fn top_panel_menu_left (&mut self,ui:&mut egui::Ui, textures:Vec<TextureId>, pat
     }else if self.current_left_tab==1{
         ui.text_edit_singleline(&mut self.search_string_menu);
         ui.checkbox(&mut self.regex_search,"regex");
-        if self.regex_search{
-            if ui.button("search").clicked(){
-                unimplemented!();
-            }
-        }
         if self.search_string_menu!=self.prev_search_string_menu{
             if self.regex_search{
                 self.search_results = search::check_dir_regex(path,&self.search_string_menu);

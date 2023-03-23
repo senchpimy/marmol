@@ -27,5 +27,5 @@ yaml-rust = "0.4.5"
 egui_commonmark = {version="0.7.0",features = ["syntax_highlighting","svg","fetch"]}
 
 walkdir = "2.3.1"
-regex = "1.4.5"
+regex = "1.7.2"
 fstream = "0.1.2"
