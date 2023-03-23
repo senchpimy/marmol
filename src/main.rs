@@ -97,15 +97,14 @@ impl Default for Marmol {
 
 impl eframe::App for Marmol {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        //dbg!(Size::exact(50.0));
         if self.current_window == screens::Screen::Default { //welcome screen
-            screens::default(ctx,&mut self.current_window,&mut self.open_vault_str,&mut self.new_vault_str);
+            screens::default(ctx,&mut self.current_window,&mut self.open_vault_str,
+                             &mut self.new_vault_str);
         }else if self.current_window == screens::Screen::Main{ //Main screen
-            self.left_controls.left_side_settings(ctx,&mut self.left_collpased,&mut self.vault ,&mut self.current_file,&mut self.current_window);
-    
+            self.left_controls.left_side_settings(ctx,&mut self.left_collpased,&mut self.vault ,
+                                                  &mut self.current_file,&mut self.current_window);
             self.left_controls.left_side_menu(ctx,&self.left_collpased, 
                            &self.vault, &mut self.current_file);
-
             CentralPanel::default().show(ctx, |ui|{
                if self.prev_current_file!=self.current_file{
                     self.prev_current_file = String::from(&self.current_file);
@@ -113,8 +112,8 @@ impl eframe::App for Marmol {
                        self.current_file.ends_with("jpeg") ||
                        self.current_file.ends_with("jpg"){
                         self.buffer_image=RetainedImage::from_image_bytes("buffer_image",&files::read_image(&self.current_file)).unwrap();
-                        self.is_image=true;
-                    }else{
+                    self.is_image=true;
+                }else{
                         self.is_image=false;
                     }
                }

@@ -1,12 +1,8 @@
-### Bugs
-- Last opened file doesnt exist
-
 ### TODO
 - Backup sever
 - Create new file
 - Delete file
-- Save Edited text
-- vaults
+- add vaults
 - Tabs
 - Split window
 - Canvas
