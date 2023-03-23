@@ -1,6 +1,6 @@
 use crate::search;
 use crate::screens;
-use eframe::egui::{ScrollArea,Separator,TopBottomPanel,SidePanel,Context,Layout,Align,ImageButton,TextureId, Link,Style,Frame, Button,RichText};
+use eframe::egui::{ScrollArea,Separator,TopBottomPanel,SidePanel,Context,Layout,Align,ImageButton,TextureId, Style,Frame, Button,RichText};
 use egui_extras::RetainedImage;
 use json;
 use egui::{ TextFormat, Color32,text::LayoutJob, Widget};
@@ -124,11 +124,15 @@ fn top_panel_menu_left (&mut self,ui:&mut egui::Ui, textures:Vec<TextureId>, pat
         let parsed = json::parse(&contents).unwrap();
         for (_key, value) in parsed.entries() {
             for i in 0..value.len(){
-                let text=format!("{}",parsed["items"][i]["path"]);
-                let clickable_starred = Link::new(&text);
-          //      ui.label(&text);
-                if ui.add(clickable_starred).clicked() {
-                    *current_file = Path::new(&format!("{}/{}",path,text)).to_str().unwrap().to_owned();
+                let text=parsed["items"][i]["path"].as_str().unwrap();
+                let full_path = format!("{}/{}",path,text);
+                if full_path == current_file.as_str(){
+                    ui.label(RichText::new(text).color(ui.style().visuals.selection.bg_fill));
+                }else{
+                    let btn = Button::new(text).frame(false);
+                    if btn.ui(ui).clicked() {
+                        *current_file = Path::new(&full_path).to_str().unwrap().to_owned();
+                    }
                 }
             }
         }

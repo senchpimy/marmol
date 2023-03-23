@@ -68,7 +68,7 @@ pub fn check_dir(path: &str, query: &str) -> Vec<MenuItem>{
 
 fn check_file_regex(file_path: &Path, query: &str, result: &mut MenuItem) {
     let re:Regex;
-    match (Regex::new(query)){
+    match Regex::new(query){
         Ok(t)=>re=t,
         Err(_)=>return
     };
