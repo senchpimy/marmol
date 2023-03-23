@@ -1,6 +1,5 @@
 ### TODO
 - Backup sever
-- Create new file
 - Delete file
 - add vaults
 - Tabs
