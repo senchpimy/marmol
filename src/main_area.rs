@@ -3,7 +3,9 @@ use crate::search;
 use crate::screens;
 use eframe::egui::{ScrollArea,Separator,TopBottomPanel,SidePanel,Context,Layout,Align,ImageButton,TextureId, Style,Frame, Button,RichText};
 use egui_extras::RetainedImage;
+
 use json::{object::Object,JsonValue};
+
 use egui::{ TextFormat, Color32,text::LayoutJob, Widget};
 use std::fs;
 use std::path::Path;
@@ -17,7 +19,7 @@ pub enum Content {
     View,
     NewFile,
 }
-//#[derive(Debug)]
+
 pub struct LeftControls {
     current_left_tab: i8,
     search_string_menu:String,
@@ -39,12 +41,16 @@ pub struct LeftControls {
     canvas_image:RetainedImage,
     daynote_image:RetainedImage,
     command_image:RetainedImage,
+    rename:String,
+    menu_error:String
 }
 
 impl Default for LeftControls{
     fn default() -> Self {
         Self{
             current_left_tab:0,
+            rename:"".to_owned(),
+            menu_error:"".to_owned(),
             search_string_menu:"".to_owned(),
             prev_search_string_menu:"".to_owned(),
             search_results:vec![],
@@ -87,7 +93,7 @@ fn top_panel_menu_left (&mut self,ui:&mut egui::Ui, textures:Vec<TextureId>, pat
     if self.current_left_tab==0{
         let scrolling_files = ScrollArea::vertical();
         scrolling_files.show(ui,|ui| {
-        Self::render_files(ui, path, current_file);
+        self.render_files(ui, path, current_file);
         });
     }else if self.current_left_tab==1{
         ui.text_edit_singleline(&mut self.search_string_menu);
@@ -141,7 +147,7 @@ fn top_panel_menu_left (&mut self,ui:&mut egui::Ui, textures:Vec<TextureId>, pat
     }
 }
 
-fn render_files(ui:&mut egui::Ui, path:&str, current_file:&mut String){
+fn render_files(&mut self,ui:&mut egui::Ui, path:&str, current_file:&mut String){
     let read_d =fs::read_dir(path);
     let entrys:fs::ReadDir;
     match read_d{
@@ -158,14 +164,16 @@ fn render_files(ui:&mut egui::Ui, path:&str, current_file:&mut String){
         if Path::new(&file_location).is_dir(){
             let col = egui::containers::collapsing_header::CollapsingHeader::new(file_name);
             col.show(ui, |ui| {
-            Self::render_files(ui,&file_location, current_file);
+            self.render_files(ui,&file_location, current_file);
             });
         }else{
             if &file_location == current_file {
                 ui.label(RichText::new(file_name).color(ui.style().visuals.selection.bg_fill));
             }else{
                 let btn = Button::new(file_name).frame(false);
-                let menu = |ui:&mut egui::Ui| {Self::file_options(ui,&file_location,&path);};
+                let menu = |ui:&mut egui::Ui| {file_options(ui,&file_location,&path, 
+                                                            &mut self.rename,&mut self.menu_error
+                                                            );};
                 if btn.ui(ui).context_menu(menu).clicked() {
                     *current_file = file_location;
                 }
@@ -235,7 +243,6 @@ pub fn create_metadata(metadata:String, ui:&mut egui::Ui){
     let mut emitter = YamlEmitter::new(&mut out_str);
     emitter.dump(metadata_parsed).unwrap();
     out_str.split("\n").skip(1).for_each(|s|{
-        //dbg!(s);
         if s.as_bytes()[s.len()-1]==58 {
             job.append(
                 &(s.to_owned()+"\n"),0.0,
@@ -273,63 +280,77 @@ pub fn create_metadata(metadata:String, ui:&mut egui::Ui){
     ui.label(job);
 
 }
-impl LeftControls{
-    fn file_options(ui: &mut egui::Ui, s:&str,path:&str) {
-        let copy = egui::Button::new("Copy file").frame(false);
-        let star = egui::Button::new("Star this file").frame(false);
-        ui.label("Move");
-        if ui.add(copy).clicked() {
-            let tmp = s.to_owned()+".copy";
-            let s_copy = Path::new(&tmp);
-            let copy = fs::copy(Path::new(s), Path::new(&s_copy));
-            match copy{
-                Ok(_)=>ui.close_menu(),
-                Err(r)=>{ui.label(RichText::new(r.to_string()).color(Color32::RED));}, //doesnt
-                                                                                       //work
-            }
+
+fn file_options(ui: &mut egui::Ui, s:&str,path:&str, rename:&mut String,error:&mut String) {
+    ui.label(RichText::new(&*error).color(Color32::RED));
+    let copy = egui::Button::new("Copy file").frame(false);
+    let star = egui::Button::new("Star this file").frame(false);
+    let path_s=Path::new(s);
+    ui.label("Move");
+    if ui.add(copy).clicked() {
+        let tmp = s.to_owned()+".copy";
+        let s_copy = Path::new(&tmp);
+        let copy = fs::copy(path_s, &s_copy);
+        match copy{
+            Ok(_)=>{ui.close_menu();*error=String::new()},
+            Err(r)=>*error=r.to_string(),
         }
-        if ui.add(star).clicked() {
-            let stared_path = format!("{}/.obsidian/starred.json",path);
-            let mut new_json_object = Object::new();
-            new_json_object.insert("type",JsonValue::from("file"));
-            new_json_object.insert("title",JsonValue::from(s));
-            new_json_object.insert("path",JsonValue::from("File"));
-            if Path::new(&stared_path).exists(){
-                let contents = fs::read_to_string(&stared_path)
-                    .expect("Should have been able to read the file");
-                let mut parsed = json::parse(&contents).unwrap();
-                //let mut arr = parsed["items"];
-                //arr.append(new_json_object);
-                let mut f = std::fs::OpenOptions::new().write(true).truncate(true)
-                .open(stared_path).unwrap();
-                f.write_all(parsed.dump().as_bytes()).unwrap();
-                f.flush().unwrap();
-            }else{
-                let mut file = File::create(stared_path);
-                let mut new_content:Object = Object::new();
-                new_content.insert("type",JsonValue::from("File"));
-                new_content.insert("title",JsonValue::from("File"));
-                new_content.insert("path",JsonValue::from("File"));
-            }
-            ui.close_menu();
-        }
-        let delete = egui::Button::new(RichText::new("Delete file").color(Color32::RED));
-        let col = egui::containers::collapsing_header::CollapsingHeader::new(RichText::new("Delete file").color(Color32::RED));
-        col.show(ui, |ui|{
-            ui.label("Are you sure?");
-            if ui.button("No").clicked(){
-            ui.close_menu();
-            }
-            if ui.add(delete).clicked() {
-                println!("{}",s);
-                let delete = fs::remove_file(s);
-                match delete {
-                    Ok(_) => {},
-                    Err(r)=>{ui.label(RichText::new(r.to_string()).color(Color32::RED));}, //doesnt
-                                                                                           //work
-                }
-            ui.close_menu();
-            }
-        });
     }
+    if ui.add(star).clicked() {
+        let stared_path = format!("{}/.obsidian/starred.json",path);
+        let nw_json= object!{
+            "type":"file",
+            "title":path_s.file_name().unwrap().to_str().unwrap(),
+            "path":"test"
+        };
+        if Path::new(&stared_path).exists(){
+            let contents = fs::read_to_string(&stared_path)
+                .expect("Should have been able to read the file");
+            let mut parsed = json::parse(&contents).unwrap();
+            let json_arr:&mut JsonValue = &mut parsed["items"];
+            json_arr.push(nw_json);
+            let mut f = std::fs::OpenOptions::new().write(true).truncate(true)
+            .open(stared_path).unwrap();
+            f.write_all(parsed.pretty(2).as_bytes()).unwrap();
+            f.flush().unwrap();
+        }else{
+            let file = File::create(stared_path);
+            match file{
+                Ok(mut w)=>{
+                    let text = format!("{{
+                        items:[{}]
+                    }}",nw_json.dump());
+                    w.write(text.as_bytes());
+                },
+                Err(r)=>*error=r.to_string(),
+            }
+        }
+        ui.close_menu();
+    }
+    if ui.button("Rename").clicked(){
+        *rename=String::from(s);
+    }
+    let delete = egui::Button::new(RichText::new("Delete file").color(Color32::RED));
+    let col = egui::containers::collapsing_header::CollapsingHeader::new(RichText::new("Delete file").color(Color32::RED));
+    col.show(ui, |ui|{
+        ui.label(format!("Are you sure you want to delete {}?",path_s.file_name().unwrap().to_str().unwrap()));
+        if ui.button("No").clicked(){
+            ui.close_menu();
+        }
+        if ui.add(delete).clicked() {
+            let delete = fs::remove_file(s);
+            match delete {
+                Ok(_) => {*error=String::new()},
+                Err(r)=>{
+                    *error=r.to_string();
+                }, 
+            }
+            ui.close_menu();
+        }
+    });
 }
+
+fn print_type_of<T>(_: &T) {
+    println!("{}", std::any::type_name::<T>())
+}
+

@@ -9,6 +9,9 @@ use std::io::Write;
 use yaml_rust::Yaml;
 //use directories::BaseDirs;
 
+#[macro_use]
+extern crate json;
+
 mod search;
 mod main_area;
 mod files;
