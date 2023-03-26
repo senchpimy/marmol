@@ -1,4 +1,5 @@
 use eframe::egui::{CentralPanel,RichText,Color32,Button};
+use std::fs;
 use egui::Widget;
 use std::path::Path;
 use rfd::FileDialog;
@@ -95,7 +96,6 @@ pub fn configuracion(ctx:&egui::Context, current_window : &mut Screen,
                     let response = ui.add(edit);
                     if response.changed(){
                         let full_path=format!("{}/{}",folder,nw_vault_str); 
-                        println!("{}",full_path);
                         let new_vault = Path::new(&full_path);
                         if new_vault.exists(){
                             *error=String::from("Folder already Exists");
@@ -108,7 +108,18 @@ pub fn configuracion(ctx:&egui::Context, current_window : &mut Screen,
                 }
                 if *button{
                     if ui.button("Create!").clicked(){
-                        vaults.push(Yaml::from_str(nw_vault_str));
+                        let full_path=format!("{}/{}",folder,nw_vault_str); 
+                        vaults.push(Yaml::from_str(&full_path));
+                        let create = fs::create_dir(full_path);
+                        match create{
+                            Ok(_)=>{},
+                            Err(x)=>{*error=x.to_string();return;}
+                        }
+                        let create = fs::create_dir(format!("{}/{}/.obsidian/",folder,nw_vault_str));
+                        match create{
+                            Ok(_)=>{},
+                            Err(x)=>{*error=x.to_string();return;}
+                        }
                         *nw_vault_str=String::new();
                         *button=false;
                         *show=false;
