@@ -4,7 +4,7 @@ use crate::screens;
 use eframe::egui::{ScrollArea,Separator,TopBottomPanel,SidePanel,Context,Layout,Align,ImageButton,TextureId, Style,Frame, Button,RichText};
 use egui_extras::RetainedImage;
 
-use json::{object::Object,JsonValue};
+use json::JsonValue;
 
 use egui::{ TextFormat, Color32,text::LayoutJob, Widget};
 use std::fs;
@@ -312,7 +312,7 @@ fn file_options(ui: &mut egui::Ui, s:&str,path:&str, rename:&mut String,error:&m
                 .expect("Should have been able to read the file");
             let mut parsed = json::parse(&contents).unwrap();
             let json_arr:&mut JsonValue = &mut parsed["items"];
-            json_arr.push(nw_json);
+            json_arr.push(nw_json).unwrap();
             let mut f = std::fs::OpenOptions::new().write(true).truncate(true)
             .open(stared_path).unwrap();
             f.write_all(parsed.pretty(2).as_bytes()).unwrap();

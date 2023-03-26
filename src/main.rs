@@ -205,7 +205,11 @@ impl eframe::App for Marmol {
                                     self.content = main_area::Content::View;
                                     let new_path = format!("{}/{}",&self.vault, &self.new_file_str);
                                     let new_file =Path::new(&new_path);
-                                    File::create(new_file);
+                                    let res = File::create(new_file);
+                                    match res{
+                                        Ok(_)=>{},
+                                        Err(x)=>{println!("{}",x);}//todo
+                                    }
                                     self.new_file_str = String::new();
                                 }
                                 if ui.button("Cancel").clicked(){
@@ -241,7 +245,7 @@ impl eframe::App for Marmol {
             let current_file = format!("current: {}", &self.current_file);
             let new_content= format!("{}\n{}\n{}",&vault_vec_str,vault_str,current_file);
             let mut file = fs::File::create(&file_path).unwrap();
-            file.write_all(new_content.as_bytes());
+            file.write_all(new_content.as_bytes()).unwrap();
             true
     }
 }
