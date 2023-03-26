@@ -69,14 +69,14 @@ impl Default for Marmol {
         let mut is_image_pre=false;
         let mut buffer_image_pre:RetainedImage =  RetainedImage::from_image_bytes("colapse",include_bytes!("../colapse.png"),).unwrap();
         println!("{}",current);
-        if !current.ends_with(".png") || 
-            !current.ends_with("jpeg") ||
-            !current.ends_with("jpg"){
-            buf = files::read_file(&current);
-        }else{
+        if current.ends_with(".png") || 
+            current.ends_with("jpeg") ||
+            current.ends_with("jpg"){
             is_image_pre=true;
             buf = String::from("file");
             buffer_image_pre = RetainedImage::from_image_bytes("buffer_image",&files::read_image(&current)).unwrap();
+        }else{
+            buf = files::read_file(&current);
         }
         Self {
             new_file_str:String::new(),

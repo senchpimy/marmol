@@ -128,6 +128,7 @@ pub fn configuracion(ctx:&egui::Context, current_window : &mut Screen,
                 ui.label(RichText::new(error.as_str()).color(Color32::RED));
                 egui::CollapsingHeader::new("Manage Vault").show(ui, |ui| {
                     let mut new_vaults=vaults.clone();
+                    let mut changed = false;
                     egui::ScrollArea::vertical().show(ui, |ui| {
                         for i in &mut *vaults{
                             let text= i.as_str();
@@ -138,7 +139,7 @@ pub fn configuracion(ctx:&egui::Context, current_window : &mut Screen,
                                         ui.label(stri);
                                     }else{
                                         let btn = Button::new(stri);
-                                        let menu = |ui:&mut egui::Ui| {remove_vault(ui,stri,&mut new_vaults)};
+                                        let menu = |ui:&mut egui::Ui| {remove_vault(ui,stri,&mut new_vaults,&mut changed)};
                                         if btn.ui(ui).context_menu(menu).clicked() {
                                             *vault=String::from(stri);
                                         }
@@ -146,7 +147,9 @@ pub fn configuracion(ctx:&egui::Context, current_window : &mut Screen,
                                 }
                             }
                         }
-                        *vaults = new_vaults;
+                        if changed{
+                            *vaults = new_vaults;
+                        }
                     });
                 });
                 if ui.button("return").clicked(){
@@ -158,9 +161,10 @@ pub fn configuracion(ctx:&egui::Context, current_window : &mut Screen,
             });
 }
 
-fn remove_vault(ui: &mut egui::Ui, s:&str,vec:&mut Vec<Yaml>) {
+fn remove_vault(ui: &mut egui::Ui, s:&str,vec:&mut Vec<Yaml>, changed:&mut bool) {
     if ui.button("Delete").clicked(){
             vec.retain(|x| x != &Yaml::from_str(s));
+            *changed=true;
     }
     ui.label("This doens't delete the folder from your system, just from the program acces");
 }
