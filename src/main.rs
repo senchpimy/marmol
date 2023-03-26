@@ -55,11 +55,15 @@ struct Marmol{
     vault: String,
     vault_vec: Vec<Yaml>,
     current_file: String,
+
+    create_new_vault:bool,
+    show_create_button:bool,
+    new_vault_folder: String,
+    new_vault_folder_err: String,
 }
 
 impl Default for Marmol {
     fn default() -> Self {
-
         let (vault_var, vault_vec_var, current, config_path_var,window)=configuraciones::load_vault();
         let buf:String;
         let mut is_image_pre=false;
@@ -79,9 +83,13 @@ impl Default for Marmol {
             content: main_area::Content::View,
             left_controls:main_area::LeftControls::default(),
             open_vault_str:String::from(""),
+            new_vault_folder:String::from(""),
+            new_vault_folder_err:String::from(""),
             new_vault_str:String::from(""),
             config_path:config_path_var.to_owned(),
             renderfile:true,
+            create_new_vault:false,
+            show_create_button:false,
             current_window: window,
             prev_current_file: current.to_owned(),
             buffer: buf.clone(),
@@ -209,7 +217,9 @@ impl eframe::App for Marmol {
                }
             });
         }else if self.current_window==screens::Screen::Configuracion { //configuration
-            screens::configuracion(ctx,&mut self.current_window, &self.vault_vec, &mut self.vault);
+            screens::configuracion(ctx,&mut self.current_window, &mut self.vault_vec, &mut self.vault,
+                                   &mut self.new_vault_str,&mut self.create_new_vault,&mut self.new_vault_folder,
+                                   &mut self.new_vault_folder_err,&mut self.show_create_button);
         }else if self.current_window == screens::Screen::Server{
             screens::set_server(ctx);
         };

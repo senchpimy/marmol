@@ -1,5 +1,7 @@
-use eframe::egui::{CentralPanel,RichText,Color32};
+use eframe::egui::{CentralPanel,RichText,Color32,Button};
+use egui::Widget;
 use std::path::Path;
+use rfd::FileDialog;
 use yaml_rust::Yaml;
 
 #[derive(PartialEq)]
@@ -69,18 +71,54 @@ pub fn default(ctx:&egui::Context, current_window : &mut Screen, contenido:&mut 
                  });
             });
 }
+
 pub fn configuracion(ctx:&egui::Context, current_window : &mut Screen, 
-                     vaults:&Vec<Yaml>, vault:&mut String,){
+                     vaults:&mut Vec<Yaml>, vault:&mut String, nw_vault_str:&mut String, show:&mut bool,
+                     folder:&mut String, error:&mut String, button:&mut bool){
             CentralPanel::default().show(ctx,|ui|{
                 if ui.button("Select theme").clicked(){
                 }
-                if ui.button("Close Vault").clicked(){
+                if ui.button("Create a New Vault").clicked(){
+                    let files = FileDialog::new()
+                        .set_title("Select a Folder")
+                        .pick_folder();
+                    match files{
+                        Some(x)=>{
+                            *show=true;
+                            *folder=String::from(x.to_str().unwrap());
+                        },
+                        None=>*show=false
+                    }
                 }
-                if ui.button("Open new Vault").clicked(){
+                if *show{
+                    let edit = egui::TextEdit::singleline(nw_vault_str);
+                    let response = ui.add(edit);
+                    if response.changed(){
+                        let full_path=format!("{}/{}",folder,nw_vault_str); 
+                        println!("{}",full_path);
+                        let new_vault = Path::new(&full_path);
+                        if new_vault.exists(){
+                            *error=String::from("Folder already Exists");
+                            *button=false;
+                        }else{
+                            *error=String::new();
+                            *button=true;
+                        }
+                            }
                 }
-                egui::CollapsingHeader::new("Open Vault").show(ui, |ui| {
+                if *button{
+                    if ui.button("Create!").clicked(){
+                        vaults.push(Yaml::from_str(nw_vault_str));
+                        *nw_vault_str=String::new();
+                        *button=false;
+                        *show=false;
+                    }
+                }
+                ui.label(RichText::new(error.as_str()).color(Color32::RED));
+                egui::CollapsingHeader::new("Manage Vault").show(ui, |ui| {
+                    let mut new_vaults=vaults.clone();
                     egui::ScrollArea::vertical().show(ui, |ui| {
-                        for i in vaults{
+                        for i in &mut *vaults{
                             let text= i.as_str();
                             match text{
                                 None=>continue,
@@ -88,13 +126,16 @@ pub fn configuracion(ctx:&egui::Context, current_window : &mut Screen,
                                     if stri==vault{
                                         ui.label(stri);
                                     }else{
-                                        if ui.button(stri).clicked(){
+                                        let btn = Button::new(stri);
+                                        let menu = |ui:&mut egui::Ui| {remove_vault(ui,stri,&mut new_vaults)};
+                                        if btn.ui(ui).context_menu(menu).clicked() {
                                             *vault=String::from(stri);
                                         }
                                     }
                                 }
                             }
                         }
+                        *vaults = new_vaults;
                     });
                 });
                 if ui.button("return").clicked(){
@@ -104,6 +145,13 @@ pub fn configuracion(ctx:&egui::Context, current_window : &mut Screen,
                     *current_window=Screen::Server;
                 };
             });
+}
+
+fn remove_vault(ui: &mut egui::Ui, s:&str,vec:&mut Vec<Yaml>) {
+    if ui.button("Delete").clicked(){
+            vec.retain(|x| x != &Yaml::from_str(s));
+    }
+    ui.label("This doens't delete the folder from your system, just from the program acces");
 }
 
 pub fn set_server(ctx:&egui::Context){
