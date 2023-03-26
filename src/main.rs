@@ -18,6 +18,7 @@ mod files;
 mod screens;
 mod configuraciones;
 mod toggle_switch;
+mod graph;
 
 fn main() -> Result<(), eframe::Error>{
     let options = eframe::NativeOptions {

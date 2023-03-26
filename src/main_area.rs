@@ -1,6 +1,8 @@
 use std::io::Write;
 use crate::search;
 use crate::screens;
+use crate::graph;
+
 use eframe::egui::{ScrollArea,Separator,TopBottomPanel,SidePanel,Context,Layout,Align,ImageButton,TextureId, Style,Frame, Button,RichText};
 use egui_extras::RetainedImage;
 
@@ -18,6 +20,7 @@ pub enum Content {
     Edit,
     View,
     NewFile,
+    Graph,
 }
 
 pub struct LeftControls {
@@ -42,12 +45,15 @@ pub struct LeftControls {
     daynote_image:RetainedImage,
     command_image:RetainedImage,
     rename:String,
-    menu_error:String
+    menu_error:String,
+
+    marker:graph::Graph
 }
 
 impl Default for LeftControls{
     fn default() -> Self {
         Self{
+            marker:graph::Graph::default(),
             current_left_tab:0,
             rename:"".to_owned(),
             menu_error:"".to_owned(),
@@ -197,7 +203,9 @@ pub fn left_side_settings(&self,ctx:&Context, colapse:&mut bool, vault:&mut Stri
         ui.add(Separator::default());
         if ui.add(ImageButton::new(self.switcher_image.texture_id(ctx), egui::vec2(18.0, 18.0)).frame(false)).clicked(){println!("switcher")} //quick switcher
         ui.add_space(space);
-        if ui.add(ImageButton::new(self.graph_image.texture_id(ctx), egui::vec2(18.0, 18.0)).frame(false)).clicked(){println!("graph")}//graph
+        if ui.add(ImageButton::new(self.graph_image.texture_id(ctx), egui::vec2(18.0, 18.0)).frame(false)).clicked(){
+            *content=Content::Graph;
+        }//graph
         ui.add_space(space);
         if ui.add(ImageButton::new(self.canvas_image.texture_id(ctx), egui::vec2(18.0, 18.0)).frame(false)).clicked(){println!("canvas")}//canvas
         ui.add_space(space);
