@@ -1,7 +1,6 @@
 use std::io::Write;
 use crate::search;
 use crate::screens;
-use crate::graph;
 
 use eframe::egui::{ScrollArea,Separator,TopBottomPanel,SidePanel,Context,Layout,Align,ImageButton,TextureId, Style,Frame, Button,RichText};
 use egui_extras::RetainedImage;
@@ -47,13 +46,11 @@ pub struct LeftControls {
     rename:String,
     menu_error:String,
 
-    marker:graph::Graph
 }
 
 impl Default for LeftControls{
     fn default() -> Self {
         Self{
-            marker:graph::Graph::default(),
             current_left_tab:0,
             rename:"".to_owned(),
             menu_error:"".to_owned(),

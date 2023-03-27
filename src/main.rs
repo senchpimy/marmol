@@ -61,6 +61,8 @@ struct Marmol{
     show_create_button:bool,
     new_vault_folder: String,
     new_vault_folder_err: String,
+
+    marker:graph::Graph
 }
 
 impl Default for Marmol {
@@ -80,6 +82,7 @@ impl Default for Marmol {
             buf = files::read_file(&current);
         }
         Self {
+            marker:graph::Graph::default(),
             new_file_str:String::new(),
             content: main_area::Content::View,
             left_controls:main_area::LeftControls::default(),
@@ -216,6 +219,9 @@ impl eframe::App for Marmol {
                                 if ui.button("Cancel").clicked(){
                                     self.content = main_area::Content::View;
                                 }
+                        }else if self.content == main_area::Content::Graph{
+                            self.marker.ui(ui);
+                            self.marker.controls(ctx);
                         }
                     }); //termina CentralPanel
                 //Termina Principal
