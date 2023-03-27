@@ -4,6 +4,7 @@ use json;
 use std::fs;
 use std::collections::HashMap;
 use crate::files;
+use yaml_rust::YamlLoader;
 
 
 use egui::*;
@@ -16,7 +17,6 @@ struct MarmolPoint {
 }
 
 pub struct Graph{
-    number_of_points:i32,
     points:Vec<MarmolPoint>,
     points_coord:Vec<(f32,f32)>,
     center_force:f32,
@@ -31,9 +31,9 @@ pub struct Graph{
 }
 
 impl MarmolPoint{
-    fn new(val:i32, tags:Vec<String>)->Self{
+    fn new(val:&str, tags:Vec<String>)->Self{
         Self{
-            text: format!("wuw {}",val),
+            text: format!("{}",val),
             tags: tags,
         }
     }
@@ -50,10 +50,11 @@ impl Default for Graph {
         tags_hashmap.insert(tags[2].clone(),colors_vec[2]);
         let mut data = vec![];
         let mut coords = vec![];
-        let number = get_data(&Path::new("/home/plof/Documents/1er-semestre-Fes/1er semestre/"),
-        &mut data,&mut coords);
+        let mut total_entries =0;
+        get_data(&Path::new("/home/plof/Documents/1er-semestre-Fes/1er semestre/"),
+        &mut data,&mut total_entries);
+        get_coords(&mut coords,total_entries);
         Self {
-            number_of_points:number,
             points:data,
             points_coord:coords,
             center_force:1.0,
@@ -116,6 +117,9 @@ impl Graph {
         markers_plot.show(ui, |plot_ui| {
             self.dragable=true;
                 let mut index = 0;
+                if self.points.len()==0{
+                    return;
+                }
                 for point in &self.points {
                     let point_color = self.tags_to_color(&point.tags);
                     let punto=Points::new([self.points_coord[index].0 as f64,self.points_coord[index].1 as f64])
@@ -131,7 +135,8 @@ impl Graph {
                         plot_ui.text(texto);
                     }
                     if plot_ui.plot_clicked() && is_close(plot_ui.pointer_coordinate(),self.points_coord[index],0.05){
-                        unimplemented!();// Cambiar el archivo a el que marca la bolita
+                        //unimplemented!();// Cambiar el archivo a el que marca la bolita
+                        println!("{}",self.points[index].text);
                     }
                     if is_close(plot_ui.pointer_coordinate(),self.points_coord[index],0.05){
                         self.dragable=false;
@@ -154,6 +159,9 @@ impl Graph {
                 None => continue,
             }
         }
+        if matches.len() == 0 {
+            return self.orphan_color;
+        }
         let mut r:u8 = matches[0].0;
         let mut g:u8 = matches[0].1;
         let mut b:u8 = matches[0].2;
@@ -165,30 +173,13 @@ impl Graph {
         }
         Color32::from_rgb(r,g,b)
     }
-fn move_points(){
-}
-}
+//fn update_vault_points(){
+//    
+//}
 
-fn get_points(elements:i32)-> Vec<(f32,f32)>{
-    let elementos = elements as f32;
-    let radio=2.;
-    let var = 3.14*2.0;
-    let mut vec_points_coord:Vec<(f32,f32)>=vec![];
-    
-    if elements<10{
-    }else if elements<=30{
-        for i in 0..elements{
-            let a = (var/elementos)* i as f32;
-            let x:f32= radio * a.cos();
-            let y:f32= radio * a.sin();
-            let punto:(f32,f32)=(x,y);
-            vec_points_coord.push(punto);
-        }
-    }else if elements<=70{
-    }else{}
-    vec_points_coord
+//fn move_points(){
+//}
 }
-
 
 fn is_close(delta:Option<PlotPoint>, point_pos:(f32,f32), tol:f32)->bool{
     match delta {
@@ -206,47 +197,75 @@ fn nueva_ubicacion(val:Vec2,punto:&mut (f32,f32)){
 }
 
 
-fn get_data(dir:&Path,marmol_vec:&mut Vec<MarmolPoint>,coords_vec:&mut Vec<(f32,f32)>)->i32{
+fn get_data(dir:&Path,marmol_vec:&mut Vec<MarmolPoint>,total_entries:&mut i32){
     for entry in fs::read_dir(dir).unwrap() {
         let entry = entry.unwrap();
         let path = entry.path();
         if path.is_dir() {
-            get_data(&path,marmol_vec,coords_vec);
+            get_data(&path,marmol_vec,total_entries);
         } else {
             if let Some(ext) = path.extension() {
                 if ext == "md" {
+                    let filename = path.file_name().unwrap().to_str().unwrap();
+                    *total_entries+=1;
                     let content = files::read_file(path.to_str().unwrap());
                     let (content,_)=files::contents(&content);
+                    let content = YamlLoader::load_from_str(&content).unwrap_or(
+                        {
+                            let point = MarmolPoint::new(filename,["Orphan".to_owned()].to_vec());
+                            marmol_vec.push(point);
+                            continue;
+                        }
+                        );
+                    let content = &content[0];
+                    if content["tags"].is_badvalue(){
+                        if content["Tags"].is_badvalue(){
+                            let point = MarmolPoint::new(filename,["Orphan".to_owned()].to_vec());
+                            marmol_vec.insert(0,point);
+                        }else{
+                            let mut tag_vecs=vec![];
+                            for tag in content["Tags"].as_vec().unwrap(){
+                                tag_vecs.push(tag.as_str().unwrap().to_owned());
+                            }
+                            let point = MarmolPoint::new(filename,tag_vecs);
+                            marmol_vec.push(point);
+                        }
+                    }else{
+                        let mut tag_vecs=vec![];
+                        for tag in content["tags"].as_vec().unwrap(){
+                            tag_vecs.push(tag.as_str().unwrap().to_owned());
+                        }
+                        let point = MarmolPoint::new(filename,tag_vecs);
+                        marmol_vec.push(point);
+                    }
                 }
             }
         }
     }
-    1
-    //let mut vec_points:Vec<MarmolPoint>=vec![];
-    //for i in 0..elementos-5{
-    //    let arr: [String;0]=[];
-    //    let point = MarmolPoint::new(i,arr.to_vec());
-    //    vec_points.push(point);
-    //}
-
-    //let vector = ["1".to_owned()];
-    //let point = MarmolPoint::new(69,vector.to_vec());
-    //vec_points.push(point);
-    //let vector = ["2".to_owned()];
-    //let point = MarmolPoint::new(420,vector.to_vec());
-    //vec_points.push(point);
-    //let vector = ["3".to_owned()];
-    //let point = MarmolPoint::new(18,vector.to_vec());
-    //vec_points.push(point);
-    //let vector = ["1".to_owned(),"3".to_owned()];
-    //let point = MarmolPoint::new(18,vector.to_vec());
-    //vec_points.push(point);
-    //let vector = ["2".to_owned(),"3".to_owned()];
-    //let point = MarmolPoint::new(18,vector.to_vec());
-    //vec_points.push(point);
-    //vec_points
 }
-
+fn get_coords(coords_vec:&mut Vec<(f32,f32)>,total_entries:i32){
+    let elementos = total_entries as f32;
+    let radio=2.;
+    let var = 3.14*2.0;
+    
+    //if elements<10{
+    //}else if elements<=30{
+    //    for i in 0..elements{
+    //        let a = (var/elementos)* i as f32;
+    //        let x:f32= radio * a.cos();
+    //        let y:f32= radio * a.sin();
+    //        let punto:(f32,f32)=(x,y);
+    //        coords_vec.push(punto);
+    //    }
+    //}else if elements<=70{
+    //}else{}
+    for i in 0..total_entries{
+        let a = (var/elementos)* i as f32;
+        let x:f32= radio * a.cos();
+        let y:f32= radio * a.sin();
+        coords_vec.push((x,y));
+    }
+}
 #[derive(Debug)]
 struct JsonConfiguration{
     show_orphans:bool,
