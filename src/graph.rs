@@ -4,6 +4,7 @@ use json;
 use std::fs;
 use std::collections::HashMap;
 use crate::files;
+use crate::main_area;
 use yaml_rust::YamlLoader;
 
 
@@ -24,9 +25,10 @@ pub struct Graph{
     dragable:bool,
     drag_delta:Vec2,
     tags_colors:HashMap<String,Color32>,
+    prev_tags_colors:HashMap<String,Color32>,
     prev_colors:Vec<Color32>,
     colors:Vec<Color32>,
-    tags:Vec<String>,
+    //tags:Vec<String>,
     orphan_color:Color32,
 }
 
@@ -42,12 +44,12 @@ impl MarmolPoint{
 impl Graph {
     pub fn new(vault:&str) -> Self {
         let mut tags_hashmap = HashMap::new();
-        let tags = vec!["1".to_owned(),"2".to_owned(), "3".to_owned()];
+        //let mut tags = vec![];
         let colors_vec = vec![Color32::from_rgb(235, 64, 52),Color32::from_rgb(38, 28, 128),Color32::from_rgb(128, 28, 101)];
         let prev_colors_vec = vec![Color32::from_rgb(235, 64, 52),Color32::from_rgb(38, 28, 128),Color32::from_rgb(128, 28, 101)];
-        tags_hashmap.insert(tags[0].clone(),colors_vec[0]);
-        tags_hashmap.insert(tags[1].clone(),colors_vec[1]);
-        tags_hashmap.insert(tags[2].clone(),colors_vec[2]);
+        //tags_hashmap.insert(tags[0].clone(),colors_vec[0]);
+        //tags_hashmap.insert(tags[1].clone(),colors_vec[1]);
+        //tags_hashmap.insert(tags[2].clone(),colors_vec[2]);
         let mut data = vec![];
         let mut coords = vec![];
         let mut total_entries =0;
@@ -61,8 +63,9 @@ impl Graph {
             repel_force:1.0,
             dragable:true,
             drag_delta:vec2(0.0,0.0),
-            tags_colors:tags_hashmap,
-            tags:tags,
+            tags_colors:tags_hashmap.clone(),
+            prev_tags_colors:tags_hashmap,
+            //tags:tags,
             orphan_color:Color32::from_rgb(66,77,92),
             colors:colors_vec,
             prev_colors:prev_colors_vec,
@@ -86,21 +89,24 @@ impl Graph {
             ui.add(egui::Slider::new(&mut self.repel_force, 5.0..=20.0));
             ui.label("Center force");
             ui.add(egui::Slider::new(&mut self.center_force, 5.0..=20.0));
-            for i in 0..self.colors.len(){
+            let mut j =0;
+            for i in self.tags_colors.clone().into_keys(){
                 ui.horizontal(|ui| {
-                    color_picker::color_edit_button_srgba(ui,&mut self.colors[i],
-                        egui::widgets::color_picker::Alpha::Opaque
-                        );
-                    ui.label(&self.tags[i]);
+                    match self.tags_colors.get(&i){
+                        Some(x)=>{
+                            let mut col = x.clone();
+                            color_picker::color_edit_button_srgba(ui,&mut col,egui::widgets::color_picker::Alpha::Opaque);
+                        },
+                        None=>{}
+                    }
+                    ui.label(i);
                 });
+                j+=1;
             }
-            if self.colors!=self.prev_colors{
-                let mut tags_hashmap = HashMap::new();
-                for i in 0..self.tags.len(){
-                    tags_hashmap.insert(self.tags[i].clone(),self.colors[i]);
+            for key in self.tags_colors.clone().into_keys(){
+                if self.tags_colors.get(&key)!=self.prev_tags_colors.get(&key){
+                    println!("diferente");
                 }
-                self.prev_colors = self.colors.clone();
-                self.tags_colors = tags_hashmap;
             }
                 ui.horizontal(|ui| {
                     color_picker::color_edit_button_srgba(ui,&mut self.orphan_color,
@@ -110,7 +116,7 @@ impl Graph {
         });
     }
 
-    pub fn ui(&mut self, ui: &mut Ui) -> Response {
+    pub fn ui(&mut self, ui: &mut Ui,vault:&mut String,content:&mut main_area::Content) -> Response {
         let markers_plot = Plot::new("markers_demo")
             .data_aspect(1.0)
             .allow_drag(self.dragable)
@@ -144,8 +150,8 @@ impl Graph {
                         plot_ui.text(texto);
                     }
                     if plot_ui.plot_clicked() && is_close(plot_ui.pointer_coordinate(),self.points_coord[index],0.05){
-                        //unimplemented!();// Cambiar el archivo a el que marca la bolita
-                        println!("{}",self.points[index].text);
+                        *vault=self.points[index].text.clone();
+                        *content=main_area::Content::Edit;
                     }
                     if is_close(plot_ui.pointer_coordinate(),self.points_coord[index],0.05){
                         self.dragable=false;
@@ -206,7 +212,8 @@ fn nueva_ubicacion(val:Vec2,punto:&mut (f32,f32)){
 }
 
 
-fn get_data(dir:&Path,marmol_vec:&mut Vec<MarmolPoint>,total_entries:&mut i32){
+fn get_data(dir:&Path,marmol_vec:&mut Vec<MarmolPoint>,total_entries:&mut i32,){
+            //tags:&mut Vec<String>){
     for entry in fs::read_dir(dir).unwrap() {
         let entry = entry.unwrap();
         let path = entry.path();
