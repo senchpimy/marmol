@@ -116,11 +116,11 @@ impl Graph {
         });
     }
 
-    pub fn ui(&mut self, ui: &mut Ui,vault:&mut String,content:&mut main_area::Content) -> Response {
-        let markers_plot = Plot::new("markers_demo")
+    pub fn ui(&mut self, ui: &mut Ui,current_file:&mut String,content:&mut main_area::Content,vault:&str) -> Response {
+        let markers_plot = Plot::new("Graph")
             .data_aspect(1.0)
             .allow_drag(self.dragable)
-            //.show_axes([false,false])
+            .show_axes([false,false])
             .label_formatter(|name, value| {
                 if !name.is_empty() {
                     format!("here be a point{}: {:.*}%", name, 1, value.y)
@@ -150,8 +150,8 @@ impl Graph {
                         plot_ui.text(texto);
                     }
                     if plot_ui.plot_clicked() && is_close(plot_ui.pointer_coordinate(),self.points_coord[index],0.05){
-                        *vault=self.points[index].text.clone();
-                        *content=main_area::Content::Edit;
+                        *current_file=format!("{}/{}",vault,&self.points[index].text);
+                        *content=main_area::Content::View;
                     }
                     if is_close(plot_ui.pointer_coordinate(),self.points_coord[index],0.05){
                         self.dragable=false;

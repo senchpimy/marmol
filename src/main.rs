@@ -222,7 +222,7 @@ impl eframe::App for Marmol {
                                     self.content = main_area::Content::View;
                                 }
                         }else if self.content == main_area::Content::Graph{
-                            self.marker.ui(ui,&mut self.current_file, &mut self.content);
+                            self.marker.ui(ui,&mut self.current_file, &mut self.content,&self.vault);
                             self.marker.controls(ctx);
                         }
                     }); //termina CentralPanel
