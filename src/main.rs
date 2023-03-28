@@ -61,6 +61,7 @@ struct Marmol{
     show_create_button:bool,
     new_vault_folder: String,
     new_vault_folder_err: String,
+    vault_changed:bool,
 
     marker:graph::Graph
 }
@@ -82,7 +83,7 @@ impl Default for Marmol {
             buf = files::read_file(&current);
         }
         Self {
-            marker:graph::Graph::default(),
+            marker:graph::Graph::new(&vault_var),
             new_file_str:String::new(),
             content: main_area::Content::View,
             left_controls:main_area::LeftControls::default(),
@@ -107,6 +108,7 @@ impl Default for Marmol {
             current_file:current.to_owned(),
 
             left_collpased:true,
+            vault_changed:false,
             //right_collpased:true,
             
         }
@@ -230,7 +232,11 @@ impl eframe::App for Marmol {
         }else if self.current_window==screens::Screen::Configuracion { //configuration
             screens::configuracion(ctx,&mut self.current_window, &mut self.vault_vec, &mut self.vault,
                                    &mut self.new_vault_str,&mut self.create_new_vault,&mut self.new_vault_folder,
-                                   &mut self.new_vault_folder_err,&mut self.show_create_button);
+                                   &mut self.new_vault_folder_err,&mut self.show_create_button,
+                                   &mut self.vault_changed);
+            if self.vault_changed{
+                self.marker.update_vault(&Path::new(&self.vault));
+            }
         }else if self.current_window == screens::Screen::Server{
             screens::set_server(ctx);
         };

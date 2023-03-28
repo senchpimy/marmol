@@ -75,7 +75,7 @@ pub fn default(ctx:&egui::Context, current_window : &mut Screen, contenido:&mut 
 
 pub fn configuracion(ctx:&egui::Context, current_window : &mut Screen, 
                      vaults:&mut Vec<Yaml>, vault:&mut String, nw_vault_str:&mut String, show:&mut bool,
-                     folder:&mut String, error:&mut String, button:&mut bool){
+                     folder:&mut String, error:&mut String, button:&mut bool,vault_changed:&mut bool){
             CentralPanel::default().show(ctx,|ui|{
                 if ui.button("Select theme").clicked(){
                 }
@@ -142,6 +142,7 @@ pub fn configuracion(ctx:&egui::Context, current_window : &mut Screen,
                                         let menu = |ui:&mut egui::Ui| {remove_vault(ui,stri,&mut new_vaults,&mut changed)};
                                         if btn.ui(ui).context_menu(menu).clicked() {
                                             *vault=String::from(stri);
+                                            *vault_changed=true;
                                         }
                                     }
                                 }

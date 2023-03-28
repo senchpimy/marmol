@@ -39,8 +39,8 @@ impl MarmolPoint{
     }
 }
 
-impl Default for Graph {
-    fn default() -> Self {
+impl Graph {
+    pub fn new(vault:&str) -> Self {
         let mut tags_hashmap = HashMap::new();
         let tags = vec!["1".to_owned(),"2".to_owned(), "3".to_owned()];
         let colors_vec = vec![Color32::from_rgb(235, 64, 52),Color32::from_rgb(38, 28, 128),Color32::from_rgb(128, 28, 101)];
@@ -51,7 +51,7 @@ impl Default for Graph {
         let mut data = vec![];
         let mut coords = vec![];
         let mut total_entries =0;
-        get_data(&Path::new("/home/plof/Documents/1er-semestre-Fes/1er semestre/"),
+        get_data(&Path::new(vault),
         &mut data,&mut total_entries);
         get_coords(&mut coords,total_entries);
         Self {
@@ -71,6 +71,15 @@ impl Default for Graph {
 }
 
 impl Graph {
+    pub fn update_vault(&mut self, vault:&Path){
+        let mut new_points=vec![];
+        let mut new_coords=vec![];
+        let mut elements = 0;
+        get_data(vault,&mut new_points,&mut elements);
+        get_coords(&mut new_coords,elements);
+        self.points=new_points;
+        self.points_coord=new_coords;
+    }
     pub fn controls(&mut self,ctx:&Context){
         egui::Window::new("Configuration").show(ctx, |ui| {
             ui.label("Repel force");
