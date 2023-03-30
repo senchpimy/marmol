@@ -10,3 +10,6 @@
 - tags in graph
 - color of tags
 - movement of the points in the graph
+
+- formating when new line
+- Create file with Enter / new line

@@ -58,6 +58,7 @@ struct Marmol{
     current_file: String,
 
     create_new_vault:bool,
+    create_file_error:String,
     show_create_button:bool,
     new_vault_folder: String,
     new_vault_folder_err: String,
@@ -102,6 +103,7 @@ impl Default for Marmol {
             buffer_image: buffer_image_pre,
             commoncache:CommonMarkCache::default(),
             is_image:is_image_pre,
+            create_file_error:String::new(),
             //tabs:vec![tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),],
             vault:vault_var,
             vault_vec:vault_vec_var,
@@ -207,19 +209,28 @@ impl eframe::App for Marmol {
                         else if self.content == main_area::Content::NewFile{
                                 ui.label("Create New File");
                                 ui.add(egui::TextEdit::singleline(&mut self.new_file_str));
-                                if ui.button("Create").clicked(){
-                                    self.content = main_area::Content::View;
-                                    let new_path = format!("{}/{}",&self.vault, &self.new_file_str);
-                                    let new_file =Path::new(&new_path);
-                                    let res = File::create(new_file);
-                                    match res{
-                                        Ok(_)=>{},
-                                        Err(x)=>{println!("{}",x);}//todo
+                                let new_path = format!("{}/{}",&self.vault, &self.new_file_str);
+                                let new_file = Path::new(&new_path);
+                                ui.label(RichText::new(&self.create_file_error).color(Color32::RED));
+                                if new_file.exists(){
+                                    self.create_file_error=String::from("File already exist");
+                                }else{
+                                    if ui.button("Create").clicked() {
+                                        self.content = main_area::Content::View;
+                                        let res = File::create(new_file);
+                                        match res{
+                                            Ok(_)=>{
+                                                self.create_file_error=String::new();
+                                                self.current_file=String::from(new_file.to_str().unwrap())},
+                                            Err(x)=>{self.create_file_error=x.to_string();}
+                                        }
+                                        self.new_file_str = String::new();
                                     }
-                                    self.new_file_str = String::new();
+                                    self.create_file_error=String::new();
                                 }
                                 if ui.button("Cancel").clicked(){
                                     self.content = main_area::Content::View;
+                                    self.new_file_str = String::new();
                                 }
                         }else if self.content == main_area::Content::Graph{
                             self.marker.ui(ui,&mut self.current_file, &mut self.content,&self.vault);

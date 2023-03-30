@@ -345,10 +345,13 @@ fn file_options(ui: &mut egui::Ui, s:&str,path:&str, rename:&mut String,error:&m
     let delete = egui::Button::new(RichText::new("Delete file").color(Color32::RED));
     let col = egui::containers::collapsing_header::CollapsingHeader::new(RichText::new("Delete file").color(Color32::RED));
     col.show(ui, |ui|{
-        ui.label(format!("Are you sure you want to delete {}?",path_s.to_str().unwrap()));
+        ui.label("Are you sure you want to delete");
+        ui.label(RichText::new(path_s.to_str().unwrap()).strong());
+        ui.add_space(5.);
         if ui.button("No").clicked(){
             ui.close_menu();
         }
+        ui.add_space(5.);
         if ui.add(delete).clicked() {
             let delete = fs::remove_file(s);
             match delete {
