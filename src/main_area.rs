@@ -267,16 +267,27 @@ pub fn create_metadata(metadata:String, ui:&mut egui::Ui){
                  },
                 )
         }else{
-            let mut test =s.split(" ");
+            let mut splitted =s.split(" ");
+            let mut content:&str;
+            let mut text = splitted.next();
+            match text{
+                Some(x)=>{content=x},
+                None=>{content="Error parsing"}
+            }
             job.append(
-                test.next().unwrap(),0.0,
-                 TextFormat {
-                 color: Color32::GRAY,
-                 ..Default::default()
-                 },
-                );
+                    content,0.0,
+                     TextFormat {
+                     color: Color32::GRAY,
+                     ..Default::default()
+                     },
+                    );
+            text=splitted.next();
+            match text{
+                Some(x)=>{let content = x.to_owned() + "\n";},
+                None=>{content="Error parsing"}
+            }
             job.append(
-                &(test.next().unwrap().to_owned()+"\n"),0.0,
+                content,0.0,
                  TextFormat {
                  color: Color32::WHITE,
                  ..Default::default()
