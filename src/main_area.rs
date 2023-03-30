@@ -283,11 +283,11 @@ pub fn create_metadata(metadata:String, ui:&mut egui::Ui){
                     );
             text=splitted.next();
             match text{
-                Some(x)=>{let content = x.to_owned() + "\n";},
+                Some(x)=>{content = x},
                 None=>{content="Error parsing"}
             }
             job.append(
-                content,0.0,
+                &format!("{}\n",content),0.0,
                  TextFormat {
                  color: Color32::WHITE,
                  ..Default::default()
