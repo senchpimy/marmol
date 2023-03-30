@@ -54,7 +54,7 @@ impl Graph {
         let mut coords = vec![];
         let mut total_entries =0;
         get_data(&Path::new(vault),
-        &mut data,&mut total_entries);
+        &mut data,&mut total_entries,vault);
         get_coords(&mut coords,total_entries);
         Self {
             points:data,
@@ -78,7 +78,7 @@ impl Graph {
         let mut new_points=vec![];
         let mut new_coords=vec![];
         let mut elements = 0;
-        get_data(vault,&mut new_points,&mut elements);
+        get_data(vault,&mut new_points,&mut elements,vault.to_str().unwrap());
         get_coords(&mut new_coords,elements);
         self.points=new_points;
         self.points_coord=new_coords;
@@ -212,23 +212,23 @@ fn nueva_ubicacion(val:Vec2,punto:&mut (f32,f32)){
 }
 
 
-fn get_data(dir:&Path,marmol_vec:&mut Vec<MarmolPoint>,total_entries:&mut i32,){
+fn get_data(dir:&Path,marmol_vec:&mut Vec<MarmolPoint>,total_entries:&mut i32,vault:&str){
             //tags:&mut Vec<String>){
     for entry in fs::read_dir(dir).unwrap() {
         let entry = entry.unwrap();
         let path = entry.path();
         if path.is_dir() {
-            get_data(&path,marmol_vec,total_entries);
+            get_data(&path,marmol_vec,total_entries,vault);
         } else {
             if let Some(ext) = path.extension() {
                 if ext == "md" {
-                    let filename = path.file_name().unwrap().to_str().unwrap();
+                    let filename = path.to_str().unwrap().replace(vault,"");
                     *total_entries+=1;
                     let content = files::read_file(path.to_str().unwrap());
                     let (content,_)=files::contents(&content);
                     let content = YamlLoader::load_from_str(&content).unwrap_or(
                         {
-                            let point = MarmolPoint::new(filename,["Orphan".to_owned()].to_vec());
+                            let point = MarmolPoint::new(&filename,["Orphan".to_owned()].to_vec());
                             marmol_vec.push(point);
                             continue;
                         }
@@ -236,14 +236,14 @@ fn get_data(dir:&Path,marmol_vec:&mut Vec<MarmolPoint>,total_entries:&mut i32,){
                     let content = &content[0];
                     if content["tags"].is_badvalue(){
                         if content["Tags"].is_badvalue(){
-                            let point = MarmolPoint::new(filename,["Orphan".to_owned()].to_vec());
+                            let point = MarmolPoint::new(&filename,["Orphan".to_owned()].to_vec());
                             marmol_vec.insert(0,point);
                         }else{
                             let mut tag_vecs=vec![];
                             for tag in content["Tags"].as_vec().unwrap(){
                                 tag_vecs.push(tag.as_str().unwrap().to_owned());
                             }
-                            let point = MarmolPoint::new(filename,tag_vecs);
+                            let point = MarmolPoint::new(&filename,tag_vecs);
                             marmol_vec.push(point);
                         }
                     }else{
@@ -251,7 +251,7 @@ fn get_data(dir:&Path,marmol_vec:&mut Vec<MarmolPoint>,total_entries:&mut i32,){
                         for tag in content["tags"].as_vec().unwrap(){
                             tag_vecs.push(tag.as_str().unwrap().to_owned());
                         }
-                        let point = MarmolPoint::new(filename,tag_vecs);
+                        let point = MarmolPoint::new(&filename,tag_vecs);
                         marmol_vec.push(point);
                     }
                 }
