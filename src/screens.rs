@@ -1,5 +1,6 @@
-use eframe::egui::{CentralPanel,RichText,Color32,Button};
+use eframe::egui::{CentralPanel,RichText,Color32,Button,FontId};
 use std::fs;
+use std::sync::Arc;
 use egui::Widget;
 use std::path::Path;
 use rfd::FileDialog;
@@ -75,7 +76,8 @@ pub fn default(ctx:&egui::Context, current_window : &mut Screen, contenido:&mut 
 
 pub fn configuracion(ctx:&egui::Context, current_window : &mut Screen, 
                      vaults:&mut Vec<Yaml>, vault:&mut String, nw_vault_str:&mut String, show:&mut bool,
-                     folder:&mut String, error:&mut String, button:&mut bool,vault_changed:&mut bool){
+                     folder:&mut String, error:&mut String, button:&mut bool,vault_changed:&mut bool,
+                     font_size:&mut f32){
             CentralPanel::default().show(ctx,|ui|{
                 if ui.button("Select theme").clicked(){
                 }
@@ -153,12 +155,21 @@ pub fn configuracion(ctx:&egui::Context, current_window : &mut Screen,
                         }
                     });
                 });
+                ui.add_space(10.0);
                 if ui.button("return").clicked(){
                     *current_window=Screen::Main;
                 };
+                ui.add_space(10.0);
                 if ui.button("Configure Backup Server").clicked(){
                     *current_window=Screen::Server;
                 };
+                if ui.add(egui::Slider::new(font_size, 10.0..=80.0).text("My value")).changed(){
+                    ui.add_space(10.0);
+                    let mut style = (*ctx.style()).clone();
+                    let mut font_id = FontId::proportional(*font_size);
+                    style.override_font_id = Some(font_id);
+                    ctx.set_style(style);
+                }
             });
 }
 

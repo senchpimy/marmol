@@ -63,13 +63,14 @@ struct Marmol{
     new_vault_folder: String,
     new_vault_folder_err: String,
     vault_changed:bool,
+    font_size:f32,
 
     marker:graph::Graph
 }
 
 impl Default for Marmol {
     fn default() -> Self {
-        let (vault_var, vault_vec_var, current, config_path_var,window)=configuraciones::load_vault();
+        let (vault_var, vault_vec_var, current, config_path_var,window,font_size)=configuraciones::load_vault();
         let buf:String;
         let mut is_image_pre=false;
         let mut buffer_image_pre:RetainedImage =  RetainedImage::from_image_bytes("colapse",include_bytes!("../colapse.png"),).unwrap();
@@ -84,6 +85,7 @@ impl Default for Marmol {
             buf = files::read_file(&current);
         }
         Self {
+            font_size:font_size,
             marker:graph::Graph::new(&vault_var),
             new_file_str:String::new(),
             content: main_area::Content::View,
@@ -178,7 +180,7 @@ impl eframe::App for Marmol {
                                 if self.content !=main_area::Content::NewFile{
                                     ui.label("✏");
                                     ui.add(toggle_switch::toggle(&mut self.content));
-                                    ui.label(RichText::new("👁").font(FontId::proportional(20.0)));
+                                    ui.label(RichText::new("👁").font(FontId::proportional(self.font_size)));
                                 }
                             });
                         });
@@ -244,7 +246,7 @@ impl eframe::App for Marmol {
             screens::configuracion(ctx,&mut self.current_window, &mut self.vault_vec, &mut self.vault,
                                    &mut self.new_vault_str,&mut self.create_new_vault,&mut self.new_vault_folder,
                                    &mut self.new_vault_folder_err,&mut self.show_create_button,
-                                   &mut self.vault_changed);
+                                   &mut self.vault_changed, &mut self.font_size);
             if self.vault_changed{
                 self.marker.update_vault(&Path::new(&self.vault));
             }
@@ -267,7 +269,8 @@ impl eframe::App for Marmol {
         let vault_vec_str = format!("vault_vec: [ {} ]",vec_str);
             let file_path = String::from(&self.config_path) + "/ProgramState";
             let current_file = format!("current: {}", &self.current_file);
-            let new_content= format!("{}\n{}\n{}",&vault_vec_str,vault_str,current_file);
+            let font_size = format!("font_size: {}", &self.font_size);
+            let new_content= format!("{}\n{}\n{}\n{}",&vault_vec_str,vault_str,current_file,font_size);
             let mut file = fs::File::create(&file_path).unwrap();
             file.write_all(new_content.as_bytes()).unwrap();
             true
