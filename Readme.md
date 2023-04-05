@@ -13,3 +13,10 @@
 
 - formating when new line
 - Create file with Enter / new line
+
+- Link between notes
+- Line Lenght
+- sort of the notes
+- Move between dirs
+- Rename dirs
+- Open file if it was first argument

@@ -36,7 +36,6 @@ pub struct LeftControls {
     new_file:RetainedImage,
     starred_image:RetainedImage,
     config_image:RetainedImage,
-    vault_image:RetainedImage,
     help_image:RetainedImage,
     switcher_image:RetainedImage,
     graph_image:RetainedImage,
@@ -64,7 +63,6 @@ impl Default for LeftControls{
             new_file: RetainedImage::from_image_bytes("search",include_bytes!("../new_file.png"),).unwrap(),
             starred_image: RetainedImage::from_image_bytes("starred",include_bytes!("../starred.png"),).unwrap(),
             config_image: RetainedImage::from_image_bytes("cpnfiguration",include_bytes!("../configuration.png"),).unwrap(),
-            vault_image: RetainedImage::from_image_bytes("vault",include_bytes!("../vault.png"),).unwrap(),
             help_image: RetainedImage::from_image_bytes("help",include_bytes!("../help.png"),).unwrap(),
             switcher_image: RetainedImage::from_image_bytes("switcher",include_bytes!("../switcher.png"),).unwrap(),
             graph_image: RetainedImage::from_image_bytes("graph",include_bytes!("../graph.png"),).unwrap(),
@@ -198,30 +196,28 @@ pub fn left_side_settings(&self,ctx:&Context, colapse:&mut bool, vault:&mut Stri
             *colapse=!*colapse;
         }
         ui.add(Separator::default());
-        if ui.add(ImageButton::new(self.switcher_image.texture_id(ctx), egui::vec2(18.0, 18.0)).frame(false)).clicked(){println!("switcher")} //quick switcher
+        if ui.add(ImageButton::new(self.switcher_image.texture_id(ctx), egui::vec2(18.0, 18.0)).frame(false)).on_hover_text("Switcher").clicked(){println!("switcher")} //quick switcher
         ui.add_space(space);
-        if ui.add(ImageButton::new(self.graph_image.texture_id(ctx), egui::vec2(18.0, 18.0)).frame(false)).clicked(){
+        if ui.add(ImageButton::new(self.graph_image.texture_id(ctx), egui::vec2(18.0, 18.0)).frame(false)).on_hover_text("Graph").clicked(){
             *content=Content::Graph;
         }//graph
         ui.add_space(space);
-        if ui.add(ImageButton::new(self.canvas_image.texture_id(ctx), egui::vec2(18.0, 18.0)).frame(false)).clicked(){println!("canvas")}//canvas
+        if ui.add(ImageButton::new(self.canvas_image.texture_id(ctx), egui::vec2(18.0, 18.0)).frame(false)).on_hover_text("Canvas").clicked(){println!("canvas")}//canvas
         ui.add_space(space);
-        if ui.add(ImageButton::new(self.daynote_image.texture_id(ctx), egui::vec2(18.0, 18.0)).frame(false)).clicked(){
+        if ui.add(ImageButton::new(self.daynote_image.texture_id(ctx), egui::vec2(18.0, 18.0)).frame(false)).on_hover_text("Daily note").clicked(){
             Self::create_date_file(vault, current_file);
         }//note
         ui.add_space(space);
-        if ui.add(ImageButton::new(self.command_image.texture_id(ctx), egui::vec2(18.0, 18.0)).frame(false)).clicked(){println!("commandpale")}//palette
+        if ui.add(ImageButton::new(self.command_image.texture_id(ctx), egui::vec2(18.0, 18.0)).frame(false)).on_hover_text("Command Palette").clicked(){println!("commandpale")}//palette
         ui.add_space(space);
-        if ui.add(ImageButton::new(self.new_file.texture_id(ctx), egui::vec2(18.0, 18.0)).frame(false)).clicked(){
+        if ui.add(ImageButton::new(self.new_file.texture_id(ctx), egui::vec2(18.0, 18.0)).frame(false)).on_hover_text("New File").clicked(){
             *content=Content::NewFile;
         }
         ui.with_layout(Layout::bottom_up(Align::Max),|ui|{
         ui.add_space(5.);
-             if ui.add(ImageButton::new(self.config_image.texture_id(ctx), egui::vec2(18.0, 18.0)).frame(false)).clicked(){*current_window=screens::Screen::Configuracion;}
+             if ui.add(ImageButton::new(self.config_image.texture_id(ctx), egui::vec2(18.0, 18.0)).frame(false)).on_hover_text("Configuration").clicked(){*current_window=screens::Screen::Configuracion;}
         ui.add_space(5.);
-             if ui.add(ImageButton::new(self.help_image.texture_id(ctx), egui::vec2(18.0, 18.0)).frame(false)).clicked(){println!("help")}
-        ui.add_space(5.);
-             if ui.add(ImageButton::new(self.vault_image.texture_id(ctx), egui::vec2(18.0, 18.0)).frame(false)).clicked(){println!("vault")}
+             if ui.add(ImageButton::new(self.help_image.texture_id(ctx), egui::vec2(18.0, 18.0)).frame(false)).on_hover_text("Help").clicked(){println!("help")}
 
         });
         });
