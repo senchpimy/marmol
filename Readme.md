@@ -20,3 +20,6 @@
 - Move between dirs
 - Rename dirs
 - Open file if it was first argument
+
+- Save state of  the left menu open/closed, size
+- Center writing

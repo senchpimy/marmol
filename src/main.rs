@@ -70,7 +70,8 @@ struct Marmol{
 
 impl Default for Marmol {
     fn default() -> Self {
-        let (vault_var, vault_vec_var, current, config_path_var,window,font_size)=configuraciones::load_vault();
+        let (vault_var, vault_vec_var, current, config_path_var,
+             window,font_size,left_coll)=configuraciones::load_vault();
         let buf:String;
         let mut is_image_pre=false;
         let mut buffer_image_pre:RetainedImage =  RetainedImage::from_image_bytes("colapse",include_bytes!("../colapse.png"),).unwrap();
@@ -111,7 +112,7 @@ impl Default for Marmol {
             vault_vec:vault_vec_var,
             current_file:current.to_owned(),
 
-            left_collpased:true,
+            left_collpased:left_coll,
             vault_changed:false,
             //right_collpased:true,
             
@@ -165,9 +166,6 @@ impl eframe::App for Marmol {
                 //Principal
                 CentralPanel::default().show(ctx, |ui| {
                     if self.renderfile{
-              //  ui.columns(1, |columns|{
-              //  for i in 0..1{
-                        //ScrollArea::vertical().id_source(format!("{}",i)).show(&mut columns[i],|ui| {
                         egui::TopBottomPanel::top("tabs").show_inside(ui,|ui| {
                             let tabs= StripBuilder::new(ui);
                             tabs.size(Size::exact(1.0))
@@ -269,8 +267,10 @@ impl eframe::App for Marmol {
         let vault_vec_str = format!("vault_vec: [ {} ]",vec_str);
             let file_path = String::from(&self.config_path) + "/ProgramState";
             let current_file = format!("current: {}", &self.current_file);
+            let left_menu = format!("left_menu: {}", &self.left_collpased);
             let font_size = format!("font_size: {}", &self.font_size);
-            let new_content= format!("{}\n{}\n{}\n{}",&vault_vec_str,vault_str,current_file,font_size);
+            let new_content= format!("{}\n{}\n{}\n{}\n{}",
+                                     &vault_vec_str,vault_str,current_file,font_size,left_menu);
             let mut file = fs::File::create(&file_path).unwrap();
             file.write_all(new_content.as_bytes()).unwrap();
             true
