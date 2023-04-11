@@ -82,7 +82,7 @@ struct Marmol{
 impl Default for Marmol {
     fn default() -> Self {
         let (vault_var, vault_vec_var, current, config_path_var,
-             window,font_size,left_coll)=configuraciones::load_vault();
+             window,font_size,left_coll,center_size)=configuraciones::load_vault();
         let buf:String;
         let mut is_image_pre=false;
         let mut buffer_image_pre:RetainedImage =  RetainedImage::from_image_bytes("colapse",include_bytes!("../colapse.png"),).unwrap();
@@ -98,7 +98,7 @@ impl Default for Marmol {
         }
         Self {
             center_bool:false,
-            center_size:0.35,
+            center_size:center_size,
             font_size:font_size,
             marker:graph::Graph::new(&vault_var),
             new_file_str:String::new(),
