@@ -75,6 +75,7 @@ struct Marmol{
     font_size:f32,
     center_bool:bool,
     center_size:f32,
+    center_size_remain:f32,
 
     marker:graph::Graph
 }
@@ -98,8 +99,9 @@ impl Default for Marmol {
         }
         Self {
             center_bool:false,
-            center_size:center_size,
-            font_size:font_size,
+            center_size,
+            center_size_remain:(1.0-center_size)/2.0,
+            font_size,
             marker:graph::Graph::new(&vault_var),
             new_file_str:String::new(),
             content: main_area::Content::View,
@@ -188,7 +190,7 @@ impl eframe::App for Marmol {
                         }
                         if self.content == main_area::Content::Edit{
                             let cont = StripBuilder::new(ui)
-                                .size(Size::relative((1.0-self.center_size)/2.0))
+                                .size(Size::relative(self.center_size_remain))
                                 .size(Size::relative(self.center_size));
                             cont.horizontal(|mut strip|{
                                 strip.cell(|_|{});
@@ -208,7 +210,7 @@ impl eframe::App for Marmol {
                             });
                         }else if self.content == main_area::Content::View{
                             let cont = StripBuilder::new(ui)
-                                .size(Size::relative((1.0-self.center_size)/2.0))
+                                .size(Size::relative(self.center_size_remain))
                                 .size(Size::relative(self.center_size));
                             cont.horizontal(|mut strip|{
                                 strip.cell(|_|{});
@@ -263,8 +265,8 @@ impl eframe::App for Marmol {
             screens::configuracion(ctx,&mut self.current_window, &mut self.vault_vec, &mut self.vault,
                                    &mut self.new_vault_str,&mut self.create_new_vault,&mut self.new_vault_folder,
                                    &mut self.new_vault_folder_err,&mut self.show_create_button,
-                                   &mut self.vault_changed, &mut self.font_size,&mut self.center_bool,
-                                   &mut self.center_size);
+                                   &mut self.vault_changed, &mut self.font_size,
+                                   &mut self.center_size, &mut self.center_size_remain);
             if self.vault_changed{
                 self.marker.update_vault(&Path::new(&self.vault));
             }

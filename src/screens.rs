@@ -77,8 +77,7 @@ pub fn default(ctx:&egui::Context, current_window : &mut Screen, contenido:&mut 
 pub fn configuracion(ctx:&egui::Context, current_window : &mut Screen, 
                      vaults:&mut Vec<Yaml>, vault:&mut String, nw_vault_str:&mut String, show:&mut bool,
                      folder:&mut String, error:&mut String, button:&mut bool,vault_changed:&mut bool,
-                     font_size:&mut f32,center_bool:&mut bool, center_size:&mut f32,){
-                     //center_size_rema:&mut f32){
+                     font_size:&mut f32, center_size:&mut f32,center_size_remain:&mut f32){
             CentralPanel::default().show(ctx,|ui|{
                 if ui.button("Select theme").clicked(){
                 }
@@ -162,7 +161,9 @@ pub fn configuracion(ctx:&egui::Context, current_window : &mut Screen,
                 };
                 ui.add_space(10.0);
 
-                ui.add(egui::Slider::new(center_size, 0.35..=0.8).text("Line lenght"));
+                if ui.add(egui::Slider::new(center_size, 0.35..=0.8).text("Line lenght")).changed(){
+                    *center_size_remain=(1.0-*center_size)/2.0;
+                };
 
                 ui.add_space(10.0);
                 if ui.add(egui::Slider::new(font_size, 10.0..=80.0).text("Font size")).changed(){
