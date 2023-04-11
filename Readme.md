@@ -21,5 +21,5 @@
 - Rename dirs
 - Open file if it was first argument
 
-- Save state of  the left menu open/closed, size
+- Save state of the left menu size (not posible rn due to egui)
 - Center writing

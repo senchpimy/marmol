@@ -22,7 +22,6 @@ mod graph;
 
 fn main() -> Result<(), eframe::Error>{
     let options = eframe::NativeOptions {
-        initial_window_size: Some(egui::vec2(500.0, 600.0)),
         ..Default::default()
     };
     eframe::run_native(
@@ -41,7 +40,6 @@ struct Marmol{
     //tabs: Vec<tabs::Tab>,
     content:main_area::Content,
     text_edit:String,
-
 
     current_window: screens::Screen,
     buffer_image:RetainedImage,
@@ -107,7 +105,6 @@ impl Default for Marmol {
             commoncache:CommonMarkCache::default(),
             is_image:is_image_pre,
             create_file_error:String::new(),
-            //tabs:vec![tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),tabs::Tab::new(),],
             vault:vault_var,
             vault_vec:vault_vec_var,
             current_file:current.to_owned(),
@@ -115,7 +112,6 @@ impl Default for Marmol {
             left_collpased:left_coll,
             vault_changed:false,
             //right_collpased:true,
-            
         }
     }
 }
@@ -146,7 +142,6 @@ impl eframe::App for Marmol {
 
                if self.is_image {
                        let image_size = self.buffer_image.size_vec2();
-                       //(Horizontal, Vertical)
                        let size:egui::Vec2;
                        if image_size[0]>800.0{
                             let vertical = (800.0*image_size[1])/image_size[0];
@@ -167,13 +162,6 @@ impl eframe::App for Marmol {
                 CentralPanel::default().show(ctx, |ui| {
                     if self.renderfile{
                         egui::TopBottomPanel::top("tabs").show_inside(ui,|ui| {
-                            let tabs= StripBuilder::new(ui);
-                            tabs.size(Size::exact(1.0))
-                            .vertical(|mut strip|{
-                                strip.cell(|ui|{
-                                    ui.label("here be a tab");
-                                });
-                            });
                             ui.with_layout(egui::Layout::right_to_left(egui::Align::TOP), |ui| {
                                 if self.content !=main_area::Content::NewFile{
                                     ui.label("✏");
@@ -198,12 +186,20 @@ impl eframe::App for Marmol {
                         }else if self.content == main_area::Content::View{
                             egui::ScrollArea::vertical().show(ui,|ui| {
                                 let header = Path::new(&self.current_file).file_name().unwrap();
-                                ui.heading(header.to_str().unwrap());
                                 let (content, metadata)=files::contents(&self.buffer);
-                                if metadata.len()!=0{
-                                    main_area::create_metadata(metadata,ui);
-                                }
-                               CommonMarkViewer::new("viewer").show(ui, &mut self.commoncache, &content);
+                                let cont = StripBuilder::new(ui);
+                                cont.size(Size::relative(0.30))
+                                    .size(Size::relative(0.35))
+                                    .horizontal(|mut strip|{
+                                        strip.cell(|_|{});
+                                        strip.cell(|ui|{
+                                            ui.heading(header.to_str().unwrap());
+                                            if metadata.len()!=0{
+                                                main_area::create_metadata(metadata,ui);
+                                                }
+                                            CommonMarkViewer::new("v").show(ui, &mut self.commoncache, &content);
+                                        });
+                                    });
                             });
                         }
                         else if self.content == main_area::Content::NewFile{
