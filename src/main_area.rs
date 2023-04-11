@@ -62,7 +62,7 @@ impl Default for LeftControls{
             search_image: RetainedImage::from_image_bytes("search",include_bytes!("../search.png"),).unwrap(),
             new_file: RetainedImage::from_image_bytes("search",include_bytes!("../new_file.png"),).unwrap(),
             starred_image: RetainedImage::from_image_bytes("starred",include_bytes!("../starred.png"),).unwrap(),
-            config_image: RetainedImage::from_image_bytes("cpnfiguration",include_bytes!("../configuration.png"),).unwrap(),
+            config_image: RetainedImage::from_image_bytes("configuration",include_bytes!("../configuration.png"),).unwrap(),
             help_image: RetainedImage::from_image_bytes("help",include_bytes!("../help.png"),).unwrap(),
             switcher_image: RetainedImage::from_image_bytes("switcher",include_bytes!("../switcher.png"),).unwrap(),
             graph_image: RetainedImage::from_image_bytes("graph",include_bytes!("../graph.png"),).unwrap(),
