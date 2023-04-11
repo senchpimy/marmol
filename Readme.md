@@ -23,3 +23,6 @@
 
 - Save state of the left menu size (not posible rn due to egui)
 - Center writing
+
+- Other Graphs
+- Search inside a file

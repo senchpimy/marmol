@@ -27,19 +27,19 @@ fn main() -> Result<(), eframe::Error>{
     let options = eframe::NativeOptions {
         ..Default::default()
     };
-    if args.len()==1{
-        eframe::run_native(
-            "Marmol",
-            options,
-            Box::new(|_cc| Box::new(simple_args::MarmolOne::new(&args))),
-        )
-    }else {
+    //if args.len()>2{
+    //    eframe::run_native(
+    //        "Marmol",
+    //        options,
+    //        Box::new(|_cc| Box::new(simple_args::MarmolOne::new(&args))),
+    //    )
+    //}else {
         eframe::run_native(
             "Marmol",
             options,
             Box::new(|_cc| Box::new(Marmol::default())),
         )
-    }
+    //}
 }
 
 
@@ -73,6 +73,8 @@ struct Marmol{
     new_vault_folder_err: String,
     vault_changed:bool,
     font_size:f32,
+    center_bool:bool,
+    center_size:f32,
 
     marker:graph::Graph
 }
@@ -95,6 +97,8 @@ impl Default for Marmol {
             buf = files::read_file(&current);
         }
         Self {
+            center_bool:false,
+            center_size:0.35,
             font_size:font_size,
             marker:graph::Graph::new(&vault_var),
             new_file_str:String::new(),
@@ -183,34 +187,42 @@ impl eframe::App for Marmol {
                         });
                         }
                         if self.content == main_area::Content::Edit{
-                            egui::ScrollArea::vertical().show(ui,|ui| {
-                                let zone = egui::TextEdit::multiline(&mut self.text_edit)
-                                    .font(FontId::proportional(15.0));
-                                let response = ui.add_sized(ui.available_size(), zone);
-                                if response.changed(){
-                                    let mut f = std::fs::OpenOptions::new().write(true).truncate(true)
-                                    .open(&self.current_file).unwrap();
-                                    f.write_all(&self.text_edit.as_bytes()).unwrap();
-                                    f.flush().unwrap();
-                                }
+                            let cont = StripBuilder::new(ui)
+                                .size(Size::relative((1.0-self.center_size)/2.0))
+                                .size(Size::relative(self.center_size));
+                            cont.horizontal(|mut strip|{
+                                strip.cell(|_|{});
+                                strip.cell(|ui|{
+                                egui::ScrollArea::vertical().show(ui,|ui| {
+                                    let zone = egui::TextEdit::multiline(&mut self.text_edit)
+                                        .font(FontId::proportional(15.0));
+                                    let response = ui.add_sized(ui.available_size(), zone);
+                                    if response.changed(){
+                                        let mut f = std::fs::OpenOptions::new().write(true).truncate(true)
+                                        .open(&self.current_file).unwrap();
+                                        f.write_all(&self.text_edit.as_bytes()).unwrap();
+                                        f.flush().unwrap();
+                                    }
+                                });
+                                });
                             });
                         }else if self.content == main_area::Content::View{
-                            egui::ScrollArea::vertical().show(ui,|ui| {
-                                let header = Path::new(&self.current_file).file_name().unwrap();
-                                let (content, metadata)=files::contents(&self.buffer);
-                                let cont = StripBuilder::new(ui);
-                                cont.size(Size::relative(0.30))
-                                    .size(Size::relative(0.35))
-                                    .horizontal(|mut strip|{
-                                        strip.cell(|_|{});
-                                        strip.cell(|ui|{
-                                            ui.heading(header.to_str().unwrap());
-                                            if metadata.len()!=0{
-                                                main_area::create_metadata(metadata,ui);
-                                                }
-                                            CommonMarkViewer::new("v").show(ui, &mut self.commoncache, &content);
-                                        });
-                                    });
+                            let cont = StripBuilder::new(ui)
+                                .size(Size::relative((1.0-self.center_size)/2.0))
+                                .size(Size::relative(self.center_size));
+                            cont.horizontal(|mut strip|{
+                                strip.cell(|_|{});
+                                strip.cell(|ui|{
+                                egui::ScrollArea::vertical().show(ui,|ui| {
+                                    let header = Path::new(&self.current_file).file_name().unwrap();
+                                    let (content, metadata)=files::contents(&self.buffer);
+                                                ui.heading(header.to_str().unwrap());
+                                                if metadata.len()!=0{
+                                                    main_area::create_metadata(metadata,ui);
+                                                    }
+                                                CommonMarkViewer::new("v").show(ui, &mut self.commoncache, &content);
+                                });
+                            });
                             });
                         }
                         else if self.content == main_area::Content::NewFile{
@@ -251,7 +263,8 @@ impl eframe::App for Marmol {
             screens::configuracion(ctx,&mut self.current_window, &mut self.vault_vec, &mut self.vault,
                                    &mut self.new_vault_str,&mut self.create_new_vault,&mut self.new_vault_folder,
                                    &mut self.new_vault_folder_err,&mut self.show_create_button,
-                                   &mut self.vault_changed, &mut self.font_size);
+                                   &mut self.vault_changed, &mut self.font_size,&mut self.center_bool,
+                                   &mut self.center_size);
             if self.vault_changed{
                 self.marker.update_vault(&Path::new(&self.vault));
             }
@@ -275,9 +288,11 @@ impl eframe::App for Marmol {
             let file_path = String::from(&self.config_path) + "/ProgramState";
             let current_file = format!("current: {}", &self.current_file);
             let left_menu = format!("left_menu: {}", &self.left_collpased);
+            let center_size = format!("center_size: {}", &self.center_size);
+            let left_menu = format!("left_menu: {}", &self.left_collpased);
             let font_size = format!("font_size: {}", &self.font_size);
-            let new_content= format!("{}\n{}\n{}\n{}\n{}",
-                                     &vault_vec_str,vault_str,current_file,font_size,left_menu);
+            let new_content= format!("{}\n{}\n{}\n{}\n{}\n{}",
+                                     &vault_vec_str,vault_str,current_file,font_size,left_menu,center_size);
             let mut file = fs::File::create(&file_path).unwrap();
             file.write_all(new_content.as_bytes()).unwrap();
             true
