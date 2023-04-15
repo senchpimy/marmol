@@ -213,7 +213,9 @@ fn nueva_ubicacion(val:Vec2,punto:&mut (f32,f32)){
 
 
 fn get_data(dir:&Path,marmol_vec:&mut Vec<MarmolPoint>,total_entries:&mut i32,vault:&str){
+    if Path::new(vault).exists()==false{return;}
             //tags:&mut Vec<String>){
+
     for entry in fs::read_dir(dir).unwrap() {
         let entry = entry.unwrap();
         let path = entry.path();

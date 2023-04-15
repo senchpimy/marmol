@@ -20,6 +20,7 @@ pub enum Content {
     View,
     NewFile,
     Graph,
+    Blank,
 }
 
 pub struct LeftControls {

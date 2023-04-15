@@ -53,6 +53,7 @@ struct Marmol{
     text_edit:String,
 
     current_window: screens::Screen,
+    prev_window: screens::Screen,
     buffer_image:RetainedImage,
     commoncache:CommonMarkCache,
     renderfile:bool,
@@ -80,19 +81,24 @@ struct Marmol{
     marker:graph::Graph
 }
 impl Marmol{
-        fn new(_cc: &eframe::CreationContext<'_>) -> Self {
-        // Customize egui here with cc.egui_ctx.set_fonts and cc.egui_ctx.set_visuals.
-        // Restore app state using cc.storage (requires the "persistence" feature).
-        // Use the cc.gl (a glow::Context) to create graphics shaders and buffers that you can use
-        // for e.g. egui::PaintCallback.
-        Self::default()
+        fn new(cc: &eframe::CreationContext<'_>) -> Self {
+        let font_size=configuraciones::load_context();
+        let ctx = &cc.egui_ctx;
+        let mut style = (*ctx.style()).clone();
+        let font_id = FontId::proportional(font_size);
+        style.override_font_id = Some(font_id);
+        ctx.set_style(style);
+        Self{
+            font_size,
+            ..Default::default()
+        }
     }
 }
 
 impl Default for Marmol {
     fn default() -> Self {
         let (vault_var, vault_vec_var, current, config_path_var,
-             window,font_size,left_coll,center_size,sort_files)=configuraciones::load_vault();
+             window,left_coll,center_size,sort_files)=configuraciones::load_vault();
         let buf:String;
         let mut is_image_pre=false;
         let mut buffer_image_pre:RetainedImage =  RetainedImage::from_image_bytes("colapse",include_bytes!("../colapse.png"),).unwrap();
@@ -109,7 +115,7 @@ impl Default for Marmol {
         Self {
             center_size,
             center_size_remain:(1.0-center_size)/2.0,
-            font_size,
+            font_size:12.0,
             marker:graph::Graph::new(&vault_var),
             new_file_str:String::new(),
             content: main_area::Content::View,
@@ -123,6 +129,7 @@ impl Default for Marmol {
             create_new_vault:false,
             show_create_button:false,
             current_window: window,
+            prev_window: window,
             prev_current_file: current.to_owned(),
             buffer: buf.clone(),
             text_edit: buf,
@@ -146,7 +153,7 @@ impl eframe::App for Marmol {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         if self.current_window == screens::Screen::Default { //welcome screen
             screens::default(ctx,&mut self.current_window,&mut self.open_vault_str,
-                             &mut self.new_vault_str);
+                             &mut self.new_vault_str,&mut self.vault_vec,&mut self.vault,&mut self.content);
         }else if self.current_window == screens::Screen::Main{ //Main screen
             self.left_controls.left_side_settings(ctx,&mut self.left_collpased,&mut self.vault ,
                                                   &mut self.current_file,&mut self.current_window,
@@ -215,9 +222,8 @@ impl eframe::App for Marmol {
                                         f.flush().unwrap();
                                     }
                                     if ctx.input(|i| i.key_pressed(Key::Enter)) && response.has_focus(){
-                                        println!("New file shoukd be added");
+                                        println!("New line formated");
                                         //let last_line= self.text_edit.lines().last();
-                                        self.text_edit= format!("{}{}",self.text_edit,"lel");
                                     }
                                 });
                                 });
@@ -280,7 +286,7 @@ impl eframe::App for Marmol {
                }
             });
         }else if self.current_window==screens::Screen::Configuracion { //configuration
-            screens::configuracion(ctx,&mut self.current_window, &mut self.vault_vec, &mut self.vault,
+            screens::configuracion(ctx,&mut self.prev_window,&mut self.current_window, &mut self.vault_vec, &mut self.vault,
                                    &mut self.new_vault_str,&mut self.create_new_vault,&mut self.new_vault_folder,
                                    &mut self.new_vault_folder_err,&mut self.show_create_button,
                                    &mut self.vault_changed, &mut self.font_size,
@@ -298,7 +304,6 @@ impl eframe::App for Marmol {
     fn on_close_event(&mut self) -> bool{
         let vault_str = format!("vault: '{}'",&self.vault);
         let mut vec_str=String::new();
-        //dbg!(vault_str);
         for i in &self.vault_vec{
             let u =i.as_str().unwrap();
             vec_str = vec_str.to_owned() + format!(" '{}' ,",&u).as_str();
@@ -307,14 +312,19 @@ impl eframe::App for Marmol {
         let vault_vec_str = format!("vault_vec: [ {} ]",vec_str);
             let file_path = String::from(&self.config_path) + "/ProgramState";
             let current_file = format!("current: {}", &self.current_file);
-            let left_menu = format!("left_menu: {}", &self.left_collpased);
             let center_size = format!("center_size: {}", &self.center_size);
             let left_menu = format!("left_menu: {}", &self.left_collpased);
-            let font_size = format!("font_size: {}", &self.font_size);
+            let sort_files = format!("sort_files: {}", &self.sort_files);
             let new_content= format!("{}\n{}\n{}\n{}\n{}\n{}",
-                                     &vault_vec_str,vault_str,current_file,font_size,left_menu,center_size);
+                                     &vault_vec_str,vault_str,current_file,left_menu,center_size,sort_files);
             let mut file = fs::File::create(&file_path).unwrap();
             file.write_all(new_content.as_bytes()).unwrap();
+
+            let context_path = String::from(&self.config_path) + "/ContextState";
+            let mut file2 = fs::File::create(&context_path).unwrap();
+            let font_size = format!("font_size: {}", &self.font_size);
+            let context_contents=format!("{}",font_size);
+            file2.write_all(context_contents.as_bytes()).unwrap();
             true
     }
 }

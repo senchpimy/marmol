@@ -1,7 +1,7 @@
 ### TODO
 - Backup sever
 - Delete file
-- add vaults
+- [x] add vaults
 - Tabs
 - Split window
 - Canvas
@@ -16,7 +16,7 @@
 
 - Link between notes
 - [x] Line Lenght
-- sort of the notes
+- [x] sort of the notes
 - Move between dirs
 - Rename dirs
 - Open file if it was first argument
