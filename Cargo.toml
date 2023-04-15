@@ -24,8 +24,8 @@ filebuffer = "0.4.0"
 image = { version = "0.24.5", default-features = false, features = ["png","jpeg"] }
 json="0.12.4"
 yaml-rust = "0.4.5"
-#egui_commonmark = {version="0.7.0",features = ["syntax_highlighting","svg","fetch"]}
-egui_commonmark = {version="0.7.1",features = ["syntax_highlighting","svg","fetch"], git="https://github.com/senchpimy/egui_commonmark"}
+#egui_commonmark = {version="0.7.1",features = ["syntax_highlighting","svg","fetch"], git="https://github.com/senchpimy/egui_commonmark"}
+egui_commonmark = {version="0.7.1",features = ["syntax_highlighting","svg","fetch"], path="../egui_commonmark/"}
 
 walkdir = "2.3.1"
 regex = "1.7.2"

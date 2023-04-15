@@ -74,16 +74,16 @@ impl Default for LeftControls{
 }
 impl LeftControls{
 pub fn left_side_menu(&mut self, ctx:&Context, colapse:&bool, 
-                  path:&str, current_file:&mut String,){
+                  path:&str, current_file:&mut String,sort_entrys:&bool){
     let left_panel = SidePanel::left("buttons left menu").default_width(100.).min_width(100.).max_width(300.);
     let textures = vec![self.files_image.texture_id(ctx), self.search_image.texture_id(ctx), 
                         self.starred_image.texture_id(ctx)];
     left_panel.show_animated(ctx, *colapse,|ui| {
-        self.top_panel_menu_left(ui,textures, path, current_file);
+        self.top_panel_menu_left(ui,textures, path, current_file,sort_entrys);
     });
 }
 
-fn top_panel_menu_left (&mut self,ui:&mut egui::Ui, textures:Vec<TextureId>, path:&str, current_file:&mut String){
+fn top_panel_menu_left (&mut self,ui:&mut egui::Ui, textures:Vec<TextureId>, path:&str, current_file:&mut String,sort_entrys:&bool){
     let vault=path;
     TopBottomPanel::top("Left Menu").show_inside(ui, |ui|{
         ui.with_layout(Layout::left_to_right(Align::Min),|ui| {
@@ -95,7 +95,7 @@ fn top_panel_menu_left (&mut self,ui:&mut egui::Ui, textures:Vec<TextureId>, pat
     if self.current_left_tab==0{
         let scrolling_files = ScrollArea::vertical();
         scrolling_files.show(ui,|ui| {
-        self.render_files(ui, path, current_file,vault);
+        self.render_files(ui, path, current_file,vault,sort_entrys);
         });
     }else if self.current_left_tab==1{
         ui.text_edit_singleline(&mut self.search_string_menu);
@@ -149,7 +149,7 @@ fn top_panel_menu_left (&mut self,ui:&mut egui::Ui, textures:Vec<TextureId>, pat
     }
 }
 
-fn render_files(&mut self,ui:&mut egui::Ui, path:&str, current_file:&mut String,vault:&str){
+fn render_files(&mut self,ui:&mut egui::Ui, path:&str, current_file:&mut String,vault:&str,sort_entrys:&bool){
     let read_d =fs::read_dir(path);
     let entrys:fs::ReadDir;
     match read_d{
@@ -160,13 +160,21 @@ fn render_files(&mut self,ui:&mut egui::Ui, path:&str, current_file:&mut String,
             return;
         }
     }
+    let mut entrys_vec:Vec<String>=Vec::new();
     for entry in entrys{
-        let file_location = entry.unwrap().path().to_str().unwrap().to_string();
+        entrys_vec.push(entry.unwrap().path().to_str().unwrap().to_string());
+    }
+    if *sort_entrys{
+        entrys_vec.sort();
+    }
+    //Sort entrys
+    for file_location in entrys_vec{
+        //let file_location = entry.unwrap().path().to_str().unwrap();//.to_string();
         let file_name=Path::new(&file_location).file_name().expect("No fails").to_str().unwrap();
         if Path::new(&file_location).is_dir(){
             let col = egui::containers::collapsing_header::CollapsingHeader::new(file_name);
             col.show(ui, |ui| {
-            self.render_files(ui,&file_location, current_file,vault);
+            self.render_files(ui,&file_location, current_file,vault,sort_entrys);
             });
         }else{
             if &file_location == current_file {
@@ -178,7 +186,7 @@ fn render_files(&mut self,ui:&mut egui::Ui, path:&str, current_file:&mut String,
                                                             vault
                                                             );};
                 if btn.ui(ui).context_menu(menu).clicked() {
-                    *current_file = file_location;
+                    *current_file = file_location.to_string();
                 }
             }
         }

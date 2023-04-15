@@ -37,7 +37,7 @@ fn main() -> Result<(), eframe::Error>{
         eframe::run_native(
             "Marmol",
             options,
-            Box::new(|_cc| Box::new(Marmol::default())),
+            Box::new(|cc| Box::new(Marmol::new(cc))),
         )
     //}
 }
@@ -73,17 +73,26 @@ struct Marmol{
     new_vault_folder_err: String,
     vault_changed:bool,
     font_size:f32,
-    center_bool:bool,
     center_size:f32,
     center_size_remain:f32,
+    sort_files:bool,
 
     marker:graph::Graph
+}
+impl Marmol{
+        fn new(_cc: &eframe::CreationContext<'_>) -> Self {
+        // Customize egui here with cc.egui_ctx.set_fonts and cc.egui_ctx.set_visuals.
+        // Restore app state using cc.storage (requires the "persistence" feature).
+        // Use the cc.gl (a glow::Context) to create graphics shaders and buffers that you can use
+        // for e.g. egui::PaintCallback.
+        Self::default()
+    }
 }
 
 impl Default for Marmol {
     fn default() -> Self {
         let (vault_var, vault_vec_var, current, config_path_var,
-             window,font_size,left_coll,center_size)=configuraciones::load_vault();
+             window,font_size,left_coll,center_size,sort_files)=configuraciones::load_vault();
         let buf:String;
         let mut is_image_pre=false;
         let mut buffer_image_pre:RetainedImage =  RetainedImage::from_image_bytes("colapse",include_bytes!("../colapse.png"),).unwrap();
@@ -98,7 +107,6 @@ impl Default for Marmol {
             buf = files::read_file(&current);
         }
         Self {
-            center_bool:false,
             center_size,
             center_size_remain:(1.0-center_size)/2.0,
             font_size,
@@ -128,6 +136,7 @@ impl Default for Marmol {
 
             left_collpased:left_coll,
             vault_changed:false,
+            sort_files
             //right_collpased:true,
         }
     }
@@ -143,7 +152,7 @@ impl eframe::App for Marmol {
                                                   &mut self.current_file,&mut self.current_window,
                                                   &mut self.content);
             self.left_controls.left_side_menu(ctx,&self.left_collpased, 
-                           &self.vault, &mut self.current_file);
+                           &self.vault, &mut self.current_file,&self.sort_files);
             CentralPanel::default().show(ctx, |ui|{
                if self.prev_current_file!=self.current_file{
                     self.prev_current_file = String::from(&self.current_file);
@@ -205,10 +214,19 @@ impl eframe::App for Marmol {
                                         f.write_all(&self.text_edit.as_bytes()).unwrap();
                                         f.flush().unwrap();
                                     }
+                                    if ctx.input(|i| i.key_pressed(Key::Enter)) && response.has_focus(){
+                                        println!("New file shoukd be added");
+                                        //let last_line= self.text_edit.lines().last();
+                                        self.text_edit= format!("{}{}",self.text_edit,"lel");
+                                    }
                                 });
                                 });
                             });
                         }else if self.content == main_area::Content::View{
+                            if ctx.input(|i| i.key_pressed(Key::F))
+                            {
+                                println!("Search");
+                            }
                             let cont = StripBuilder::new(ui)
                                 .size(Size::relative(self.center_size_remain))
                                 .size(Size::relative(self.center_size));
@@ -266,7 +284,7 @@ impl eframe::App for Marmol {
                                    &mut self.new_vault_str,&mut self.create_new_vault,&mut self.new_vault_folder,
                                    &mut self.new_vault_folder_err,&mut self.show_create_button,
                                    &mut self.vault_changed, &mut self.font_size,
-                                   &mut self.center_size, &mut self.center_size_remain);
+                                   &mut self.center_size, &mut self.center_size_remain,&mut self.sort_files);
             if self.vault_changed{
                 self.marker.update_vault(&Path::new(&self.vault));
             }

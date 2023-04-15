@@ -15,14 +15,16 @@
 - Create file with Enter / new line
 
 - Link between notes
-- Line Lenght
+- [x] Line Lenght
 - sort of the notes
 - Move between dirs
 - Rename dirs
 - Open file if it was first argument
 
 - Save state of the left menu size (not posible rn due to egui)
-- Center writing
 
 - Other Graphs
 - Search inside a file
+- Themes
+- checkbox change with the font size
+- Add custom font

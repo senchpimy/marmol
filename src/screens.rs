@@ -1,10 +1,10 @@
 use eframe::egui::{CentralPanel,RichText,Color32,Button,FontId};
 use std::fs;
-use std::sync::Arc;
 use egui::Widget;
 use std::path::Path;
 use rfd::FileDialog;
 use yaml_rust::Yaml;
+use crate::toggle_switch;
 
 #[derive(PartialEq)]
 pub enum Screen{
@@ -77,7 +77,7 @@ pub fn default(ctx:&egui::Context, current_window : &mut Screen, contenido:&mut 
 pub fn configuracion(ctx:&egui::Context, current_window : &mut Screen, 
                      vaults:&mut Vec<Yaml>, vault:&mut String, nw_vault_str:&mut String, show:&mut bool,
                      folder:&mut String, error:&mut String, button:&mut bool,vault_changed:&mut bool,
-                     font_size:&mut f32, center_size:&mut f32,center_size_remain:&mut f32){
+                     font_size:&mut f32, center_size:&mut f32,center_size_remain:&mut f32,sort_files:&mut bool){
             CentralPanel::default().show(ctx,|ui|{
                 if ui.button("Select theme").clicked(){
                 }
@@ -155,6 +155,9 @@ pub fn configuracion(ctx:&egui::Context, current_window : &mut Screen,
                         }
                     });
                 });
+                ui.add_space(10.0);
+                ui.add(toggle_switch::toggle_bool(sort_files));
+                ui.label("Show files sorted");
                 ui.add_space(10.0);
                 if ui.button("Configure Backup Server").clicked(){
                     *current_window=Screen::Server;

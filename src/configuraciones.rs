@@ -4,7 +4,7 @@ use std::path::Path;
 use directories::BaseDirs;
 use std::fs;
 
-pub fn load_vault()->(String, Vec<Yaml>, String, String, screens::Screen,f32,bool,f32){
+pub fn load_vault()->(String, Vec<Yaml>, String, String, screens::Screen,f32,bool,f32,bool){
     let mut current=String::new();
     let mut vault_var=String::new();
     let mut font_size:f32=12.0;
@@ -15,6 +15,7 @@ pub fn load_vault()->(String, Vec<Yaml>, String, String, screens::Screen,f32,boo
     let mut config_path_var = String::from(home_dir);
     config_path_var=config_path_var+"/.config/marmol";
     let mut collpased_left = true;
+    let mut sort_files = true;
     let mut center_size = 35.0;
     let dir = Path::new(&config_path_var);
     if dir.exists(){
@@ -32,6 +33,7 @@ pub fn load_vault()->(String, Vec<Yaml>, String, String, screens::Screen,f32,boo
                     vault_vec_var = docs["vault_vec"].as_vec().unwrap().to_vec();
                     collpased_left = docs["left_menu"].as_bool().unwrap();
                     center_size = docs["center_size"].as_f64().unwrap() as f32;
+                    sort_files = docs["sort_files"].as_bool().unwrap_or(false);
                 println!("Estado anterior cargado");
     }else{
         let res = fs::create_dir(&dir);
@@ -41,5 +43,5 @@ pub fn load_vault()->(String, Vec<Yaml>, String, String, screens::Screen,f32,boo
         }
     }
     }
-    return (vault_var.to_string(), vault_vec_var, current.to_string(),config_path_var.to_string(),window,font_size,collpased_left,center_size);
+    return (vault_var.to_string(), vault_vec_var, current.to_string(),config_path_var.to_string(),window,font_size,collpased_left,center_size,sort_files);
 }
