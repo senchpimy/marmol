@@ -3,7 +3,8 @@ use crate::search;
 use crate::screens;
 
 use eframe::egui::{ScrollArea,Separator,TopBottomPanel,SidePanel,Context,Layout,Align,ImageButton,TextureId, Style,Frame, Button,RichText};
-use egui_extras::RetainedImage;
+use egui_extras::{RetainedImage,Size,StripBuilder};
+
 
 use json::JsonValue;
 
@@ -15,6 +16,13 @@ use std::fs::File;
 use yaml_rust::{YamlLoader,YamlEmitter};
 
 #[derive(PartialEq)]
+pub enum LeftTab {
+    Files,
+    Starred,
+    Search
+}
+
+#[derive(PartialEq)]
 pub enum Content {
     Edit,
     View,
@@ -24,7 +32,7 @@ pub enum Content {
 }
 
 pub struct LeftControls {
-    current_left_tab: i8,
+    current_left_tab: LeftTab,
     search_string_menu:String,
     prev_search_string_menu:String,
     search_results:Vec<search::MenuItem>,
@@ -51,7 +59,7 @@ pub struct LeftControls {
 impl Default for LeftControls{
     fn default() -> Self {
         Self{
-            current_left_tab:0,
+            current_left_tab:LeftTab::Files,
             rename:"".to_owned(),
             menu_error:"".to_owned(),
             search_string_menu:"".to_owned(),
@@ -88,17 +96,17 @@ fn top_panel_menu_left (&mut self,ui:&mut egui::Ui, textures:Vec<TextureId>, pat
     let vault=path;
     TopBottomPanel::top("Left Menu").show_inside(ui, |ui|{
         ui.with_layout(Layout::left_to_right(Align::Min),|ui| {
-     if ui.add(ImageButton::new(textures[0], egui::vec2(18.0, 18.0)).frame(false)).clicked(){self.current_left_tab=0;}
-     if ui.add(ImageButton::new(textures[1], egui::vec2(18.0, 18.0)).frame(false)).clicked(){self.current_left_tab=1;}
-     if ui.add(ImageButton::new(textures[2], egui::vec2(18.0, 18.0)).frame(false)).clicked(){self.current_left_tab=2;}
+            if ui.add(ImageButton::new(textures[0], egui::vec2(18.0, 18.0)).frame(false)).clicked(){self.current_left_tab=LeftTab::Files;}
+            if ui.add(ImageButton::new(textures[1], egui::vec2(18.0, 18.0)).frame(false)).clicked(){self.current_left_tab=LeftTab::Search;}
+            if ui.add(ImageButton::new(textures[2], egui::vec2(18.0, 18.0)).frame(false)).clicked(){self.current_left_tab=LeftTab::Starred;}
         });
     });
-    if self.current_left_tab==0{
+    if self.current_left_tab==LeftTab::Files{
         let scrolling_files = ScrollArea::vertical();
         scrolling_files.show(ui,|ui| {
         self.render_files(ui, path, current_file,vault,sort_entrys);
         });
-    }else if self.current_left_tab==1{
+    }else if self.current_left_tab==LeftTab::Search{
         ui.text_edit_singleline(&mut self.search_string_menu);
         ui.checkbox(&mut self.regex_search,"regex");
         if self.search_string_menu!=self.prev_search_string_menu{
@@ -129,7 +137,7 @@ fn top_panel_menu_left (&mut self,ui:&mut egui::Ui, textures:Vec<TextureId>, pat
                 });
             }
         });
-    }else if self.current_left_tab==2{
+    }else if self.current_left_tab==LeftTab::Starred{
         let contents = fs::read_to_string(format!("{}/.obsidian/starred.json",path))
             .expect("Should have been able to read the file");
         let parsed = json::parse(&contents).unwrap();
@@ -191,7 +199,7 @@ fn render_files(&mut self,ui:&mut egui::Ui, path:&str, current_file:&mut String,
                 }
             }
         }
-        ui.add_space(1.0);
+        ui.add_space(2.0);
     }
 
  }
