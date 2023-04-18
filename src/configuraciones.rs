@@ -1,13 +1,14 @@
 use crate::screens;
+use json;
 use yaml_rust::{YamlLoader,Yaml};
 use std::path::Path;
 use directories::BaseDirs;
 use std::fs;
+use egui::{style,Color32,Rounding,Stroke};
 
 pub fn load_vault()->(String, Vec<Yaml>, String, String, screens::Screen,bool,f32,bool){
     let mut current=String::new();
     let mut vault_var=String::new();
-    let mut font_size:f32=12.0;
     let mut vault_vec_var:Vec<Yaml> = vec![];
     let mut window = screens::Screen::Default;
     let binding = BaseDirs::new().unwrap();
@@ -66,4 +67,50 @@ pub fn load_context()->f32{
         }
     }
     return font_size
+}
+
+pub fn load_colors()->style::Visuals{
+
+    let binding = BaseDirs::new().unwrap();
+    let home_dir = binding.home_dir().to_str().unwrap();
+    let mut config_path_var = String::from(home_dir);
+    config_path_var=config_path_var+"/.config/marmol/themes.json";
+    let themes = Path::new(&config_path_var);
+    if !themes.exists(){return style::Visuals::default()};
+    let data = fs::read_to_string(themes).expect("Unable to read file");
+    let data = json::parse(&data).unwrap_or(return style::Visuals::default());
+    let vis = json::parse(&data["visuals"].dump()).unwrap().entries();
+    for theme in vis{
+    }
+
+    //https://docs.rs/egui/0.21.0/egui/style/struct.Visuals.html
+    let widget_visuals_active=style::WidgetVisuals{
+        bg_fill:Color32::WHITE,
+        weak_bg_fill:Color32::BLUE,
+        bg_stroke:Stroke{width:5.0,color:Color32::GREEN},
+        rounding:Rounding::default(),
+        fg_stroke:Stroke{width:5.0,color:Color32::RED},
+        expansion:10.0,
+    };
+
+    let widget_visuals_nonineractive=style::WidgetVisuals{
+        bg_fill:Color32::WHITE,
+        weak_bg_fill:Color32::BLUE,
+        bg_stroke:Stroke{width:5.0,color:Color32::GREEN},
+        rounding:Rounding::default(),
+        fg_stroke:Stroke{width:5.0,color:Color32::RED},
+        expansion:10.0,
+    };
+
+    let widgets=style::Widgets{
+        noninteractive:widget_visuals_nonineractive,
+        hovered:widget_visuals_active,
+        ..Default::default()
+    };
+
+    style::Visuals{
+        widgets,
+        dark_mode:true,
+        ..Default::default()
+    }
 }

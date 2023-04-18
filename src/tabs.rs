@@ -54,10 +54,6 @@ impl Buffer{
     }
 } 
 
-pub fn start(path:String){
-    let _i = Buffer::new(path);
-}
-
 pub fn create_tab(ui: &mut Ui,tab:&mut Tab){
     if tab.selected{
         tab.color = Color32::WHITE;
@@ -65,4 +61,7 @@ pub fn create_tab(ui: &mut Ui,tab:&mut Tab){
         if ui.add(Button::new(&tab.title).fill(tab.color)).clicked(){
             tab.selected = true;
         }
+}
+
+pub fn create_tabs(ui:&mut Ui, ){
 }

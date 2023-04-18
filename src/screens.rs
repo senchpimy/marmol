@@ -15,7 +15,7 @@ Default,
 Server,
 }
 
-pub fn default(ctx:&egui::Context, current_window : &mut Screen, contenido:&mut String, nuevo:&mut String, vaults_vec:&mut Vec<Yaml>,
+pub fn default(ctx:&egui::Context, current_window : &mut Screen,  nuevo:&mut String, vaults_vec:&mut Vec<Yaml>,
                vault:&mut String,content:&mut main_area::Content){
             let mut  nuevo_bool=false;
             CentralPanel::default().show(ctx,|ui|{
@@ -39,26 +39,6 @@ pub fn default(ctx:&egui::Context, current_window : &mut Screen, contenido:&mut 
                         None=>{}
                     }
                 }
-                //ui.label("Select a Vault");
-                //ui.add(
-                //    egui::TextEdit::singleline( contenido )
-                //    );
-                //ui.add_space(10.0);
-                //if contenido.len()>2{
-                //    let path = Path::new(contenido);
-                //    let open_text:RichText;
-                //    if path.exists(){
-                //        if path.is_dir(){
-                //            open_text = RichText::new("Good!").color(Color32::GREEN);
-                //            open_bool=true;
-                //        }else{
-                //            open_text = RichText::new("Path is not a dir").color(Color32::RED);
-                //        }
-                //    }else{
-                //            open_text = RichText::new("Path does not exists").color(Color32::RED);
-                //    }
-                //    ui.label(open_text);
-                //}
                     ui.add_space(30.0);
                 ui.add(
                     egui::TextEdit::singleline( nuevo )

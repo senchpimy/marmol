@@ -191,6 +191,7 @@ fn render_files(&mut self,ui:&mut egui::Ui, path:&str, current_file:&mut String,
                 }
             }
         }
+        ui.add_space(1.0);
     }
 
  }

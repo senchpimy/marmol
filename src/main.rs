@@ -46,7 +46,6 @@ fn main() -> Result<(), eframe::Error>{
 struct Marmol{
     buffer: String,
     prev_current_file: String,
-    open_vault_str:String,
     new_vault_str:String,
     //tabs: Vec<tabs::Tab>,
     content:main_area::Content,
@@ -88,6 +87,7 @@ impl Marmol{
         let font_id = FontId::proportional(font_size);
         style.override_font_id = Some(font_id);
         ctx.set_style(style);
+        //ctx.set_visuals(configuraciones::load_colors());
         Self{
             font_size,
             ..Default::default()
@@ -120,7 +120,6 @@ impl Default for Marmol {
             new_file_str:String::new(),
             content: main_area::Content::View,
             left_controls:main_area::LeftControls::default(),
-            open_vault_str:String::from(""),
             new_vault_folder:String::from(""),
             new_vault_folder_err:String::from(""),
             new_vault_str:String::from(""),
@@ -152,7 +151,7 @@ impl Default for Marmol {
 impl eframe::App for Marmol {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         if self.current_window == screens::Screen::Default { //welcome screen
-            screens::default(ctx,&mut self.current_window,&mut self.open_vault_str,
+            screens::default(ctx,&mut self.current_window,
                              &mut self.new_vault_str,&mut self.vault_vec,&mut self.vault,&mut self.content);
         }else if self.current_window == screens::Screen::Main{ //Main screen
             self.left_controls.left_side_settings(ctx,&mut self.left_collpased,&mut self.vault ,
