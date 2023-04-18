@@ -148,6 +148,21 @@ pub fn configuracion(ctx:&egui::Context,prev_window : &mut Screen, current_windo
                         }
                     });
                 });
+                if ui.button("Add a Existing Vault").clicked(){
+                    let files = FileDialog::new()
+                        .set_title("Select a Folder")
+                        .pick_folder();
+                    match files{
+                        Some(x)=>{
+                            let selected_vault = x.to_str().unwrap();
+                            if !vaults.contains(&Yaml::from_str(selected_vault)){
+                                vaults.push(Yaml::from_str(selected_vault));
+                                *vault=String::from(selected_vault);
+                            };
+                        },
+                        None=>{}
+                    }
+                }
                 ui.add_space(10.0);
                 ui.add(toggle_switch::toggle_bool(sort_files));
                 ui.label("Show files sorted");
