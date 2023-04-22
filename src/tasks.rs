@@ -97,12 +97,14 @@ pub struct TasksGui{
     new_entry_tittle:String,
     tasks_hash:HashMap<u32,String>,
     update_graph:bool,
+    save_file:bool,
     prom:f32,
 }
 
 impl Default for TasksGui{
     fn default() -> Self {
         Self{
+            save_file:false,
             add_entry:false,
             update_graph:false,
             json_content:TasksFile{tasks:vec![],days:vec![],top_id:0},
@@ -132,10 +134,9 @@ impl TasksGui{
         }
     }
 
-    pub fn set_path(&mut self,path:String) {
-        if path!=self.path{
-            println!("Datos actualizados");
-            self.path=path;
+    pub fn set_path(&mut self,path:&str) {
+        if path!=&self.path{
+            self.path=String::from(path);
             let mut prom:u16=0;
             let mut tot_num=0.0;
             self.set_tasks(load_tasks(&self.path));
@@ -148,6 +149,7 @@ impl TasksGui{
             }
             self.prom=prom as f32 / tot_num;
             self.numeros_grafica.reverse();
+            self.update_graph();
         }
     }
 
@@ -156,7 +158,7 @@ impl TasksGui{
                 format!("Day {}", x)
         };
 
-        let markers_plot = Plot::new("Grafica")
+        let markers_plot = Plot::new("Graph")
             .height(200.0)
             .x_axis_formatter(x_fmt)
             .data_aspect(0.70)
@@ -195,6 +197,7 @@ impl TasksGui{
                                 del=rem_indx;
                                 del_bool=true;
                                 id=element.id;
+                                self.save_file=true;
                             }
                         });
                     });
@@ -249,6 +252,7 @@ impl TasksGui{
                             self.new_task_desc=String::new();
                             self.add_task=false;
                             self.json_content.top_id+=1;
+                            self.save_file=true;
                         }
                     });
                 }else if ui.button("Add Task").clicked(){
@@ -266,6 +270,7 @@ impl TasksGui{
                             self.add_entry=false;
                         }
                         if ui.button("Add").clicked(){
+                            self.save_file=true;
                             let mut tasks=vec![];
                             for i in &self.json_content.tasks{
                                 tasks.push(TaskCompleted::new(i.id));
@@ -279,6 +284,7 @@ impl TasksGui{
                 self.add_entry=true;
                 let date = Local::now().format("%Y-%m-%d").to_string();
                 self.new_entry_tittle=date;
+                self.save_file=true;
             }
             let mut del_ind = 0;
             let mut del_ind_bool = false;
@@ -304,6 +310,7 @@ impl TasksGui{
                                     del_ind_bool=true;
                                     del_ind=ind;
                                     self.update_graph=true;
+                                    self.save_file=true;
                                 }
                             });
                         });
@@ -314,11 +321,13 @@ impl TasksGui{
                             Some(t)=>{
                                 if ui.add(egui::Checkbox::new(&mut task.completed, t)).changed(){
                                     self.update_graph=true;
+                                    self.save_file=true;
                                 }
                             },
                             None=>{
                                 if ui.add(egui::Checkbox::new(&mut task.completed, "Task Not Found")).changed(){
                                     self.update_graph=true;
+                                    self.save_file=true;
                                 }
                             },
                         }
@@ -334,6 +343,7 @@ impl TasksGui{
                             }else{
                                 element.notes=None;
                             }
+                            self.save_file=true;
                         }
                     }else if self.edit_task.edit != Edit::Description{
                         match &element.notes {
@@ -356,6 +366,10 @@ impl TasksGui{
             self.update_graph();
             self.update_graph=false;
         }
+        if self.save_file{
+            self.save_tasks();
+            self.save_file=false;
+        }
     }
 
     fn update_graph(&mut self){
@@ -375,7 +389,6 @@ impl TasksGui{
     }
 
     pub fn save_tasks(&self){
-        println!("Guardado");
         let file = String::from(&self.path);
         let mut file2 = fs::File::create(file).unwrap();
         let conts = serde_json::to_string(&self.json_content).unwrap();

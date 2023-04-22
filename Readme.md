@@ -23,7 +23,7 @@
 
 - Save state of the left menu size (not posible rn due to egui)
 
-- Other Graphs
+- [x] Other Graphs
 - Search inside a file
 - Themes
 - checkbox change with the font size

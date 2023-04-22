@@ -27,6 +27,7 @@ pub enum Content {
     Edit,
     View,
     NewFile,
+    NewTask,
     Graph,
     Blank,
 }
@@ -51,6 +52,7 @@ pub struct LeftControls {
     canvas_image:RetainedImage,
     daynote_image:RetainedImage,
     command_image:RetainedImage,
+    tasks_image:RetainedImage,
     rename:String,
     menu_error:String,
 
@@ -78,6 +80,7 @@ impl Default for LeftControls{
             canvas_image: RetainedImage::from_image_bytes("canvas",include_bytes!("../canvas.png"),).unwrap(),
             daynote_image: RetainedImage::from_image_bytes("daynote",include_bytes!("../daynote.png"),).unwrap(),
             command_image: RetainedImage::from_image_bytes("command",include_bytes!("../command.png"),).unwrap(),
+            tasks_image: RetainedImage::from_image_bytes("tasks",include_bytes!("../tasks.png"),).unwrap(),
         }
     }
 }
@@ -228,6 +231,10 @@ pub fn left_side_settings(&self,ctx:&Context, colapse:&mut bool, vault:&mut Stri
         ui.add_space(space);
         if ui.add(ImageButton::new(self.new_file.texture_id(ctx), egui::vec2(18.0, 18.0)).frame(false)).on_hover_text("New File").clicked(){
             *content=Content::NewFile;
+        }
+        ui.add_space(space);
+        if ui.add(ImageButton::new(self.tasks_image.texture_id(ctx), egui::vec2(18.0, 18.0)).frame(false)).on_hover_text("Create new Tasks").clicked(){
+            *content=Content::NewTask;
         }
         ui.with_layout(Layout::bottom_up(Align::Max),|ui|{
         ui.add_space(5.);

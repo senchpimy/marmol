@@ -78,7 +78,8 @@ struct Marmol{
     center_size_remain:f32,
     sort_files:bool,
 
-    marker:graph::Graph
+    marker:graph::Graph,
+    tasks:tasks::TasksGui,
 }
 impl Marmol{
         fn new(cc: &eframe::CreationContext<'_>) -> Self {
@@ -114,6 +115,7 @@ impl Default for Marmol {
             buf = files::read_file(&current);
         }
         Self {
+            tasks:tasks::TasksGui::default(),
             center_size,
             center_size_remain:(1.0-center_size)/2.0,
             font_size:12.0,
@@ -228,6 +230,13 @@ impl eframe::App for Marmol {
                                 });
                                 });
                             });
+                        }else if self.content == main_area::Content::NewTask{
+                            self.new_file(ui,true);
+                        }else if self.content == main_area::Content::NewFile{
+                            self.new_file(ui,false);
+                        }else if self.current_file.ends_with(".graph"){
+                            self.tasks.set_path(&self.current_file);
+                            self.tasks.show(ui);
                         }else if self.content == main_area::Content::View{
                             if ctx.input(|i| i.key_pressed(Key::F))
                             {
@@ -250,33 +259,6 @@ impl eframe::App for Marmol {
                                 });
                             });
                             });
-                        }
-                        else if self.content == main_area::Content::NewFile{
-                                ui.label("Create New File");
-                                ui.add(egui::TextEdit::singleline(&mut self.new_file_str));
-                                let new_path = format!("{}/{}",&self.vault, &self.new_file_str);
-                                let new_file = Path::new(&new_path);
-                                ui.label(RichText::new(&self.create_file_error).color(Color32::RED));
-                                if new_file.exists(){
-                                    self.create_file_error=String::from("File already exist");
-                                }else{
-                                    if ui.button("Create").clicked() {
-                                        self.content = main_area::Content::View;
-                                        let res = File::create(new_file);
-                                        match res{
-                                            Ok(_)=>{
-                                                self.create_file_error=String::new();
-                                                self.current_file=String::from(new_file.to_str().unwrap())},
-                                            Err(x)=>{self.create_file_error=x.to_string();}
-                                        }
-                                        self.new_file_str = String::new();
-                                    }
-                                    self.create_file_error=String::new();
-                                }
-                                if ui.button("Cancel").clicked(){
-                                    self.content = main_area::Content::View;
-                                    self.new_file_str = String::new();
-                                }
                         }else if self.content == main_area::Content::Graph{
                             self.marker.ui(ui,&mut self.current_file, &mut self.content,&self.vault);
                             self.marker.controls(ctx);
@@ -326,5 +308,47 @@ impl eframe::App for Marmol {
             let context_contents=format!("{}",font_size);
             file2.write_all(context_contents.as_bytes()).unwrap();
             true
+    }
+}
+
+impl Marmol{
+    fn new_file(&mut self,ui:&mut Ui,task:bool){
+        if task{
+            ui.label("Create New Task");
+        }else{
+            ui.label("Create New File");
+        }
+        ui.add(egui::TextEdit::singleline(&mut self.new_file_str));
+        let new_path = format!("{}/{}",&self.vault, &self.new_file_str);
+        if task{
+            let new_path = format!("{}.graph",new_path);
+        }
+        let new_file = Path::new(&new_path);
+        ui.label(RichText::new(&self.create_file_error).color(Color32::RED));
+        if new_file.exists(){
+            self.create_file_error=String::from("File already exist");
+        }else{
+            if ui.button("Create").clicked() {
+                self.content = main_area::Content::View;
+                let res = File::create(new_file);
+                match res{
+                    Ok(mut re)=>{
+                        self.create_file_error=String::new();
+                        if task{
+                            let contents=String::from("{\"tasks\":[],\"days\":[],\"top_id\":0}");
+                            re.write_all(contents.as_bytes()).unwrap();
+                        }
+                        self.current_file=String::from(new_file.to_str().unwrap());
+                    }
+                    Err(x)=>{self.create_file_error=x.to_string();}
+                }
+                    self.new_file_str = String::new();
+            }
+            self.create_file_error=String::new();
+        }
+        if ui.button("Cancel").clicked(){
+            self.content = main_area::Content::View;
+            self.new_file_str = String::new();
+        }
     }
 }
