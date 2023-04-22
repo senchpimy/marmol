@@ -176,9 +176,7 @@ fn render_files(&mut self,ui:&mut egui::Ui, path:&str, current_file:&mut String,
     if *sort_entrys{
         entrys_vec.sort();
     }
-    //Sort entrys
     for file_location in entrys_vec{
-        //let file_location = entry.unwrap().path().to_str().unwrap();//.to_string();
         let file_name=Path::new(&file_location).file_name().expect("No fails").to_str().unwrap();
         if Path::new(&file_location).is_dir(){
             let col = egui::containers::collapsing_header::CollapsingHeader::new(file_name);

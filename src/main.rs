@@ -21,6 +21,7 @@ mod configuraciones;
 mod toggle_switch;
 mod graph;
 mod simple_args;
+mod tasks;
 
 fn main() -> Result<(), eframe::Error>{
     let args: Vec<String> = env::args().collect();
