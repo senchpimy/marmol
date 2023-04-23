@@ -74,8 +74,10 @@ pub struct TasksFile{
 }
 
 pub fn load_tasks(path:&str)->TasksFile{ 
-    let data = fs::read_to_string(Path::new(path))
-            .expect("Unable to read file");
+    let data = match fs::read_to_string(Path::new(path)){
+        Ok(x)=>{x},
+        Err(_)=>{String::from("{\"tasks\":[],\"days\":[],\"top_id\":0}")}
+    };
     let data: TasksFile = serde_json::from_str(&data).unwrap();
     data
 }

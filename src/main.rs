@@ -231,9 +231,9 @@ impl eframe::App for Marmol {
                                 });
                             });
                         }else if self.content == main_area::Content::NewTask{
-                            self.new_file(ui,true);
+                            self.new_file(ui,true,ctx.input(|i| i.key_pressed(Key::Enter)));
                         }else if self.content == main_area::Content::NewFile{
-                            self.new_file(ui,false);
+                            self.new_file(ui,false,ctx.input(|i| i.key_pressed(Key::Enter)));
                         }else if self.current_file.ends_with(".graph"){
                             self.tasks.set_path(&self.current_file);
                             self.tasks.show(ui);
@@ -312,7 +312,7 @@ impl eframe::App for Marmol {
 }
 
 impl Marmol{
-    fn new_file(&mut self,ui:&mut Ui,task:bool){
+    fn new_file(&mut self,ui:&mut Ui,task:bool,enter_clicked:bool){
         if task{
             ui.label("Create New Task");
         }else{
@@ -328,7 +328,7 @@ impl Marmol{
         if new_file.exists(){
             self.create_file_error=String::from("File already exist");
         }else{
-            if ui.button("Create").clicked() {
+            if ui.button("Create").clicked() || enter_clicked{
                 self.content = main_area::Content::View;
                 let res = File::create(new_file);
                 match res{

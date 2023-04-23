@@ -25,7 +25,7 @@ pub fn load_vault()->(String, Vec<Yaml>, String, String, screens::Screen,bool,f3
         if dir2.exists(){
             let data = fs::read_to_string(file_saved)
                 .expect("Unable to read file");
-            let docs = YamlLoader::load_from_str(&data).unwrap();
+            let docs = YamlLoader::load_from_str(&data).unwrap_or(vec![]);
             if docs.len()==1{
                 window = screens::Screen::Main;
                 let docs = &docs[0];
