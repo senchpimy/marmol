@@ -1,30 +1,30 @@
 ### TODO
 - Backup sever
 - Delete file
-- [x] add vaults
 - Tabs
 - Split window
 - Canvas
-- Color scheme
+- Color scheme/themes
 
 - tags in graph
 - color of tags
 - movement of the points in the graph
 
-- formating when new line
-- [x] Create file with Enter / new line
+- Move cursor when formating
 
 - Link between notes
-- [x] Line Lenght
-- [x] sort of the notes
 - Move between dirs
 - Rename dirs
 - Open file if it was first argument
 
 - Save state of the left menu size (not posible rn due to egui)
 
-- [x] Other Graphs
+- Calendar
+- Income tracker
+- Keyboard Shortcuts
+- Templates
+- Search by metadata
+- Icons in the file explorer
 - Search inside a file
-- Themes
 - checkbox change with the font size
 - Add custom font

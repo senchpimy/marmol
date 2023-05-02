@@ -14,6 +14,7 @@ use std::env;
 extern crate json;
 
 mod search;
+mod format;
 mod main_area;
 mod files;
 mod screens;
@@ -224,8 +225,10 @@ impl eframe::App for Marmol {
                                         f.flush().unwrap();
                                     }
                                     if ctx.input(|i| i.key_pressed(Key::Enter)) && response.has_focus(){
-                                        println!("New line formated");
-                                        //let last_line= self.text_edit.lines().last();
+                                            let mut f = std::fs::OpenOptions::new().write(true).truncate(true)
+                                            .open(&self.current_file).unwrap();
+                                            f.write_all(&format::indent(&self.text_edit).as_bytes()).unwrap();
+                                            f.flush().unwrap();
                                     }
                                 });
                                 });

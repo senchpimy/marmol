@@ -350,3 +350,11 @@ fn _distance(a: (f32, f32), b: (f32, f32)) -> f32 {
     (dx*dx + dy*dy).sqrt()
 }
 
+fn get_hex_string(num: u64) -> (u8,u8,u8) {
+  let hex_string = format!("{:x}", num);
+let hex_string = format!("{:0<6}", hex_string);
+ let red = u8::from_str_radix(&hex_string[0..2], 16).ok();
+    let green = u8::from_str_radix(&hex_string[2..4], 16).ok();
+    let blue = u8::from_str_radix(&hex_string[4..6], 16).ok();
+    (red.unwrap(), green.unwrap(), blue.unwrap())
+}
