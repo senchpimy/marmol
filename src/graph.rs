@@ -1,6 +1,5 @@
 //use rand::Rng;
 use std::path::Path;
-use json;
 use std::fs;
 use std::collections::HashMap;
 use crate::files;
@@ -300,7 +299,7 @@ struct ColorGroup{
     rgb:(u8,u8,u8)
 }
 
-pub fn get_data_uni()->String{
+pub fn get_data_uni()->String{ //Change json lib
     let file = "./test.json";
     let file_content = fs::read_to_string(file).expect("Should have been able to read the file");
     let parsed = json::parse(&file_content).unwrap();

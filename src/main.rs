@@ -178,13 +178,13 @@ impl eframe::App for Marmol {
 
                if self.is_image {
                        let image_size = self.buffer_image.size_vec2();
-                       let size:egui::Vec2;
+                       let size:egui::Vec2=
                        if image_size[0]>800.0{
                             let vertical = (800.0*image_size[1])/image_size[0];
-                            size = egui::vec2(800.0, vertical);
+                            egui::vec2(800.0, vertical)
                        }else{
-                            size = image_size;
-                       }
+                            size = image_size
+                       };
                        let scrolling_buffer = ScrollArea::vertical();
                            scrolling_buffer.show(ui,|ui| {
                                ui.add(
@@ -221,13 +221,13 @@ impl eframe::App for Marmol {
                                     if response.changed(){
                                         let mut f = std::fs::OpenOptions::new().write(true).truncate(true)
                                         .open(&self.current_file).unwrap();
-                                        f.write_all(&self.text_edit.as_bytes()).unwrap();
+                                        f.write_all(self.text_edit.as_bytes()).unwrap();
                                         f.flush().unwrap();
                                     }
                                     if ctx.input(|i| i.key_pressed(Key::Enter)) && response.has_focus(){
                                             let mut f = std::fs::OpenOptions::new().write(true).truncate(true)
                                             .open(&self.current_file).unwrap();
-                                            f.write_all(&format::indent(&self.text_edit).as_bytes()).unwrap();
+                                            f.write_all(format::indent(&self.text_edit).as_bytes()).unwrap();
                                             f.flush().unwrap();
                                     }
                                 });
@@ -255,7 +255,7 @@ impl eframe::App for Marmol {
                                     let header = Path::new(&self.current_file).file_name().unwrap();
                                     let (content, metadata)=files::contents(&self.buffer);
                                                 ui.heading(header.to_str().unwrap());
-                                                if metadata.len()!=0{
+                                                if !metadata.is_empty(){
                                                     main_area::create_metadata(metadata,ui);
                                                     }
                                                 CommonMarkViewer::new("v").show(ui, &mut self.commoncache, &content);
@@ -277,7 +277,7 @@ impl eframe::App for Marmol {
                                    &mut self.vault_changed, &mut self.font_size,
                                    &mut self.center_size, &mut self.center_size_remain,&mut self.sort_files);
             if self.vault_changed{
-                self.marker.update_vault(&Path::new(&self.vault));
+                self.marker.update_vault(Path::new(&self.vault));
             }
         }else if self.current_window == screens::Screen::Server{
             screens::set_server(ctx);
@@ -302,14 +302,14 @@ impl eframe::App for Marmol {
             let sort_files = format!("sort_files: {}", &self.sort_files);
             let new_content= format!("{}\n{}\n{}\n{}\n{}\n{}",
                                      &vault_vec_str,vault_str,current_file,left_menu,center_size,sort_files);
-            let mut file = fs::File::create(&file_path).unwrap();
+            let mut file = fs::File::create(file_path).unwrap();
             file.write_all(new_content.as_bytes()).unwrap();
 
             let context_path = String::from(&self.config_path) + "/ContextState";
-            let mut file2 = fs::File::create(&context_path).unwrap();
+            let mut file2 = fs::File::create(context_path).unwrap();
             let font_size = format!("font_size: {}", &self.font_size);
-            let context_contents=format!("{}",font_size);
-            file2.write_all(context_contents.as_bytes()).unwrap();
+            //let context_contents=font_size;
+            file2.write_all(font_size.as_str().as_bytes()).unwrap();
             true
     }
 }

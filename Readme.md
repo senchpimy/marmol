@@ -1,6 +1,5 @@
 ### TODO
 - Backup sever
-- Delete file
 - Tabs
 - Split window
 - Canvas
@@ -14,7 +13,7 @@
 
 - Link between notes
 - Move between dirs
-- Rename dirs
+- Rename/remove dirs/file
 - Open file if it was first argument
 
 - Save state of the left menu size (not posible rn due to egui)

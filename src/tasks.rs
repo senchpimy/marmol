@@ -291,6 +291,7 @@ impl TasksGui{
             let mut del_ind = 0;
             let mut del_ind_bool = false;
             for (ind,element) in self.json_content.days.iter_mut().enumerate(){
+                let btn = egui::Button::new(&element.date).frame(false);
                 ui.group(|ui|{
                         ui.horizontal_top(|ui|{
                             if self.edit_task.index == ind as i32 && self.edit_task.edit == Edit::Tittle{
@@ -301,9 +302,7 @@ impl TasksGui{
                                     element.date=String::from(&self.edit);
                                     self.edit=String::new();
                                 }
-                            }else if ui.add(egui::Label::new(
-                                RichText::new(&element.date).color(ui.visuals().strong_text_color())
-                                )).hovered(){
+                            }else if ui.add(btn).clicked(){
                                     self.edit_task=EditDay{index:ind as i32,edit:Edit::Tittle};
                                     self.edit=element.date.clone();
                                 }
