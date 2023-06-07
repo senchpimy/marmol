@@ -27,3 +27,5 @@
 - Search inside a file
 - checkbox change with the font size
 - Add custom font
+- Handle no file in current
+- Create and save file for first time

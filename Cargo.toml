@@ -19,7 +19,6 @@ serde = { version = "1.0.126", features = ["derive"] }
 
 egui="0.21"
 #egui = { git = "https://github.com/senchpimy/egui", rev="d99fac7" }
-tracing-subscriber = "0.3"
 egui_extras = {version = "0.21.0", features = ["image"]}
 #egui_extras = {git = "https://github.com/senchpimy/egui", rev="d99fac7", features = ["image"]}
 filebuffer = "0.4.0"
@@ -37,7 +36,8 @@ rfd = "0.11.3"
 [profile.release]
 panic = "abort"
 lto = true
-strip = true
+#strip = true
 codegen-units = 1
 incremental = false
-opt-level = 3
+#opt-level = 3
+opt-level = "z"

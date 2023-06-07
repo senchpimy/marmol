@@ -183,7 +183,7 @@ impl eframe::App for Marmol {
                             let vertical = (800.0*image_size[1])/image_size[0];
                             egui::vec2(800.0, vertical)
                        }else{
-                            size = image_size
+                            image_size
                        };
                        let scrolling_buffer = ScrollArea::vertical();
                            scrolling_buffer.show(ui,|ui| {
