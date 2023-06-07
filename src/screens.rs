@@ -172,7 +172,7 @@ pub fn configuracion(ctx:&egui::Context,prev_window : &mut Screen, current_windo
                 };
                 ui.add_space(10.0);
 
-                if ui.add(egui::Slider::new(center_size, 0.35..=0.8).text("Line lenght")).changed(){
+                if ui.add(egui::Slider::new(center_size, 0.35..=0.9).text("Line lenght")).changed(){
                     *center_size_remain=(1.0-*center_size)/2.0;
                 };
 
