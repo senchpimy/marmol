@@ -232,10 +232,10 @@ pub fn left_side_settings(&self,ctx:&Context, colapse:&mut bool, vault:&mut Stri
         if ui.add(ImageButton::new(self.new_file.texture_id(ctx), egui::vec2(18.0, 18.0)).frame(false)).on_hover_text("New File").clicked(){
             *content=Content::NewFile;
         }
-        ui.add_space(space);
-        if ui.add(ImageButton::new(self.tasks_image.texture_id(ctx), egui::vec2(18.0, 18.0)).frame(false)).on_hover_text("Create new Tasks").clicked(){
-            *content=Content::NewTask;
-        }
+        //ui.add_space(space);
+        //if ui.add(ImageButton::new(self.tasks_image.texture_id(ctx), egui::vec2(18.0, 18.0)).frame(false)).on_hover_text("Create new Tasks").clicked(){
+        //    *content=Content::NewTask;
+        //}
         ui.with_layout(Layout::bottom_up(Align::Max),|ui|{
         ui.add_space(5.);
              if ui.add(ImageButton::new(self.config_image.texture_id(ctx), egui::vec2(18.0, 18.0)).frame(false)).on_hover_text("Configuration").clicked(){*current_window=screens::Screen::Configuracion;}

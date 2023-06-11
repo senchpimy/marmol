@@ -8,6 +8,7 @@ use std::fs;
 use std::io::Write;
 use yaml_rust::Yaml;
 use std::env;
+use std::fmt;
 //use directories::BaseDirs;
 
 #[macro_use]
@@ -23,6 +24,16 @@ mod toggle_switch;
 mod graph;
 mod simple_args;
 mod tasks;
+mod income;
+
+#[derive(PartialEq,Debug)]
+enum NewFileType{Markdown, Income,Tasks}
+
+impl fmt::Display for NewFileType{
+    fn fmt(&self,f:&mut fmt::Formatter)->fmt::Result{
+        write!(f,"{:?}",self)
+    }
+}
 
 fn main() -> Result<(), eframe::Error>{
     let args: Vec<String> = env::args().collect();
@@ -79,9 +90,12 @@ struct Marmol{
     center_size_remain:f32,
     sort_files:bool,
 
+    new_file_type:NewFileType,
     marker:graph::Graph,
     tasks:tasks::TasksGui,
+    income:income::IncomeGui,
 }
+
 impl Marmol{
         fn new(cc: &eframe::CreationContext<'_>) -> Self {
         let font_size=configuraciones::load_context();
@@ -117,6 +131,7 @@ impl Default for Marmol {
         }
         Self {
             tasks:tasks::TasksGui::default(),
+            income:income::IncomeGui::default(),
             center_size,
             center_size_remain:(1.0-center_size)/2.0,
             font_size:12.0,
@@ -143,6 +158,7 @@ impl Default for Marmol {
             vault:vault_var,
             vault_vec:vault_vec_var,
             current_file:current.to_owned(),
+            new_file_type:NewFileType::Markdown,
 
             left_collpased:left_coll,
             vault_changed:false,
@@ -233,13 +249,16 @@ impl eframe::App for Marmol {
                                 });
                                 });
                             });
-                        }else if self.content == main_area::Content::NewTask{
-                            self.new_file(ui,true,ctx.input(|i| i.key_pressed(Key::Enter)));
+                        //}else if self.content == main_area::Content::NewTask{
+                        //    self.new_file(ui,ctx.input(|i| i.key_pressed(Key::Enter)));
                         }else if self.content == main_area::Content::NewFile{
-                            self.new_file(ui,false,ctx.input(|i| i.key_pressed(Key::Enter)));
+                            self.new_file(ui,ctx.input(|i| i.key_pressed(Key::Enter)));
                         }else if self.current_file.ends_with(".graph"){
                             self.tasks.set_path(&self.current_file);
                             self.tasks.show(ui);
+                        }else if self.current_file.ends_with(".inc"){
+                            self.income.set_path(&self.current_file);
+                            self.income.show(ui);
                         }else if self.content == main_area::Content::View{
                             if ctx.input(|i| i.key_pressed(Key::F))
                             {
@@ -315,18 +334,30 @@ impl eframe::App for Marmol {
 }
 
 impl Marmol{
-    fn new_file(&mut self,ui:&mut Ui,task:bool,enter_clicked:bool){
-        if task{
-            ui.label("Create New Task");
-        }else{
-            ui.label("Create New File");
-        }
+    //fn new_file(&mut self,ui:&mut Ui,selected:NewFileType,enter_clicked:bool){
+    fn new_file(&mut self,ui:&mut Ui,enter_clicked:bool){
+        ui.label("Create New File");
         ui.add(egui::TextEdit::singleline(&mut self.new_file_str));
         let new_path = format!("{}/{}",&self.vault, &self.new_file_str);
-        if task{
-            let new_path = format!("{}.graph",new_path);
-        }
-        let new_file = Path::new(&new_path);
+        egui::ComboBox::from_label("Editar categoria")
+        .selected_text(&self.new_file_type.to_string())
+        .show_ui(ui, |ui| {
+            ui.selectable_value(&mut self.new_file_type,NewFileType::Markdown ,"Markdown");
+            ui.selectable_value(&mut self.new_file_type,NewFileType::Tasks ,"Tasks");
+            ui.selectable_value(&mut self.new_file_type,NewFileType::Income ,"Income");
+        });
+        let path =if self.new_file_type==NewFileType::Tasks{
+            format!("{}.graph",new_path)
+        }else if self.new_file_type==NewFileType::Income{
+            format!("{}.inc",new_path)
+        }else{
+            String::new()
+        };
+        let new_file= if self.new_file_type==NewFileType::Markdown{
+            Path::new(&new_path)
+        }else{
+            Path::new(&path)
+        };
         ui.label(RichText::new(&self.create_file_error).color(Color32::RED));
         if new_file.exists(){
             self.create_file_error=String::from("File already exist");
@@ -337,8 +368,11 @@ impl Marmol{
                 match res{
                     Ok(mut re)=>{
                         self.create_file_error=String::new();
-                        if task{
+                        if self.new_file_type==NewFileType::Tasks{
                             let contents=String::from("{\"tasks\":[],\"days\":[],\"top_id\":0}");
+                            re.write_all(contents.as_bytes()).unwrap();
+                        }else if self.new_file_type==NewFileType::Income{
+                            let contents=String::from("{\"transacciones\":[],\"categorias\":[ \"Categoria\"],\"colores\":[[0.0,0.0,0.0]]}");
                             re.write_all(contents.as_bytes()).unwrap();
                         }
                         self.current_file=String::from(new_file.to_str().unwrap());

@@ -213,6 +213,7 @@ impl IncomeGui{
         }else{
             self.canvas(ui);
         }
+        self.save()
     }
     
     fn categorias(&mut self,ui:&mut egui::Ui){
@@ -366,7 +367,6 @@ impl IncomeGui{
 
 
     pub fn save(&self){
-        println!("Guardado");
         let file = String::from(&self.path);
         let mut file2 = fs::File::create(file).unwrap();
         let conts = serde_json::to_string(&self.json_content).unwrap();

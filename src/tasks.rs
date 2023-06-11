@@ -73,12 +73,25 @@ pub struct TasksFile{
     top_id:u32,
 }
 
+impl Default for TasksFile{
+    fn default()->Self{
+        TasksFile{
+        tasks:Vec::new(),
+        days:Vec::new(),
+        top_id:0,
+        }
+    }
+}
+
 pub fn load_tasks(path:&str)->TasksFile{ 
     let data = match fs::read_to_string(Path::new(path)){
         Ok(x)=>{x},
         Err(_)=>{String::from("{\"tasks\":[],\"days\":[],\"top_id\":0}")}
     };
-    let data: TasksFile = serde_json::from_str(&data).unwrap();
+    let data: TasksFile = match serde_json::from_str(&data){
+        Ok(t)=>{t}
+        Err(_)=>TasksFile::default()
+    };
     data
 }
 

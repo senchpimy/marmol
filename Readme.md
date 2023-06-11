@@ -14,12 +14,9 @@
 - Link between notes
 - Move between dirs
 - Rename/remove dirs/file
-- Open file if it was first argument
-
-- Save state of the left menu size (not posible rn due to egui)
 
 - Calendar
-- Income tracker
+- [x] Income tracker
 - Keyboard Shortcuts
 - Templates
 - Search by metadata
