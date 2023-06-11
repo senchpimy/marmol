@@ -7,9 +7,7 @@ use egui_commonmark::*;
 use std::fs;
 use std::io::Write;
 use yaml_rust::Yaml;
-use std::env;
 use std::fmt;
-//use directories::BaseDirs;
 
 #[macro_use]
 extern crate json;
@@ -22,7 +20,6 @@ mod screens;
 mod configuraciones;
 mod toggle_switch;
 mod graph;
-mod simple_args;
 mod tasks;
 mod income;
 
@@ -36,23 +33,14 @@ impl fmt::Display for NewFileType{
 }
 
 fn main() -> Result<(), eframe::Error>{
-    let args: Vec<String> = env::args().collect();
     let options = eframe::NativeOptions {
         ..Default::default()
     };
-    //if args.len()>2{
-    //    eframe::run_native(
-    //        "Marmol",
-    //        options,
-    //        Box::new(|_cc| Box::new(simple_args::MarmolOne::new(&args))),
-    //    )
-    //}else {
         eframe::run_native(
             "Marmol",
             options,
             Box::new(|cc| Box::new(Marmol::new(cc))),
         )
-    //}
 }
 
 

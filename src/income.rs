@@ -441,17 +441,17 @@ impl IncomeGui{
     fn canvas(&mut self, ui:&mut egui::Ui){
         let f = Frame::none().fill(Color32::BLACK).rounding(Rounding::same(3.0));
         f.show(ui,|ui|{
-            let available_height=((ui.available_height()-(ui.available_height()*0.3))*1.1)/2.;
+            let available_height=((ui.available_height()-(ui.available_height()*0.2))*1.1)/2.;
             let available_width=(ui.available_width()*1.05)/2.;//y==400
             let radio = available_height/2.;
             let (_, painter) =
             ui.allocate_painter(Vec2::new(ui.available_width(), ui.available_height()-(ui.available_height()*0.3)), Sense::click());
             let mut ulti =0;
-            let diferencia=(available_width-50.)*0.5;
+            let diferencia=(available_width)*0.6;
             for i in self.ingresos_cat.keys(){
                 let color = array_to_color(self.json_content.colores[*i]);
                 let max = ((self.ingresos_cat.get(i).unwrap()*360.)/self.ingresos_cat_tot) as i32;
-                let result = dibujar_arco(ulti,max+ulti,available_width-diferencia,available_height,radio);
+                let result = dibujar_arco(ulti,max+ulti,available_width,available_height,radio);
                 let arco = epaint::PathShape{points:result,
                            stroke:Stroke::new(2.,color),closed:false,fill:color};
                 painter.add(arco);
