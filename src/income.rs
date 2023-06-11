@@ -100,7 +100,7 @@ impl Default for IncomeGui{
             fecha: Local::now().format("%Y-%m-%d").to_string(),
             error:String::new(),
             edit:(-1,TipoMovimiento::Null),
-            ventana:Ventana::Categorias,
+            ventana:Ventana::Normal,
             points:Vec::new(),
             lines:Vec::new(),
             mov_sort:Vec::new(),
