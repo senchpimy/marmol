@@ -11,7 +11,7 @@ use egui::*;
 use plot::{Points,PlotPoints,MarkerShape,Line};
 
 #[derive(PartialEq)]
-enum Ventana { Normal, Graficos }
+enum Ventana { Normal, Graficos, Categorias }
 
 #[derive(Debug,Deserialize,Serialize,Clone,PartialEq)]
 enum TipoMovimiento{
@@ -82,6 +82,10 @@ pub struct IncomeGui{
     max:f64,
     ver_gra:GraficaVer,
     ver_gra_i:usize,
+    ingresos_cat:HashMap<usize,f32>,
+    gastos_cat:HashMap<usize,f32>,
+    ingresos_cat_tot:f32,
+    gastos_cat_tot:f32,
 }
 
 impl Default for IncomeGui{
@@ -96,7 +100,7 @@ impl Default for IncomeGui{
             fecha: Local::now().format("%Y-%m-%d").to_string(),
             error:String::new(),
             edit:(-1,TipoMovimiento::Null),
-            ventana:Ventana::Normal,
+            ventana:Ventana::Categorias,
             points:Vec::new(),
             lines:Vec::new(),
             mov_sort:Vec::new(),
@@ -107,6 +111,10 @@ impl Default for IncomeGui{
             max:0.0,
             ver_gra:GraficaVer::Grafica,
             ver_gra_i:0,
+            ingresos_cat:HashMap::new(),
+            gastos_cat:HashMap::new(),
+            ingresos_cat_tot:0.0,
+            gastos_cat_tot:0.0,
         }
     }
 }
@@ -163,6 +171,13 @@ impl IncomeGui{
         self.categorias=HashMap::new();
         for elemento in &self.json_content.transacciones{
             self.categorias.entry(elemento.categoria).and_modify(|x| *x += 1).or_insert(1);
+            if elemento.tipo == TipoMovimiento::Ingreso{
+                self.ingresos_cat.entry(elemento.categoria).and_modify(|x| *x += elemento.monto).or_insert(elemento.monto);
+                self.ingresos_cat_tot+=elemento.monto;
+            }else{
+                self.gastos_cat.entry(elemento.categoria).and_modify(|x| *x += elemento.monto).or_insert(elemento.monto);
+                self.gastos_cat_tot+=elemento.monto;
+            }
         }
     }
 
@@ -175,25 +190,28 @@ impl IncomeGui{
     }
 
     pub fn show(&mut self, ui:&mut egui::Ui){
-        let scroll = ScrollArea::vertical().max_height(350.0);
+        let scroll = ScrollArea::vertical().max_height(ui.available_height()*0.6);
+        let scroll2 = ScrollArea::vertical().id_source("second");
         self.escojer(ui);
         if self.ventana==Ventana::Normal{
             scroll.show(ui,|ui|{
                     self.vista_separada(ui);
             });
-            ui.add_space(20.0);
-            ui.horizontal(|ui|{
-                ui.vertical(|ui|{
-                    self.add_record(ui);
+            ui.add_space(ui.available_height()*0.01);
+            scroll2.show(ui,|ui|{
+                ui.horizontal(|ui|{
+                    ui.vertical(|ui|{
+                        self.add_record(ui);
+                    });
+                    ui.vertical(|ui|{
+                        self.categorias(ui);
+                    });
                 });
-                ui.vertical(|ui|{
-                    self.categorias(ui);
-                });
-            //self.add_record(ui);
             });
-        }else{
+        }else if self.ventana==Ventana::Graficos{
             self.grafica(ui);
-            //self.canvas(ui);
+        }else{
+            self.canvas(ui);
         }
     }
     
@@ -243,6 +261,7 @@ impl IncomeGui{
             ui.horizontal(|ui|{
                 ui.selectable_value(&mut self.ventana, Ventana::Normal, "Normal");
                 ui.selectable_value(&mut self.ventana, Ventana::Graficos, "Graph");
+                ui.selectable_value(&mut self.ventana, Ventana::Categorias, "Categorias");
             });
         });
     }
@@ -421,24 +440,65 @@ impl IncomeGui{
 
     fn canvas(&mut self, ui:&mut egui::Ui){
         let f = Frame::none().fill(Color32::BLACK).rounding(Rounding::same(3.0));
-        //El canvas empieza desde 10,40
         f.show(ui,|ui|{
+            let available_height=((ui.available_height()-(ui.available_height()*0.3))*1.1)/2.;
+            let available_width=(ui.available_width()*1.05)/2.;//y==400
+            let radio = available_height/2.;
             let (_, painter) =
-                ui.allocate_painter(Vec2::new(ui.available_width(), ui.available_height()), Sense::click());
-            let fig2 = epaint::PathShape{points:vec![Pos2::new(200.,40.),Pos2::new(10.,200.),Pos2::new(200.,400.)],
-                       stroke:Stroke::new(2.,Color32::RED),closed:false,fill:Color32::GREEN};
-            let result = dibujar_arco(0,361,10.,200.,200.);
-            let fig3 = epaint::PathShape{points:result,
-                       stroke:Stroke::new(2.,Color32::RED),closed:false,fill:Color32::TRANSPARENT};
-            painter.add(fig2);
-            painter.add(fig3);
+            ui.allocate_painter(Vec2::new(ui.available_width(), ui.available_height()-(ui.available_height()*0.3)), Sense::click());
+            let mut ulti =0;
+            let diferencia=(available_width-50.)*0.5;
+            for i in self.ingresos_cat.keys(){
+                let color = array_to_color(self.json_content.colores[*i]);
+                let max = ((self.ingresos_cat.get(i).unwrap()*360.)/self.ingresos_cat_tot) as i32;
+                let result = dibujar_arco(ulti,max+ulti,available_width-diferencia,available_height,radio);
+                let arco = epaint::PathShape{points:result,
+                           stroke:Stroke::new(2.,color),closed:false,fill:color};
+                painter.add(arco);
+                ulti+=max;
+            }
+            let mut ulti =0;
+            for i in self.gastos_cat.keys(){
+                let color = array_to_color(self.json_content.colores[*i]);
+                let max = ((self.gastos_cat.get(i).unwrap()*360.)/self.gastos_cat_tot) as i32;
+                let result = dibujar_arco(ulti,max+ulti,available_width+diferencia,available_height,radio);
+                let arco = epaint::PathShape{points:result,
+                           stroke:Stroke::new(2.,color),closed:false,fill:color};
+                painter.add(arco);
+                ulti+=max;
+            }
+        });
+        let r = ScrollArea::vertical();
+        r.show(ui, |ui|{
+            ui.horizontal(|ui|{
+                ui.add_sized([ui.available_width()*0.5,ui.available_height()],|ui:&mut egui::Ui|{
+                ui.vertical(|ui|{
+                    ui.heading("Ingresos");
+                        for i in self.ingresos_cat.keys(){
+                            let max = ((self.ingresos_cat.get(i).unwrap()*100.)/self.ingresos_cat_tot) as i32;
+                            ui.label(format!("{}: {}%",self.json_content.categorias[*i],max));
+                        }
+                });
+                    ui.separator()
+                    });
+                ui.add_sized([ui.available_width(),ui.available_height()],|ui:&mut egui::Ui|{
+                ui.vertical(|ui|{
+                    ui.heading("Gastos");
+                    for i in self.gastos_cat.keys(){
+                        let max = ((self.gastos_cat.get(i).unwrap()*100.)/self.gastos_cat_tot) as i32;
+                        ui.label(format!("{}: {}%",self.json_content.categorias[*i],max));
+                    }
+                    });
+                    ui.separator()
+                });
+            });
         });
     }
     
     fn grafica(&mut self, ui:&mut egui::Ui){
         if self.ver_gra==GraficaVer::Grafica{
             let mov_sort = self.mov_sort.clone();
-            let g = move |x:f64, _:& RangeInclusive<f64>|->String{format!("{}",&mov_sort[x as usize])};
+            let g = move |x:f64, _:& RangeInclusive<f64>|->String{mov_sort[x as usize].clone()};
             let plot = egui::plot::Plot::new("items_demo")
                 .show_x(false)
                 .show_y(false)
@@ -453,40 +513,61 @@ impl IncomeGui{
             plot.show(ui, |plot_ui| {
                 plot_ui.line(line);
                 plot_ui.points(p2);
-                let mut j =0;
-                for i in &self.points{
-                    let pp = plot_ui.pointer_coordinate();
-                    match pp{
-                        Some(p)=>{
-                            let x = i[0].max(p.x)-i[0].min(p.x);
-                            let y = i[1].max(p.y)-i[1].min(p.y);
-                            if plot_ui.plot_clicked() && x<0.1 && y<(self.max*0.05) {
-                                self.ver_gra=GraficaVer::Elemento;
-                                self.ver_gra_i=j;
+                let pp = plot_ui.pointer_coordinate();
+                for (j,i) in self.points.iter().enumerate(){
+                    //match pp{
+                        if let Some(p)=pp{
+                            if plot_ui.plot_clicked(){
+                                let x = i[0].max(p.x)-i[0].min(p.x);
+                                let y = i[1].max(p.y)-i[1].min(p.y);
+                                if  x<0.1 && y<(self.max*0.05) {
+                                    self.ver_gra=GraficaVer::Elemento;
+                                    self.ver_gra_i=j;
+                                }
                             }
-                        },
-                        None=>{}
-                    }
-                    j+=1;
+                        }
+                    //}
                 }
             });
         }else{
+            let mut total=0.0;
             if ui.button("Regresar").clicked(){
                 self.ver_gra=GraficaVer::Grafica;
             }
-            ui.label(RichText::from(&self.mov_sort[self.ver_gra_i]).color(Color32::WHITE));
-            for j in &self.json_content.transacciones{
-                    let vals = array_to_color(self.json_content.colores[j.categoria]);
-                    let f = Frame::none().fill(faded(vals,ui))
-                        .rounding(Rounding::same(2.0));
-                if j.fecha==self.mov_sort[self.ver_gra_i]{
-                    f.show(ui,|ui: &mut Ui|{
-                    ui.heading(&j.description);
-                    ui.label(&self.json_content.categorias[j.categoria]);
-                    });
-                    //ui.separator();
-                };
-            }
+            ui.label(RichText::from(&self.mov_sort[self.ver_gra_i]).color(Color32::WHITE).size(30.));
+            ui.add_space(20.);
+            let scroll = ScrollArea::vertical().max_height(ui.available_height()*0.8);
+            scroll.show(ui,|ui|{
+                for j in &self.json_content.transacciones{
+                        let vals = array_to_color(self.json_content.colores[j.categoria]);
+                        let f = Frame::none().fill(faded(vals,ui))
+                            .rounding(Rounding::same(2.0));
+                    if j.fecha==self.mov_sort[self.ver_gra_i]{
+                        f.show(ui,|ui: &mut Ui|{
+                            ui.horizontal(|ui|{
+                                ui.vertical(|ui|{
+                                    ui.heading(&self.json_content.categorias[j.categoria]);
+                                    ui.label(&j.description);
+                                });
+                                ui.add_space(30.);
+                                ui.vertical(|ui|{
+                                    ui.add_space(ui.available_height()*0.4);
+                                    if j.tipo == TipoMovimiento::Gasto{
+                                        ui.heading(RichText::from(format!("-{}",&j.monto)).color(Color32::RED));
+                                        total-=j.monto;
+                                    }else{
+                                        ui.heading(RichText::from(format!("{}",&j.monto)).color(Color32::GREEN));
+                                        total+=j.monto;
+                                    }
+                                });
+                            });
+                            ui.separator();
+                        });
+                    };
+                }
+            });
+            ui.separator();
+            ui.label(RichText::from(format!("Total: {}",total)));
         }
     }
 }
@@ -516,15 +597,34 @@ impl IncomeGui{
         }
     }
 
+//fn porcion(ang1:i32,ang2:i32,cx:f32,cy:f32,radio:f32)->Vec<Pos2>{
+//    //Pos2::new(available_width/2.,available_height/2.) Centro
+//    let mut v = Vec::new();
+//    let var = (std::f32::consts::PI *2.0)/360.;
+//    let mut a = var* ang1 as f32;
+//    let x:f32= radio * a.cos()+cx;
+//    let y:f32= radio * a.sin()+cy;
+//
+//    a = var* ang2 as f32;
+//    let x2:f32= radio * a.cos()+cx;
+//    let y2:f32= radio * a.sin()+cy;
+//    v.push(Pos2::new(x,y));
+//    v.push(Pos2::new(cx,cy));
+//    v.push(Pos2::new(x2,y2));
+//    v
+//}
+
 fn dibujar_arco(ang1:i32,ang2:i32,cx:f32,cy:f32,radio:f32)->Vec<Pos2>{
     let mut vect=Vec::new();
     let var = (std::f32::consts::PI *2.0)/360.;
-    for i in ang1..ang2{
+    vect.push(Pos2::new(cx,cy));
+    for i in (ang1-1)..=ang2{
         let a = var* i as f32;
         let x:f32= radio * a.cos()+cx;
         let y:f32= radio * a.sin()+cy;
         vect.push(Pos2::new(x,y));
     }
+    vect.push(Pos2::new(cx,cy));
     vect
 }
 
