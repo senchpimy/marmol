@@ -26,3 +26,4 @@
 - Add custom font
 - Handle no file in current
 - Create and save file for first time
+- copy files between vaults
