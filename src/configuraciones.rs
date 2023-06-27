@@ -40,7 +40,7 @@ pub fn load_vault()->(String, Vec<Yaml>, String, String, screens::Screen,bool,f3
             let res = fs::create_dir(&dir);
             match res{
                 Ok(_)=>println!("Dir created"),
-                Err(r)=>println!("{}",r)
+                Err(r)=>println!("Dir cannot be created: {}",r)
             }
         }
     }

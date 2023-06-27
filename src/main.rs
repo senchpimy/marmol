@@ -301,6 +301,10 @@ impl eframe::App for Marmol {
             vec_str = vec_str.to_owned() + format!(" '{}' ,",&u).as_str();
         }
 
+        let dir = Path::new(&self.config_path);
+        if !dir.exists(){
+            fs::create_dir(&self.config_path);
+        }
         let vault_vec_str = format!("vault_vec: [ {} ]",vec_str);
             let file_path = String::from(&self.config_path) + "/ProgramState";
             let current_file = format!("current: {}", &self.current_file);
