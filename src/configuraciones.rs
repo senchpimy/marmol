@@ -23,19 +23,18 @@ pub fn load_vault()->(String, Vec<Yaml>, String, String, screens::Screen,bool,f3
         let file_saved = String::from(&config_path_var)+"/ProgramState";
         let dir2 = Path::new(&file_saved);
         if dir2.exists(){
+            println!("Configuration file exists");
             let data = fs::read_to_string(file_saved)
                 .expect("Unable to read file");
             let docs = YamlLoader::load_from_str(&data).unwrap_or(vec![]);
-            if docs.len()==1{
-                window = screens::Screen::Main;
-                let docs = &docs[0];
-                vault_var = docs["vault"].as_str().unwrap().to_string();
-                current = docs["current"].as_str().unwrap().to_string();
-                vault_vec_var = docs["vault_vec"].as_vec().unwrap().to_vec();
-                collpased_left = docs["left_menu"].as_bool().unwrap_or(true);
-                center_size = docs["center_size"].as_f64().unwrap_or(0.8) as f32;
-                sort_files = docs["sort_files"].as_bool().unwrap_or(false);
-            }
+            window = screens::Screen::Main;
+            let docs = &docs[0];
+            vault_var = docs["vault"].as_str().unwrap().to_string();
+            current = docs["current"].as_str().unwrap_or("None").to_string();
+            vault_vec_var = docs["vault_vec"].as_vec().unwrap_or(&Vec::<Yaml>::new()).to_vec();
+            collpased_left = docs["left_menu"].as_bool().unwrap_or(true);
+            center_size = docs["center_size"].as_f64().unwrap_or(0.8) as f32;
+            sort_files = docs["sort_files"].as_bool().unwrap_or(false);
         }else{
             let res = fs::create_dir(&dir);
             match res{

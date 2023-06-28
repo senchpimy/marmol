@@ -302,6 +302,7 @@ impl eframe::App for Marmol {
         }
 
         let dir = Path::new(&self.config_path);
+        println!("{}",&self.config_path);
         if !dir.exists(){
             fs::create_dir(&self.config_path);
         }
