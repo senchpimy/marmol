@@ -1,12 +1,12 @@
 [package]
 name = "marmol"
-version = "0.1.4"
+version = "0.1.5"
 edition = "2021"
 resolver = "2"
 
 
 [dependencies]
-eframe = "0.23"
+eframe = "0.24.1"
 #eframe = { git = "https://github.com/senchpimy/egui", rev="d99fac7"}
 chrono = "0.4.23"
 syntect = "5.0"
@@ -17,9 +17,9 @@ serde = { version = "1.0.126", features = ["derive"] }
 #egui_demo_lib = { git = "https://github.com/senchpimy/egui", rev="d99fac7" }
 
 
-egui = "0.23"
+egui = "0.24.1"
 #egui = { git = "https://github.com/senchpimy/egui", rev="d99fac7" }
-egui_extras = { version = "0.23.0", features = ["image"] }
+egui_extras = { version = "0.24.1", features = ["image"] }
 #egui_extras = {git = "https://github.com/senchpimy/egui", rev="d99fac7", features = ["image"]}
 filebuffer = "0.4.0"
 image = { version = "0.24.5", default-features = false, features = [

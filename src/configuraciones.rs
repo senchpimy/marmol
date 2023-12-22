@@ -6,9 +6,13 @@ use std::fs;
 use std::path::Path;
 use yaml_rust::{Yaml, YamlLoader};
 
+pub struct VaultConfig{
+    graph_json_config:String
+}
+
 pub fn load_vault() -> (
     String,
-    Vec<Yaml>,
+    Vec<String>,
     String,
     String,
     screens::Screen,
@@ -18,7 +22,7 @@ pub fn load_vault() -> (
 ) {
     let mut current = String::new();
     let mut vault_var = String::new();
-    let mut vault_vec_var: Vec<Yaml> = vec![];
+    let mut vault_vec_var: Vec<String> = vec![];
     let mut window = screens::Screen::Default;
     let binding = BaseDirs::new().unwrap();
     let home_dir = binding.home_dir().to_str().unwrap();
@@ -42,7 +46,8 @@ pub fn load_vault() -> (
             vault_vec_var = docs["vault_vec"]
                 .as_vec()
                 .unwrap_or(&Vec::<Yaml>::new())
-                .to_vec();
+            .iter().map(|x|x.as_str().unwrap_or("").to_owned()).collect();
+            //vault_vec_var = tmp.iter().map(|x|x.as_str().unwrap().to_owned()).collect();
             collpased_left = docs["left_menu"].as_bool().unwrap_or(true);
             center_size = docs["center_size"].as_f64().unwrap_or(0.8) as f32;
             sort_files = docs["sort_files"].as_bool().unwrap_or(false);
@@ -69,13 +74,12 @@ pub fn load_vault() -> (
 pub fn load_context() -> f32 {
     let binding = BaseDirs::new().unwrap();
     let home_dir = binding.home_dir().to_str().unwrap();
-    let mut config_path_var = String::from(home_dir);
-    config_path_var = config_path_var + "/.config/marmol";
+    let config_path_var = format!("{}{}",&home_dir,"/.config/marmol");
     let dir = Path::new(&config_path_var);
 
     let mut font_size: f32 = 12.0;
     if dir.exists() {
-        let file_saved = String::from(&config_path_var) + "/ContextState";
+        let file_saved = format!("{}{}",&config_path_var,"/ContextState");
         let dir2 = Path::new(&file_saved);
         if dir2.exists() {
             let data = fs::read_to_string(file_saved).expect("Unable to read file");
