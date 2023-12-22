@@ -6,7 +6,7 @@ use std::path::Path;
 use std::fs;
 
 use egui::*;
-use plot::{Line, Plot, Points};
+use egui_plot::{Line, Plot, Points};
 use std::ops::RangeInclusive;
 
 #[derive(Debug)]
@@ -169,7 +169,7 @@ impl TasksGui{
     }
 
     pub fn show(&mut self, ui:&mut egui::Ui){
-        let x_fmt = |x, _range: &RangeInclusive<f64>| {
+        let x_fmt = |x,_, _range: &RangeInclusive<f64>| {
                 format!("Day {}", x)
         };
 

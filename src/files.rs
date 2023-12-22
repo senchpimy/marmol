@@ -18,9 +18,14 @@ pub fn read_file(file_name: &str) -> String {
 }
 
 pub fn read_image(path: &str) -> Vec<u8> {
-    let fbuffer = FileBuffer::open(path).expect("failed to open file");
-    let vec = fbuffer.leak().to_vec();
+    let fbuffer = FileBuffer::open(path);
+    match fbuffer {
+        Ok(val)=>{
+    let vec = val.leak().to_vec();
     vec
+        }
+        Err(_)=>{vec![]}
+    }
 }
 
 pub fn contents(contents: &String) -> (String, String) {

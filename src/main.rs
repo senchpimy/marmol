@@ -90,9 +90,10 @@ impl Marmol {
     fn new(cc: &eframe::CreationContext<'_>) -> Self {
         let font_size = configuraciones::load_context();
         let ctx = &cc.egui_ctx;
-        let mut s = ctx.style();
+        ctx.style_mut(|style|{
         let font_id = FontId::proportional(font_size);
-        s.override_font_id = Some(font_id);
+            style.override_font_id = Some(font_id);
+        });
         //ctx.set_visuals(configuraciones::load_colors());
         Self {
             font_size,
@@ -218,7 +219,7 @@ impl eframe::App for Marmol {
                     scrolling_buffer.show(ui, |ui| {
                         //ui.add(Image::new(self.buffer_image.texture_id(ctx), size));
                         ui.add(
-                            Image::from_bytes("img",self.buffer_image)
+                            Image::from_bytes("img",self.buffer_image.clone()) //TODO fix clone
                         );
                     });
                 } else {
@@ -355,13 +356,13 @@ impl eframe::App for Marmol {
         /////////////////////////////////////////////////////////////////////////////////
     }
 
-    fn on_close_event(&mut self) -> bool {
+    fn on_exit(&mut self, _gl: Option<&eframe::glow::Context>) {
         let vault_str = format!("vault: '{}'", &self.vault);
         //let mut vec_str = String::new();
         //for i in &self.vault_vec {
         //    vec_str = vec_str.to_owned() + format!(" '{}' ,", &i).as_str();
         //}
-let vec_str: String = self.vault_vec
+    let vec_str: String = self.vault_vec
     .iter()
     .map(|item| format!("'{}'", item))
     .collect::<Vec<String>>()
@@ -390,7 +391,6 @@ let vec_str: String = self.vault_vec
         let font_size = format!("font_size: {}", &self.font_size);
         //let context_contents=font_size;
         file2.write_all(font_size.as_str().as_bytes()).unwrap();
-        true
     }
 }
 

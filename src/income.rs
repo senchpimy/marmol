@@ -2,7 +2,7 @@ use chrono::Local;
 use core::ops::RangeInclusive;
 
 use egui::*;
-use plot::{Line, MarkerShape, PlotPoints, Points};
+use egui_plot::{Line, MarkerShape, PlotPoints, Points};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
@@ -616,8 +616,8 @@ impl IncomeGui {
         if self.ver_gra == GraficaVer::Grafica {
             let mov_sort = self.mov_sort.clone();
             let g =
-                move |x: f64, _: &RangeInclusive<f64>| -> String { mov_sort[x as usize].clone() };
-            let plot = egui::plot::Plot::new("items_demo")
+                move |x: f64, _:usize,_: &RangeInclusive<f64>| -> String { mov_sort[x as usize].clone() };
+            let plot = egui_plot::Plot::new("items_demo")
                 .show_x(false)
                 .show_y(false)
                 .clamp_grid(true)
@@ -635,7 +635,7 @@ impl IncomeGui {
                 for (j, i) in self.points.iter().enumerate() {
                     //match pp{
                     if let Some(p) = pp {
-                        if plot_ui.plot_clicked() {
+                        if plot_ui.response().clicked() {
                             let x = i[0].max(p.x) - i[0].min(p.x);
                             let y = i[1].max(p.y) - i[1].min(p.y);
                             if x < 0.1 && y < (self.max * 0.05) {

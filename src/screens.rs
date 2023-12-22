@@ -116,8 +116,8 @@ pub fn configuracion(
         if *button {
             if ui.button("Create!").clicked() {
                 let full_path = format!("{}/{}", folder, nw_vault_str);
+                let create = fs::create_dir(&full_path);
                 vaults.push(full_path);
-                let create = fs::create_dir(full_path);
                 match create {
                     Ok(_) => {}
                     Err(x) => {

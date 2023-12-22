@@ -6,6 +6,7 @@ use eframe::egui::{
     Align, Button, Context, Frame, ImageButton, Layout, RichText, ScrollArea, Separator, SidePanel,
     Style, TextureId, TopBottomPanel,
 };
+use egui::ImageSource;
 use egui_extras::{RetainedImage, Size, StripBuilder};
 
 use json::JsonValue;
@@ -42,22 +43,12 @@ pub struct LeftControls {
     regex_search: bool,
 
     //right_collpased:bool,
-    colapse_image: RetainedImage,
-    files_image: RetainedImage,
-    search_image: RetainedImage,
-    new_file: RetainedImage,
-    starred_image: RetainedImage,
-    config_image: RetainedImage,
-    help_image: RetainedImage,
-    switcher_image: RetainedImage,
-    graph_image: RetainedImage,
-    canvas_image: RetainedImage,
-    daynote_image: RetainedImage,
-    command_image: RetainedImage,
-    tasks_image: RetainedImage,
+    //starred_image: RetainedImage,
     rename: String,
     menu_error: String,
 }
+
+const HELP_IMAGE:&str = "../help.png";
 
 impl Default for LeftControls {
     fn default() -> Self {
@@ -69,56 +60,6 @@ impl Default for LeftControls {
             prev_search_string_menu: "".to_owned(),
             search_results: vec![],
             regex_search: false,
-            colapse_image: RetainedImage::from_image_bytes(
-                "colapse",
-                include_bytes!("../colapse.png"),
-            )
-            .unwrap(),
-            files_image: RetainedImage::from_image_bytes("files", include_bytes!("../files.png"))
-                .unwrap(),
-            search_image: RetainedImage::from_image_bytes(
-                "search",
-                include_bytes!("../search.png"),
-            )
-            .unwrap(),
-            new_file: RetainedImage::from_image_bytes("search", include_bytes!("../new_file.png"))
-                .unwrap(),
-            starred_image: RetainedImage::from_image_bytes(
-                "starred",
-                include_bytes!("../starred.png"),
-            )
-            .unwrap(),
-            config_image: RetainedImage::from_image_bytes(
-                "configuration",
-                include_bytes!("../configuration.png"),
-            )
-            .unwrap(),
-            help_image: RetainedImage::from_image_bytes("help", include_bytes!("../help.png"))
-                .unwrap(),
-            switcher_image: RetainedImage::from_image_bytes(
-                "switcher",
-                include_bytes!("../switcher.png"),
-            )
-            .unwrap(),
-            graph_image: RetainedImage::from_image_bytes("graph", include_bytes!("../graph.png"))
-                .unwrap(),
-            canvas_image: RetainedImage::from_image_bytes(
-                "canvas",
-                include_bytes!("../canvas.png"),
-            )
-            .unwrap(),
-            daynote_image: RetainedImage::from_image_bytes(
-                "daynote",
-                include_bytes!("../daynote.png"),
-            )
-            .unwrap(),
-            command_image: RetainedImage::from_image_bytes(
-                "command",
-                include_bytes!("../command.png"),
-            )
-            .unwrap(),
-            tasks_image: RetainedImage::from_image_bytes("tasks", include_bytes!("../tasks.png"))
-                .unwrap(),
         }
     }
 }
@@ -136,9 +77,8 @@ impl LeftControls {
             .min_width(100.)
             .max_width(300.);
         let textures = vec![
-            self.files_image.texture_id(ctx),
-            self.search_image.texture_id(ctx),
-            self.starred_image.texture_id(ctx),
+            egui::include_image!("../search.png"),
+            egui::include_image!("../tasks.png"),
         ];
         left_panel.show_animated(ctx, *colapse, |ui| {
             self.top_panel_menu_left(ui, textures, path, current_file, sort_entrys);
@@ -148,7 +88,7 @@ impl LeftControls {
     fn top_panel_menu_left(
         &mut self,
         ui: &mut egui::Ui,
-        textures: Vec<TextureId>,
+        textures: Vec<ImageSource>,
         path: &str,
         current_file: &mut String,
         sort_entrys: &bool,
@@ -159,7 +99,9 @@ impl LeftControls {
             ui.with_layout(Layout::left_to_right(Align::Min), |ui| {
                 if ui
                     .add(
-                        ImageButton::new(textures[0], egui::vec2(boton_tam, boton_tam))
+                        ImageButton::new(
+            egui::include_image!("../files.png")
+                        )
                             .frame(false),
                     )
                     .clicked()
@@ -168,7 +110,9 @@ impl LeftControls {
                 }
                 if ui
                     .add(
-                        ImageButton::new(textures[1], egui::vec2(boton_tam, boton_tam))
+                        ImageButton::new(
+            egui::include_image!("../search.png")
+                        )
                             .frame(false),
                     )
                     .clicked()
@@ -177,7 +121,9 @@ impl LeftControls {
                 }
                 if ui
                     .add(
-                        ImageButton::new(textures[2], egui::vec2(boton_tam, boton_tam))
+                        ImageButton::new(
+            egui::include_image!("../tasks.png")
+                        )
                             .frame(false),
                     )
                     .clicked()
@@ -328,10 +274,7 @@ impl LeftControls {
             ui.vertical(|ui| {
                 if ui
                     .add(
-                        ImageButton::new(
-                            self.colapse_image.texture_id(ctx),
-                            egui::vec2(18.0, 18.0),
-                        )
+                        ImageButton::new(egui::include_image!("../colapse.png")) // TODO const value & size
                         .frame(false),
                     )
                     .clicked()
@@ -341,10 +284,7 @@ impl LeftControls {
                 ui.add(Separator::default());
                 if ui
                     .add(
-                        ImageButton::new(
-                            self.switcher_image.texture_id(ctx),
-                            egui::vec2(18.0, 18.0),
-                        )
+                        ImageButton::new(egui::include_image!("../switcher.png")) // TODO const value & size
                         .frame(false),
                     )
                     .on_hover_text("Switcher")
@@ -355,8 +295,8 @@ impl LeftControls {
                 ui.add_space(space);
                 if ui
                     .add(
-                        ImageButton::new(self.graph_image.texture_id(ctx), egui::vec2(18.0, 18.0))
-                            .frame(false),
+                        ImageButton::new(egui::include_image!("../graph.png")) // TODO const value & size
+                        .frame(false),
                     )
                     .on_hover_text("Graph")
                     .clicked()
@@ -366,8 +306,8 @@ impl LeftControls {
                 ui.add_space(space);
                 if ui
                     .add(
-                        ImageButton::new(self.canvas_image.texture_id(ctx), egui::vec2(18.0, 18.0))
-                            .frame(false),
+                        ImageButton::new(egui::include_image!("../canvas.png")) // TODO const value & size
+                        .frame(false),
                     )
                     .on_hover_text("Canvas")
                     .clicked()
@@ -377,10 +317,7 @@ impl LeftControls {
                 ui.add_space(space);
                 if ui
                     .add(
-                        ImageButton::new(
-                            self.daynote_image.texture_id(ctx),
-                            egui::vec2(18.0, 18.0),
-                        )
+                        ImageButton::new(egui::include_image!("../daynote.png")) // TODO const value & size
                         .frame(false),
                     )
                     .on_hover_text("Daily note")
@@ -388,26 +325,22 @@ impl LeftControls {
                 {
                     Self::create_date_file(vault, current_file);
                 } //note
-                ui.add_space(space);
+                ui.add_space(space) ;
                 if ui
                     .add(
-                        ImageButton::new(
-                            self.command_image.texture_id(ctx),
-                            egui::vec2(18.0, 18.0),
-                        )
-                        .frame(false),
+                            ImageButton::new(egui::include_image!("../command.png")) // TODO const value & size
+                            .frame(false),
                     )
                     .on_hover_text("Command Palette")
                     .clicked()
                 {
-                    println!("commandpale")
+                    println!("command palette")
                 } //palette
                 ui.add_space(space);
-                if ui
-                    .add(
-                        ImageButton::new(self.new_file.texture_id(ctx), egui::vec2(18.0, 18.0))
+                    if ui.add(
+                            ImageButton::new(egui::include_image!("../new_file.png")) // TODO const value & size
                             .frame(false),
-                    )
+                        )
                     .on_hover_text("New File")
                     .clicked()
                 {
@@ -419,12 +352,8 @@ impl LeftControls {
                 //}
                 ui.with_layout(Layout::bottom_up(Align::Max), |ui| {
                     ui.add_space(5.);
-                    if ui
-                        .add(
-                            ImageButton::new(
-                                self.config_image.texture_id(ctx),
-                                egui::vec2(18.0, 18.0),
-                            )
+                    if ui.add(
+                            ImageButton::new(egui::include_image!("../configuration.png")) // TODO const value & size
                             .frame(false),
                         )
                         .on_hover_text("Configuration")
@@ -433,12 +362,8 @@ impl LeftControls {
                         *current_window = screens::Screen::Configuracion;
                     }
                     ui.add_space(5.);
-                    if ui
-                        .add(
-                            ImageButton::new(
-                                self.help_image.texture_id(ctx),
-                                egui::vec2(18.0, 18.0),
-                            )
+                    if ui.add(
+                            ImageButton::new(egui::include_image!("../help.png")) // TODO const value & size
                             .frame(false),
                         )
                         .on_hover_text("Help")

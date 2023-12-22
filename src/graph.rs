@@ -7,7 +7,7 @@ use std::path::Path;
 use yaml_rust::YamlLoader;
 
 use egui::*;
-use plot::{Line, LineStyle, MarkerShape, Plot, PlotPoint, Points, Text};
+use egui_plot::{Line, LineStyle, MarkerShape, Plot, PlotPoint, Points, Text};
 
 #[derive(Clone)]
 struct MarmolPoint {
