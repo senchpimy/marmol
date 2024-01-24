@@ -5,7 +5,6 @@ use egui::Widget;
 use rfd::FileDialog;
 use std::fs;
 use std::path::Path;
-use yaml_rust::Yaml;
 
 #[derive(PartialEq, Copy, Clone)]
 pub enum Screen {
@@ -145,18 +144,18 @@ pub fn configuracion(
             egui::ScrollArea::vertical().show(ui, |ui| {
                 for i in &mut *vaults {
                     let stri = i.as_str();
-                            if stri == vault {
-                                ui.label(stri);
-                            } else {
-                                let btn = Button::new(stri);
-                                let menu = |ui: &mut egui::Ui| {
-                                    remove_vault(ui, stri, &mut new_vaults, &mut changed)
-                                };
-                                if btn.ui(ui).context_menu(menu).clicked() {
-                                    *vault = String::from(stri);
-                                    *vault_changed = true;
-                                }
-                            }
+                    if stri == vault {
+                        ui.label(stri);
+                    } else {
+                        let btn = Button::new(stri);
+                        let menu = |ui: &mut egui::Ui| {
+                            remove_vault(ui, stri, &mut new_vaults, &mut changed)
+                        };
+                        if btn.ui(ui).context_menu(menu).clicked() {
+                            *vault = String::from(stri);
+                            *vault_changed = true;
+                        }
+                    }
                 }
                 if changed {
                     *vaults = new_vaults;

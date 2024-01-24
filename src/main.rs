@@ -1,13 +1,11 @@
 use egui::*;
 use egui_commonmark::*;
-use egui_extras::RetainedImage;
 use egui_extras::{Size, StripBuilder};
 use std::fmt;
 use std::fs;
 use std::fs::File;
 use std::io::Write;
 use std::path::Path;
-use yaml_rust::Yaml;
 
 #[macro_use]
 extern crate json;
@@ -20,6 +18,7 @@ mod income;
 mod main_area;
 mod screens;
 mod search;
+mod server;
 mod tasks;
 mod toggle_switch;
 
@@ -40,10 +39,14 @@ fn main() -> Result<(), eframe::Error> {
     let options = eframe::NativeOptions {
         ..Default::default()
     };
-    eframe::run_native("Marmol", options, Box::new(|cc| {
+    eframe::run_native(
+        "Marmol",
+        options,
+        Box::new(|cc| {
             egui_extras::install_image_loaders(&cc.egui_ctx);
-        Box::new(Marmol::new(cc))
-    }))
+            Box::new(Marmol::new(cc))
+        }),
+    )
 }
 
 struct Marmol {
@@ -90,8 +93,8 @@ impl Marmol {
     fn new(cc: &eframe::CreationContext<'_>) -> Self {
         let font_size = configuraciones::load_context();
         let ctx = &cc.egui_ctx;
-        ctx.style_mut(|style|{
-        let font_id = FontId::proportional(font_size);
+        ctx.style_mut(|style| {
+            let font_id = FontId::proportional(font_size);
             style.override_font_id = Some(font_id);
         });
         //ctx.set_visuals(configuraciones::load_colors());
@@ -105,7 +108,7 @@ impl Marmol {
 impl Default for Marmol {
     fn default() -> Self {
         let (
-            vault_var, //graph_json_config
+            vault_var,     //graph_json_config
             vault_vec_var, //Vec de diferentes vaults
             current,
             config_path_var,
@@ -117,15 +120,16 @@ impl Default for Marmol {
         let buf: String;
         let is_image_pre;
         println!("{}", current);
-        let buffer_image_pre = if current.ends_with(".png") || current.ends_with("jpeg") || current.ends_with("jpg") {
-            is_image_pre = true;
-            buf = String::from("file");
-            files::read_image(&current)
-        } else {
-            is_image_pre = false;
-            buf = files::read_file(&current);
-            files::read_image("../graph.png")
-        };
+        let buffer_image_pre =
+            if current.ends_with(".png") || current.ends_with("jpeg") || current.ends_with("jpg") {
+                is_image_pre = true;
+                buf = String::from("file");
+                files::read_image(&current)
+            } else {
+                is_image_pre = false;
+                buf = files::read_file(&current);
+                files::read_image("../graph.png")
+            };
         Self {
             tasks: tasks::TasksGui::default(),
             income: income::IncomeGui::default(),
@@ -208,7 +212,7 @@ impl eframe::App for Marmol {
                 }
 
                 if self.is_image {
-                    let image_size = egui::vec2(300.,200.); //TODO get image_size
+                    let image_size = egui::vec2(300., 200.); //TODO get image_size
                     let size: egui::Vec2 = if image_size[0] > 800.0 {
                         let vertical = (800.0 * image_size[1]) / image_size[0];
                         egui::vec2(800.0, vertical)
@@ -219,7 +223,7 @@ impl eframe::App for Marmol {
                     scrolling_buffer.show(ui, |ui| {
                         //ui.add(Image::new(self.buffer_image.texture_id(ctx), size));
                         ui.add(
-                            Image::from_bytes("img",self.buffer_image.clone()) //TODO fix clone
+                            Image::from_bytes("img", self.buffer_image.clone()), //TODO fix clone
                         );
                     });
                 } else {
@@ -362,11 +366,12 @@ impl eframe::App for Marmol {
         //for i in &self.vault_vec {
         //    vec_str = vec_str.to_owned() + format!(" '{}' ,", &i).as_str();
         //}
-    let vec_str: String = self.vault_vec
-    .iter()
-    .map(|item| format!("'{}'", item))
-    .collect::<Vec<String>>()
-    .join(", ");
+        let vec_str: String = self
+            .vault_vec
+            .iter()
+            .map(|item| format!("'{}'", item))
+            .collect::<Vec<String>>()
+            .join(", ");
 
         let dir = Path::new(&self.config_path);
         println!("{}", &self.config_path);

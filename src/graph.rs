@@ -181,7 +181,7 @@ impl Graph {
                         );
                         plot_ui.text(texto);
                     }
-                    if plot_ui.plot_clicked()
+                    if plot_ui.response().clicked()
                         && is_close(plot_ui.pointer_coordinate(), self.points_coord[index], 0.05)
                     {
                         *current_file = format!("{}/{}", vault, &self.points[index].text);

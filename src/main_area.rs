@@ -48,7 +48,7 @@ pub struct LeftControls {
     menu_error: String,
 }
 
-const HELP_IMAGE:&str = "../help.png";
+const HELP_IMAGE: &str = "../help.png";
 
 impl Default for LeftControls {
     fn default() -> Self {
@@ -76,55 +76,44 @@ impl LeftControls {
             .default_width(100.)
             .min_width(100.)
             .max_width(300.);
-        let textures = vec![
-            egui::include_image!("../search.png"),
-            egui::include_image!("../tasks.png"),
-        ];
         left_panel.show_animated(ctx, *colapse, |ui| {
-            self.top_panel_menu_left(ui, textures, path, current_file, sort_entrys);
+            self.top_panel_menu_left(ui, path, current_file, sort_entrys);
         });
     }
 
     fn top_panel_menu_left(
         &mut self,
         ui: &mut egui::Ui,
-        textures: Vec<ImageSource>,
         path: &str,
         current_file: &mut String,
         sort_entrys: &bool,
     ) {
         let vault = path;
-        let boton_tam = 22.;
+        let boton_tam = 22.; // TODO relative size
         TopBottomPanel::top("Left Menu").show_inside(ui, |ui| {
             ui.with_layout(Layout::left_to_right(Align::Min), |ui| {
                 if ui
-                    .add(
-                        ImageButton::new(
-            egui::include_image!("../files.png")
-                        )
-                            .frame(false),
+                    .add_sized(
+                        egui::vec2(boton_tam, boton_tam),
+                        ImageButton::new(egui::include_image!("../files.png")).frame(false),
                     )
                     .clicked()
                 {
                     self.current_left_tab = LeftTab::Files;
                 }
                 if ui
-                    .add(
-                        ImageButton::new(
-            egui::include_image!("../search.png")
-                        )
-                            .frame(false),
+                    .add_sized(
+                        egui::vec2(boton_tam, boton_tam),
+                        ImageButton::new(egui::include_image!("../search.png")).frame(false),
                     )
                     .clicked()
                 {
                     self.current_left_tab = LeftTab::Search;
                 }
                 if ui
-                    .add(
-                        ImageButton::new(
-            egui::include_image!("../tasks.png")
-                        )
-                            .frame(false),
+                    .add_sized(
+                        egui::vec2(boton_tam, boton_tam),
+                        ImageButton::new(egui::include_image!("../tasks.png")).frame(false),
                     )
                     .clicked()
                 {
@@ -273,9 +262,10 @@ impl LeftControls {
             ui.add_space(5.);
             ui.vertical(|ui| {
                 if ui
-                    .add(
+                    .add_sized(
+                        egui::vec2(30., 30.), // TODO relative size
                         ImageButton::new(egui::include_image!("../colapse.png")) // TODO const value & size
-                        .frame(false),
+                            .frame(false),
                     )
                     .clicked()
                 {
@@ -285,7 +275,7 @@ impl LeftControls {
                 if ui
                     .add(
                         ImageButton::new(egui::include_image!("../switcher.png")) // TODO const value & size
-                        .frame(false),
+                            .frame(false),
                     )
                     .on_hover_text("Switcher")
                     .clicked()
@@ -296,7 +286,7 @@ impl LeftControls {
                 if ui
                     .add(
                         ImageButton::new(egui::include_image!("../graph.png")) // TODO const value & size
-                        .frame(false),
+                            .frame(false),
                     )
                     .on_hover_text("Graph")
                     .clicked()
@@ -307,7 +297,7 @@ impl LeftControls {
                 if ui
                     .add(
                         ImageButton::new(egui::include_image!("../canvas.png")) // TODO const value & size
-                        .frame(false),
+                            .frame(false),
                     )
                     .on_hover_text("Canvas")
                     .clicked()
@@ -318,17 +308,17 @@ impl LeftControls {
                 if ui
                     .add(
                         ImageButton::new(egui::include_image!("../daynote.png")) // TODO const value & size
-                        .frame(false),
+                            .frame(false),
                     )
                     .on_hover_text("Daily note")
                     .clicked()
                 {
                     Self::create_date_file(vault, current_file);
                 } //note
-                ui.add_space(space) ;
+                ui.add_space(space);
                 if ui
                     .add(
-                            ImageButton::new(egui::include_image!("../command.png")) // TODO const value & size
+                        ImageButton::new(egui::include_image!("../command.png")) // TODO const value & size
                             .frame(false),
                     )
                     .on_hover_text("Command Palette")
@@ -337,10 +327,11 @@ impl LeftControls {
                     println!("command palette")
                 } //palette
                 ui.add_space(space);
-                    if ui.add(
-                            ImageButton::new(egui::include_image!("../new_file.png")) // TODO const value & size
+                if ui
+                    .add(
+                        ImageButton::new(egui::include_image!("../new_file.png")) // TODO const value & size
                             .frame(false),
-                        )
+                    )
                     .on_hover_text("New File")
                     .clicked()
                 {
@@ -352,9 +343,10 @@ impl LeftControls {
                 //}
                 ui.with_layout(Layout::bottom_up(Align::Max), |ui| {
                     ui.add_space(5.);
-                    if ui.add(
+                    if ui
+                        .add(
                             ImageButton::new(egui::include_image!("../configuration.png")) // TODO const value & size
-                            .frame(false),
+                                .frame(false),
                         )
                         .on_hover_text("Configuration")
                         .clicked()
@@ -362,9 +354,10 @@ impl LeftControls {
                         *current_window = screens::Screen::Configuracion;
                     }
                     ui.add_space(5.);
-                    if ui.add(
+                    if ui
+                        .add(
                             ImageButton::new(egui::include_image!("../help.png")) // TODO const value & size
-                            .frame(false),
+                                .frame(false),
                         )
                         .on_hover_text("Help")
                         .clicked()
