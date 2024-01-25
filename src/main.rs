@@ -28,6 +28,10 @@ enum NewFileType {
     Income,
     Tasks,
 }
+struct MShape {
+    height: f32,
+    width: f32,
+}
 
 impl fmt::Display for NewFileType {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -71,6 +75,7 @@ struct Marmol {
     vault: String,
     vault_vec: Vec<String>,
     current_file: String,
+    window_size: MShape,
 
     create_new_vault: bool,
     create_file_error: String,
@@ -131,6 +136,10 @@ impl Default for Marmol {
                 files::read_image("../graph.png")
             };
         Self {
+            window_size: MShape {
+                height: 0.,
+                width: 0.,
+            },
             tasks: tasks::TasksGui::default(),
             income: income::IncomeGui::default(),
             center_size,
@@ -170,6 +179,16 @@ impl Default for Marmol {
 
 impl eframe::App for Marmol {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        ctx.input(|i| match i.viewport().outer_rect {
+            Some(a) => {
+                //a.min; // Position
+                self.window_size = MShape {
+                    width: a.max.x,
+                    height: a.max.y,
+                };
+            }
+            None => {}
+        });
         if self.current_window == screens::Screen::Default {
             //welcome screen
             screens::default(
@@ -189,6 +208,7 @@ impl eframe::App for Marmol {
                 &mut self.current_file,
                 &mut self.current_window,
                 &mut self.content,
+                &self.window_size,
             );
             self.left_controls.left_side_menu(
                 ctx,
@@ -199,11 +219,14 @@ impl eframe::App for Marmol {
             );
             CentralPanel::default().show(ctx, |ui| {
                 if self.prev_current_file != self.current_file {
-                    self.prev_current_file = String::from(&self.current_file);
+                    self.prev_current_file = self.current_file.clone();
                     if self.current_file.ends_with(".png")
                         || self.current_file.ends_with("jpeg")
                         || self.current_file.ends_with("jpg")
                     {
+                        println!("IMAGEN ABIERTA");
+                        println!("{}", &self.current_file);
+                        self.buffer_image = Vec::new();
                         self.buffer_image = files::read_image(&self.current_file);
                         self.is_image = true;
                     } else {
@@ -212,25 +235,22 @@ impl eframe::App for Marmol {
                 }
 
                 if self.is_image {
-                    let image_size = egui::vec2(300., 200.); //TODO get image_size
-                    let size: egui::Vec2 = if image_size[0] > 800.0 {
-                        let vertical = (800.0 * image_size[1]) / image_size[0];
-                        egui::vec2(800.0, vertical)
-                    } else {
-                        image_size
+                    let mut img = Image::from_bytes("", self.buffer_image.clone());
+                    let image_size = img.size().unwrap_or(egui::Vec2::default()); // If its loaded
+                                                                                  // by texture iy will return none
+                    if image_size[0] > self.window_size.width {
+                        img = img.max_width(self.window_size.width);
                     };
                     let scrolling_buffer = ScrollArea::vertical();
-                    scrolling_buffer.show(ui, |ui| {
-                        //ui.add(Image::new(self.buffer_image.texture_id(ctx), size));
-                        ui.add(
-                            Image::from_bytes("img", self.buffer_image.clone()), //TODO fix clone
-                        );
+                    scrolling_buffer.show(ui, move |ui| {
+                        ui.add(img);
                     });
                 } else {
                     self.buffer = files::read_file(&self.current_file);
                     self.text_edit = self.buffer.clone();
                     //Principal
                     CentralPanel::default().show(ctx, |ui| {
+                        //TODO ADD TABS HERE
                         if self.renderfile {
                             egui::TopBottomPanel::top("tabs").show_inside(ui, |ui| {
                                 ui.with_layout(
@@ -333,7 +353,7 @@ impl eframe::App for Marmol {
                 }
             });
         } else if self.current_window == screens::Screen::Configuracion {
-            //configuration
+            //TODO fix this mess
             screens::configuracion(
                 ctx,
                 &mut self.prev_window,
@@ -360,6 +380,7 @@ impl eframe::App for Marmol {
         /////////////////////////////////////////////////////////////////////////////////
     }
 
+    //TODO replace with serde?
     fn on_exit(&mut self, _gl: Option<&eframe::glow::Context>) {
         let vault_str = format!("vault: '{}'", &self.vault);
         //let mut vec_str = String::new();
@@ -376,7 +397,7 @@ impl eframe::App for Marmol {
         let dir = Path::new(&self.config_path);
         println!("{}", &self.config_path);
         if !dir.exists() {
-            fs::create_dir(&self.config_path);
+            _ = fs::create_dir(&self.config_path);
         }
         let vault_vec_str = format!("vault_vec: [ {} ]", vec_str);
         let file_path = String::from(&self.config_path) + "/ProgramState";
@@ -400,7 +421,6 @@ impl eframe::App for Marmol {
 }
 
 impl Marmol {
-    //fn new_file(&mut self,ui:&mut Ui,selected:NewFileType,enter_clicked:bool){
     fn new_file(&mut self, ui: &mut Ui, enter_clicked: bool) {
         ui.label("Create New File");
         ui.add(egui::TextEdit::singleline(&mut self.new_file_str));
