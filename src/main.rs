@@ -19,6 +19,7 @@ mod main_area;
 mod screens;
 mod search;
 mod server;
+mod tabs;
 mod tasks;
 mod toggle_switch;
 
@@ -54,10 +55,8 @@ fn main() -> Result<(), eframe::Error> {
 }
 
 struct Marmol {
-    buffer: String,
     prev_current_file: String,
     new_vault_str: String,
-    //tabs: Vec<tabs::Tab>,
     content: main_area::Content,
     text_edit: String,
 
@@ -87,6 +86,7 @@ struct Marmol {
     center_size: f32,
     center_size_remain: f32,
     sort_files: bool,
+    tabs: tabs::Tabs,
 
     new_file_type: NewFileType,
     marker: graph::Graph,
@@ -140,6 +140,7 @@ impl Default for Marmol {
                 height: 0.,
                 width: 0.,
             },
+            tabs: tabs::Tabs::new(current.clone()),
             tasks: tasks::TasksGui::default(),
             income: income::IncomeGui::default(),
             center_size,
@@ -159,7 +160,6 @@ impl Default for Marmol {
             current_window: window,
             prev_window: window,
             prev_current_file: current.to_owned(),
-            buffer: buf.clone(),
             text_edit: buf,
             buffer_image: buffer_image_pre,
             commoncache: CommonMarkCache::default(),
@@ -235,18 +235,13 @@ impl eframe::App for Marmol {
                 }
 
                 if self.is_image {
-                    let mut img = Image::from_bytes("", self.buffer_image.clone());
-                    let image_size = img.size().unwrap_or(egui::Vec2::default()); // If its loaded
-                                                                                  // by texture iy will return none
-                    if image_size[0] > self.window_size.width {
-                        img = img.max_width(self.window_size.width);
-                    };
-                    let scrolling_buffer = ScrollArea::vertical();
-                    scrolling_buffer.show(ui, move |ui| {
-                        ui.add(img);
+                    ScrollArea::vertical().show(ui, |ui| {
+                        add_image(ui, &self.buffer_image);
                     });
                 } else {
-                    self.buffer = files::read_file(&self.current_file);
+                    //let mut tapbs = tabs::MyTabs::new();
+                    self.tabs.ui(ui);
+                    /*self.buffer = files::read_file(&self.current_file);
                     self.text_edit = self.buffer.clone();
                     //Principal
                     CentralPanel::default().show(ctx, |ui| {
@@ -313,32 +308,7 @@ impl eframe::App for Marmol {
                         } else if self.current_file.ends_with(".inc") {
                             self.income.set_path(&self.current_file);
                             self.income.show(ui);
-                        } else if self.content == main_area::Content::View {
-                            if ctx.input(|i| i.key_pressed(Key::F)) {
-                                println!("Search");
-                            }
-                            let cont = StripBuilder::new(ui)
-                                .size(Size::relative(self.center_size_remain))
-                                .size(Size::relative(self.center_size));
-                            cont.horizontal(|mut strip| {
-                                strip.cell(|_| {});
-                                strip.cell(|ui| {
-                                    egui::ScrollArea::vertical().show(ui, |ui| {
-                                        let header =
-                                            Path::new(&self.current_file).file_name().unwrap();
-                                        let (content, metadata) = files::contents(&self.buffer);
-                                        ui.heading(header.to_str().unwrap());
-                                        if !metadata.is_empty() {
-                                            main_area::create_metadata(metadata, ui);
-                                        }
-                                        CommonMarkViewer::new("v").show(
-                                            ui,
-                                            &mut self.commoncache,
-                                            &content,
-                                        );
-                                    });
-                                });
-                            });
+
                         } else if self.content == main_area::Content::Graph {
                             self.marker.ui(
                                 ui,
@@ -349,7 +319,7 @@ impl eframe::App for Marmol {
                             self.marker.controls(ctx);
                         }
                     }); //termina CentralPanel
-                        //Termina Principal
+                        //Termina Principal*/
                 }
             });
         } else if self.current_window == screens::Screen::Configuracion {
@@ -476,4 +446,16 @@ impl Marmol {
             self.new_file_str = String::new();
         }
     }
+}
+
+//fn add_image<'a>(ui: &'a mut egui::Ui, vec: &'a Vec<u8>) -> Image<'a> {
+fn add_image(ui: &mut egui::Ui, vec: &Vec<u8>) {
+    let mut img = Image::from_bytes("", vec.clone());
+    let image_size = img.size().unwrap_or(egui::Vec2::default()); // If its loaded
+                                                                  // with bytes it will return none
+                                                                  //if image_size[0] > self.window_size.width {
+                                                                  //    img = img.max_width(self.window_size.width);
+    ui.add(img);
+    //};
+    //img
 }
