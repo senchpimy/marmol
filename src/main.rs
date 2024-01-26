@@ -1,6 +1,4 @@
 use egui::*;
-use egui_commonmark::*;
-use egui_extras::{Size, StripBuilder};
 use std::fmt;
 use std::fs;
 use std::fs::File;
@@ -58,14 +56,9 @@ struct Marmol {
     prev_current_file: String,
     new_vault_str: String,
     content: main_area::Content,
-    text_edit: String,
 
     current_window: screens::Screen,
     prev_window: screens::Screen,
-    buffer_image: Vec<u8>,
-    commoncache: CommonMarkCache,
-    renderfile: bool,
-    is_image: bool,
     config_path: String,
     left_controls: main_area::LeftControls,
     new_file_str: String,
@@ -90,8 +83,6 @@ struct Marmol {
 
     new_file_type: NewFileType,
     marker: graph::Graph,
-    tasks: tasks::TasksGui,
-    income: income::IncomeGui,
 }
 
 impl Marmol {
@@ -122,27 +113,13 @@ impl Default for Marmol {
             center_size,
             sort_files,
         ) = configuraciones::load_vault();
-        let buf: String;
-        let is_image_pre;
         println!("{}", current);
-        let buffer_image_pre =
-            if current.ends_with(".png") || current.ends_with("jpeg") || current.ends_with("jpg") {
-                is_image_pre = true;
-                buf = String::from("file");
-                files::read_image(&current)
-            } else {
-                is_image_pre = false;
-                buf = files::read_file(&current);
-                files::read_image("../graph.png")
-            };
         Self {
             window_size: MShape {
                 height: 0.,
                 width: 0.,
             },
             tabs: tabs::Tabs::new(current.clone()),
-            tasks: tasks::TasksGui::default(),
-            income: income::IncomeGui::default(),
             center_size,
             center_size_remain: (1.0 - center_size) / 2.0,
             font_size: 12.0,
@@ -154,16 +131,11 @@ impl Default for Marmol {
             new_vault_folder_err: String::from(""),
             new_vault_str: String::from(""),
             config_path: config_path_var.to_owned(),
-            renderfile: true,
             create_new_vault: false,
             show_create_button: false,
             current_window: window,
             prev_window: window,
             prev_current_file: current.to_owned(),
-            text_edit: buf,
-            buffer_image: buffer_image_pre,
-            commoncache: CommonMarkCache::default(),
-            is_image: is_image_pre,
             create_file_error: String::new(),
             vault: vault_var,
             vault_vec: vault_vec_var,
@@ -219,108 +191,48 @@ impl eframe::App for Marmol {
             );
             CentralPanel::default().show(ctx, |ui| {
                 if self.prev_current_file != self.current_file {
-                    self.prev_current_file = self.current_file.clone();
-                    if self.current_file.ends_with(".png")
-                        || self.current_file.ends_with("jpeg")
-                        || self.current_file.ends_with("jpg")
-                    {
-                        println!("IMAGEN ABIERTA");
-                        println!("{}", &self.current_file);
-                        self.buffer_image = Vec::new();
-                        self.buffer_image = files::read_image(&self.current_file);
-                        self.is_image = true;
-                    } else {
-                        self.is_image = false;
-                    }
+                    self.prev_current_file = self.current_file.clone(); //TODO remove
+                    {}
                 }
-
-                if self.is_image {
-                    ScrollArea::vertical().show(ui, |ui| {
-                        add_image(ui, &self.buffer_image);
-                    });
-                } else {
-                    //let mut tapbs = tabs::MyTabs::new();
-                    self.tabs.ui(ui);
-                    /*self.buffer = files::read_file(&self.current_file);
-                    self.text_edit = self.buffer.clone();
-                    //Principal
-                    CentralPanel::default().show(ctx, |ui| {
-                        //TODO ADD TABS HERE
-                        if self.renderfile {
-                            egui::TopBottomPanel::top("tabs").show_inside(ui, |ui| {
-                                ui.with_layout(
-                                    egui::Layout::right_to_left(egui::Align::TOP),
-                                    |ui| {
-                                        if self.content != main_area::Content::NewFile {
-                                            ui.label("✏");
-                                            ui.add(toggle_switch::toggle(&mut self.content));
-                                            ui.label(
-                                                RichText::new("👁")
-                                                    .font(FontId::proportional(self.font_size)),
-                                            );
-                                        }
-                                    },
-                                );
-                            });
-                        }
-                        if self.content == main_area::Content::Edit {
-                            let cont = StripBuilder::new(ui)
-                                .size(Size::relative(self.center_size_remain))
-                                .size(Size::relative(self.center_size));
-                            cont.horizontal(|mut strip| {
-                                strip.cell(|_| {});
-                                strip.cell(|ui| {
-                                    egui::ScrollArea::vertical().show(ui, |ui| {
-                                        let zone = egui::TextEdit::multiline(&mut self.text_edit)
-                                            .font(FontId::proportional(15.0));
-                                        let response = ui.add_sized(ui.available_size(), zone);
-                                        if response.changed() {
-                                            let mut f = std::fs::OpenOptions::new()
-                                                .write(true)
-                                                .truncate(true)
-                                                .open(&self.current_file)
-                                                .unwrap();
-                                            f.write_all(self.text_edit.as_bytes()).unwrap();
-                                            f.flush().unwrap();
-                                        }
-                                        if ctx.input(|i| i.key_pressed(Key::Enter))
-                                            && response.has_focus()
-                                        {
-                                            let mut f = std::fs::OpenOptions::new()
-                                                .write(true)
-                                                .truncate(true)
-                                                .open(&self.current_file)
-                                                .unwrap();
-                                            f.write_all(format::indent(&self.text_edit).as_bytes())
-                                                .unwrap();
-                                            f.flush().unwrap();
-                                        }
-                                    });
-                                });
-                            });
-                        //}else if self.content == main_area::Content::NewTask{
-                        //    self.new_file(ui,ctx.input(|i| i.key_pressed(Key::Enter)));
-                        } else if self.content == main_area::Content::NewFile {
-                            self.new_file(ui, ctx.input(|i| i.key_pressed(Key::Enter)));
-                        } else if self.current_file.ends_with(".graph") {
-                            self.tasks.set_path(&self.current_file);
-                            self.tasks.show(ui);
-                        } else if self.current_file.ends_with(".inc") {
-                            self.income.set_path(&self.current_file);
-                            self.income.show(ui);
-
-                        } else if self.content == main_area::Content::Graph {
-                            self.marker.ui(
-                                ui,
-                                &mut self.current_file,
-                                &mut self.content,
-                                &self.vault,
+                self.tabs.ui(ui);
+                if self.content == main_area::Content::NewFile {
+                    self.new_file(ui, ctx.input(|i| i.key_pressed(Key::Enter)));
+                }
+                /*self.buffer = files::read_file(&self.current_file);
+                self.text_edit = self.buffer.clone();
+                //Principal
+                CentralPanel::default().show(ctx, |ui| {
+                    //TODO ADD TABS HERE
+                    if self.renderfile {
+                        egui::TopBottomPanel::top("tabs").show_inside(ui, |ui| {
+                            ui.with_layout(
+                                egui::Layout::right_to_left(egui::Align::TOP),
+                                |ui| {
+                                    if self.content != main_area::Content::NewFile {
+                                        ui.label("✏");
+                                        ui.add(toggle_switch::toggle(&mut self.content));
+                                        ui.label(
+                                            RichText::new("👁")
+                                                .font(FontId::proportional(self.font_size)),
+                                        );
+                                    }
+                                },
                             );
-                            self.marker.controls(ctx);
-                        }
-                    }); //termina CentralPanel
-                        //Termina Principal*/
-                }
+                        });
+                    }
+                    //}else if self.content == main_area::Content::NewTask{
+                    //    self.new_file(ui,ctx.input(|i| i.key_pressed(Key::Enter)));
+                    } else if self.content == main_area::Content::Graph {
+                        self.marker.ui(
+                            ui,
+                            &mut self.current_file,
+                            &mut self.content,
+                            &self.vault,
+                        );
+                        self.marker.controls(ctx);
+                    }
+                }); //termina CentralPanel
+                    //Termina Principal*/
             });
         } else if self.current_window == screens::Screen::Configuracion {
             //TODO fix this mess
@@ -446,16 +358,4 @@ impl Marmol {
             self.new_file_str = String::new();
         }
     }
-}
-
-//fn add_image<'a>(ui: &'a mut egui::Ui, vec: &'a Vec<u8>) -> Image<'a> {
-fn add_image(ui: &mut egui::Ui, vec: &Vec<u8>) {
-    let mut img = Image::from_bytes("", vec.clone());
-    let image_size = img.size().unwrap_or(egui::Vec2::default()); // If its loaded
-                                                                  // with bytes it will return none
-                                                                  //if image_size[0] > self.window_size.width {
-                                                                  //    img = img.max_width(self.window_size.width);
-    ui.add(img);
-    //};
-    //img
 }
