@@ -2,6 +2,7 @@ use crate::files;
 use crate::income;
 use crate::main_area;
 use crate::tasks;
+use egui::epaint::image;
 use egui::Image;
 use egui::{FontId, Ui, WidgetText};
 use egui_commonmark::*;
@@ -22,6 +23,7 @@ struct Tabe {
     common_mark_c: CommonMarkCache,
     income: income::IncomeGui,
     tasks: tasks::TasksGui,
+    //image:Option<Image<'static>>
     buffer_image: Vec<u8>,
 }
 
@@ -44,6 +46,7 @@ impl Tabe {
             common_mark_c: CommonMarkCache::default(),
             income: income::IncomeGui::default(),
             tasks: tasks::TasksGui::default(),
+            //image:None
             buffer_image: Vec::new(),
         }
     }
@@ -65,20 +68,29 @@ impl TabViewer for MTabViewer<'_> {
         //if ctx.input(|i| i.key_pressed(Key::F)) {
         //    println!("Search");
         //}
-        if tab.path.ends_with(".png") || tab.path.ends_with("jpeg") || tab.path.ends_with("jpg") {
+        if (tab.path.ends_with(".png") || tab.path.ends_with("jpeg") || tab.path.ends_with("jpg")) && true {
             tab.buffer_image = Vec::new();
             tab.buffer_image = files::read_image(&tab.path);
+            //tab.image = Some(Image::from_uri(tab.path.clone()));
             tab.is_image = true;
+            //println!("{}",tab.path);
         } else {
             tab.is_image = false;
         }
+
         if tab.is_image {
-            egui::ScrollArea::vertical().show(ui, |ui| {
-                add_image(ui, &tab.buffer_image);
-            });
-            return;
-        }
-        if tab.ctype == main_area::Content::View {
+           // match tab.image.clone() {
+           //     Some(x)=>{
+           //         ui.add(x.clone());//TODO ?????
+           //     }
+           //     None=>{}
+           // }
+            egui::ScrollArea::vertical()
+                .id_source(format!("{}", tab.id))
+                .show(ui, |ui| {
+                    add_image(ui, &tab.buffer_image, tab.id);
+                });
+        }else if tab.ctype == main_area::Content::View {
             let cont = StripBuilder::new(ui)
                 .size(Size::relative(0.3))
                 .size(Size::relative(0.3));
@@ -178,11 +190,21 @@ impl Tabs {
                 .push_to_focused_leaf(Tabe::new(self.counter, cloned_path));
         });
     }
+
+    pub fn file_changed(&mut self,path:String){
+        match self.tree.find_active_focused() {
+            None=>{},
+            Some((_,obj))=>{
+                obj.path= path;
+                //self.tree.push_to_focused_leaf(Tabe::new(1, path));
+            }
+        }
+    }
 }
 
 //fn add_image<'a>(ui: &'a mut egui::Ui, vec: &'a Vec<u8>) -> Image<'a> {
-fn add_image(ui: &mut egui::Ui, vec: &Vec<u8>) {
-    let mut img = Image::from_bytes("", vec.clone());
+fn add_image(ui: &mut egui::Ui, vec: &Vec<u8>, id: usize) {
+    let mut img = Image::from_bytes(format!("{id}"), vec.clone());
     let image_size = img.size().unwrap_or(egui::Vec2::default()); // If its loaded
                                                                   // with bytes it will return none
                                                                   //if image_size[0] > self.window_size.width {

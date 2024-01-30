@@ -1,7 +1,7 @@
 ### TODO
 - Backup sever
-- Tabs
-- Split window
+- [x] Tabs
+- [x] Split window
 - Canvas
 - Color scheme/themes
 
@@ -27,3 +27,4 @@
 - Handle no file in current
 - Create and save file for first time
 - copy files between vaults
+- Memory issue on images

@@ -192,34 +192,17 @@ impl eframe::App for Marmol {
             CentralPanel::default().show(ctx, |ui| {
                 if self.prev_current_file != self.current_file {
                     self.prev_current_file = self.current_file.clone(); //TODO remove
-                    {}
+                    {
+                        self.tabs.file_changed(self.current_file.clone());
+                    }
                 }
                 self.tabs.ui(ui);
                 if self.content == main_area::Content::NewFile {
                     self.new_file(ui, ctx.input(|i| i.key_pressed(Key::Enter)));
                 }
                 /*self.buffer = files::read_file(&self.current_file);
-                self.text_edit = self.buffer.clone();
-                //Principal
-                CentralPanel::default().show(ctx, |ui| {
-                    //TODO ADD TABS HERE
-                    if self.renderfile {
-                        egui::TopBottomPanel::top("tabs").show_inside(ui, |ui| {
-                            ui.with_layout(
-                                egui::Layout::right_to_left(egui::Align::TOP),
-                                |ui| {
-                                    if self.content != main_area::Content::NewFile {
                                         ui.label("✏");
-                                        ui.add(toggle_switch::toggle(&mut self.content));
-                                        ui.label(
                                             RichText::new("👁")
-                                                .font(FontId::proportional(self.font_size)),
-                                        );
-                                    }
-                                },
-                            );
-                        });
-                    }
                     //}else if self.content == main_area::Content::NewTask{
                     //    self.new_file(ui,ctx.input(|i| i.key_pressed(Key::Enter)));
                     } else if self.content == main_area::Content::Graph {
