@@ -21,7 +21,7 @@ serde = { version = "1.0.126", features = ["derive"] }
 
 
 #egui = { git = "https://github.com/senchpimy/egui", rev="d99fac7" }
-egui_extras = { version = "0.25", features = ["image"] }
+egui_extras = { version = "0.25", features = ["image","file"] }
 #egui_extras = {git = "https://github.com/senchpimy/egui", rev="d99fac7", features = ["image"]}
 filebuffer = "0.4.0"
 image = { version = "0.24.5", default-features = false, features = [

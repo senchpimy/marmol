@@ -2,7 +2,6 @@ use crate::files;
 use crate::income;
 use crate::main_area;
 use crate::tasks;
-use egui::epaint::image;
 use egui::Image;
 use egui::{FontId, Ui, WidgetText};
 use egui_commonmark::*;
@@ -23,8 +22,6 @@ struct Tabe {
     common_mark_c: CommonMarkCache,
     income: income::IncomeGui,
     tasks: tasks::TasksGui,
-    //image:Option<Image<'static>>
-    buffer_image: Vec<u8>,
 }
 
 impl Tabe {
@@ -46,8 +43,6 @@ impl Tabe {
             common_mark_c: CommonMarkCache::default(),
             income: income::IncomeGui::default(),
             tasks: tasks::TasksGui::default(),
-            //image:None
-            buffer_image: Vec::new(),
         }
     }
 }
@@ -68,27 +63,18 @@ impl TabViewer for MTabViewer<'_> {
         //if ctx.input(|i| i.key_pressed(Key::F)) {
         //    println!("Search");
         //}
-        if (tab.path.ends_with(".png") || tab.path.ends_with("jpeg") || tab.path.ends_with("jpg")) && true {
-            tab.buffer_image = Vec::new();
-            tab.buffer_image = files::read_image(&tab.path);
-            //tab.image = Some(Image::from_uri(tab.path.clone()));
+        if tab.path.ends_with(".png") || tab.path.ends_with("jpeg") || tab.path.ends_with("jpg") {
             tab.is_image = true;
-            //println!("{}",tab.path);
         } else {
             tab.is_image = false;
         }
 
         if tab.is_image {
-           // match tab.image.clone() {
-           //     Some(x)=>{
-           //         ui.add(x.clone());//TODO ?????
-           //     }
-           //     None=>{}
-           // }
             egui::ScrollArea::vertical()
                 .id_source(format!("{}", tab.id))
                 .show(ui, |ui| {
-                    add_image(ui, &tab.buffer_image, tab.id);
+                    let img = Image::from_uri(format!("file://{}",&tab.path));
+                    ui.add(img);
                 });
         }else if tab.ctype == main_area::Content::View {
             let cont = StripBuilder::new(ui)
@@ -98,7 +84,8 @@ impl TabViewer for MTabViewer<'_> {
                 strip.cell(|_| {});
                 strip.cell(|ui| {
                     egui::ScrollArea::vertical().show(ui, |ui| {
-                        tab.content = files::read_file(&tab.path); //TODO Read Just once
+                        tab.content = files::read_file(&tab.path);  //Reading every time == listen
+                                                                    //changes
                         let (content, metadata) = files::contents(&tab.content);
                         ui.heading(&tab.title);
                         if !metadata.is_empty() {
@@ -195,21 +182,8 @@ impl Tabs {
         match self.tree.find_active_focused() {
             None=>{},
             Some((_,obj))=>{
-                obj.path= path;
-                //self.tree.push_to_focused_leaf(Tabe::new(1, path));
+                obj.path= path; //Change tittle
             }
         }
     }
-}
-
-//fn add_image<'a>(ui: &'a mut egui::Ui, vec: &'a Vec<u8>) -> Image<'a> {
-fn add_image(ui: &mut egui::Ui, vec: &Vec<u8>, id: usize) {
-    let mut img = Image::from_bytes(format!("{id}"), vec.clone());
-    let image_size = img.size().unwrap_or(egui::Vec2::default()); // If its loaded
-                                                                  // with bytes it will return none
-                                                                  //if image_size[0] > self.window_size.width {
-                                                                  //    img = img.max_width(self.window_size.width);
-    ui.add(img);
-    //};
-    //img
 }
