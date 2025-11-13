@@ -1,6 +1,6 @@
 use crate::screens;
 use directories::BaseDirs;
-use egui::{style, Color32, Rounding, Stroke};
+use egui::{style, Color32, CornerRadius, Rounding, Stroke};
 use json;
 use std::fs;
 use std::path::Path;
@@ -150,7 +150,7 @@ pub fn load_colors() -> style::Visuals {
             width: 5.0,
             color: Color32::GREEN,
         },
-        rounding: Rounding::default(),
+        corner_radius: CornerRadius::default(),
         fg_stroke: Stroke {
             width: 5.0,
             color: Color32::RED,
@@ -165,7 +165,7 @@ pub fn load_colors() -> style::Visuals {
             width: 5.0,
             color: Color32::GREEN,
         },
-        rounding: Rounding::default(),
+        corner_radius: CornerRadius::default(),
         fg_stroke: Stroke {
             width: 5.0,
             color: Color32::RED,

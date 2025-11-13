@@ -151,7 +151,7 @@ pub fn configuracion(
                         let menu = |ui: &mut egui::Ui| {
                             remove_vault(ui, stri, &mut new_vaults, &mut changed)
                         };
-                        if btn.ui(ui).context_menu(menu).clicked() {
+                        if btn.ui(ui).context_menu(menu).unwrap().response.clicked() {
                             *vault = String::from(stri);
                             *vault_changed = true;
                         }
@@ -216,4 +216,4 @@ fn remove_vault(ui: &mut egui::Ui, s: &str, vec: &mut Vec<String>, changed: &mut
     ui.label("This doens't delete the folder from your system, just from the program acces");
 }
 
-pub fn set_server(ctx: &egui::Context) {}
+pub fn set_server(_ctx: &egui::Context) {}

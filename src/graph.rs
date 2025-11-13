@@ -41,7 +41,8 @@ impl MarmolPoint {
 
 impl Graph {
     pub fn new(vault: &str) -> Self {
-        let mut tags_hashmap = HashMap::new();
+        //let mut tags_hashmap = HashMap::new();
+        let tags_hashmap = HashMap::new();
         //let mut tags = vec![];
         let colors_vec = vec![
             Color32::from_rgb(235, 64, 52),
@@ -53,7 +54,7 @@ impl Graph {
             Color32::from_rgb(38, 28, 128),
             Color32::from_rgb(128, 28, 101),
         ];
-        //tags_hashmap.insert(tags[0].clone(),colors_vec[0]);
+        //tags_hashmap.insert(tags[0].clone(), colors_vec[0]);
         //tags_hashmap.insert(tags[1].clone(),colors_vec[1]);
         //tags_hashmap.insert(tags[2].clone(),colors_vec[2]);
         let mut data = vec![];
@@ -99,7 +100,7 @@ impl Graph {
             ui.add(egui::Slider::new(&mut self.repel_force, 5.0..=20.0));
             ui.label("Center force");
             ui.add(egui::Slider::new(&mut self.center_force, 5.0..=20.0));
-            let mut j = 0;
+            let mut _j = 0;
             for i in self.tags_colors.clone().into_keys() {
                 ui.horizontal(|ui| {
                     match self.tags_colors.get(&i) {
@@ -115,7 +116,7 @@ impl Graph {
                     }
                     ui.label(i);
                 });
-                j += 1;
+                _j += 1;
             }
             for key in self.tags_colors.clone().into_keys() {
                 if self.tags_colors.get(&key) != self.prev_tags_colors.get(&key) {
@@ -161,10 +162,13 @@ impl Graph {
                 }
                 for point in &self.points {
                     let point_color = self.tags_to_color(&point.tags);
-                    let punto = Points::new([
-                        self.points_coord[index].0 as f64,
-                        self.points_coord[index].1 as f64,
-                    ])
+                    let punto = Points::new(
+                        "",
+                        [
+                            self.points_coord[index].0 as f64,
+                            self.points_coord[index].1 as f64,
+                        ],
+                    )
                     .radius(9.0)
                     .color(point_color)
                     .shape(MarkerShape::Circle);
@@ -173,6 +177,7 @@ impl Graph {
                     let diff = bounds.max()[1] - bounds.min()[1];
                     if diff < 6.0 {
                         let texto = Text::new(
+                            "",
                             PlotPoint::new(
                                 self.points_coord[index].0,
                                 (self.points_coord[index].1) - (diff * 0.02) as f32,
@@ -268,12 +273,12 @@ fn get_data(dir: &Path, marmol_vec: &mut Vec<MarmolPoint>, total_entries: &mut i
                     *total_entries += 1;
                     let content = files::read_file(path.to_str().unwrap());
                     let (content, _) = files::contents(&content);
-                    let content = YamlLoader::load_from_str(&content).unwrap_or({
+                    let _n_content = YamlLoader::load_from_str(&content).unwrap_or({
                         let point = MarmolPoint::new(&filename, ["Orphan".to_owned()].to_vec());
                         marmol_vec.push(point);
                         continue;
                     });
-                    let content = &content[0];
+                    let content = &_n_content[0];
                     if content["tags"].is_badvalue() {
                         if content["Tags"].is_badvalue() {
                             let point = MarmolPoint::new(&filename, ["Orphan".to_owned()].to_vec());

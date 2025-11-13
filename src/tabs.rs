@@ -73,7 +73,7 @@ impl TabViewer for MTabViewer<'_> {
 
         if tab.is_image {
             egui::ScrollArea::vertical()
-                .id_source(format!("{}", tab.id))
+                .id_salt(format!("{}", tab.id))
                 .show(ui, |ui| {
                     let img = Image::from_uri(format!("file://{}", &tab.path));
                     ui.add(img);
@@ -94,7 +94,8 @@ impl TabViewer for MTabViewer<'_> {
                         if !metadata.is_empty() {
                             main_area::create_metadata(metadata, ui);
                         }
-                        CommonMarkViewer::new(tab.id).show(ui, &mut tab.common_mark_c, &content);
+                        //CommonMarkViewer::new(tab.id).show(ui, &mut tab.common_mark_c, &content);
+                        CommonMarkViewer::new().show(ui, &mut tab.common_mark_c, &content);
                     });
                 });
             });
@@ -185,6 +186,7 @@ impl Tabs {
     }
 
     pub fn file_changed(&mut self, path: String) {
+        dbg!("file changed");
         match self.tree.find_active_focused() {
             None => {}
             Some((_, obj)) => {

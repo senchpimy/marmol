@@ -47,7 +47,7 @@ fn main() -> Result<(), eframe::Error> {
         options,
         Box::new(|cc| {
             egui_extras::install_image_loaders(&cc.egui_ctx);
-            Box::new(Marmol::new(cc))
+            Ok(Box::new(Marmol::new(cc)))
         }),
     )
 }

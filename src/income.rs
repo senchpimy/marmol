@@ -1,8 +1,9 @@
 use chrono::Local;
 use core::ops::RangeInclusive;
+use egui::epaint::PathStroke;
 
 use egui::*;
-use egui_plot::{Line, MarkerShape, PlotPoints, Points};
+use egui_plot::{GridMark, Line, MarkerShape, PlotPoints, Points};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
@@ -327,9 +328,9 @@ impl IncomeGui {
                                     let vals = array_to_color(
                                         self.json_content.colores[elemento.categoria],
                                     );
-                                    let f = Frame::none()
+                                    let f = Frame::NONE
                                         .fill(faded(vals, ui))
-                                        .rounding(Rounding::same(2.0));
+                                        .corner_radius(CornerRadius::same(2));
                                     if self.edit == (this as i32, TipoMovimiento::Gasto) {
                                         edit_valor(
                                             ui,
@@ -380,9 +381,9 @@ impl IncomeGui {
                         {
                             let vals =
                                 array_to_color(self.json_content.colores[elemento.categoria]);
-                            let f = Frame::none()
+                            let f = Frame::NONE
                                 .fill(faded(vals, ui))
-                                .rounding(Rounding::same(2.0));
+                                .corner_radius(CornerRadius::same(2));
                             if self.edit == (this as i32, TipoMovimiento::Ingreso) {
                                 edit_valor(
                                     ui,
@@ -522,9 +523,9 @@ impl IncomeGui {
     }
 
     fn canvas(&mut self, ui: &mut egui::Ui) {
-        let f = Frame::none()
+        let f = Frame::NONE
             .fill(Color32::BLACK)
-            .rounding(Rounding::same(3.0));
+            .corner_radius(CornerRadius::same(3));
         f.show(ui, |ui| {
             let available_height =
                 ((ui.available_height() - (ui.available_height() * 0.2)) * 1.1) / 2.;
@@ -547,7 +548,7 @@ impl IncomeGui {
                     dibujar_arco(ulti, max + ulti, available_width, available_height, radio);
                 let arco = epaint::PathShape {
                     points: result,
-                    stroke: Stroke::new(2., color),
+                    stroke: PathStroke::new(2., color),
                     closed: false,
                     fill: color,
                 };
@@ -567,7 +568,7 @@ impl IncomeGui {
                 );
                 let arco = epaint::PathShape {
                     points: result,
-                    stroke: Stroke::new(2., color),
+                    stroke: PathStroke::new(2., color),
                     closed: false,
                     fill: color,
                 };
@@ -615,8 +616,9 @@ impl IncomeGui {
     fn grafica(&mut self, ui: &mut egui::Ui) {
         if self.ver_gra == GraficaVer::Grafica {
             let mov_sort = self.mov_sort.clone();
-            let g =
-                move |x: f64, _:usize,_: &RangeInclusive<f64>| -> String { mov_sort[x as usize].clone() };
+            let g = move |x: GridMark, _: &RangeInclusive<f64>| -> String {
+                mov_sort[x.value as usize].clone()
+            };
             let plot = egui_plot::Plot::new("items_demo")
                 .show_x(false)
                 .show_y(false)
@@ -626,8 +628,8 @@ impl IncomeGui {
                 .x_axis_formatter(g);
             let p = PlotPoints::new(self.points.clone());
             let l = PlotPoints::new(self.lines.clone());
-            let p2 = Points::new(p).shape(MarkerShape::Circle).radius(5.);
-            let line = Line::new(l).fill(0.);
+            let p2 = Points::new("", p).shape(MarkerShape::Circle).radius(5.);
+            let line = Line::new("", l).fill(0.);
             plot.show(ui, |plot_ui| {
                 plot_ui.line(line);
                 plot_ui.points(p2);
@@ -662,9 +664,9 @@ impl IncomeGui {
             scroll.show(ui, |ui| {
                 for j in &self.json_content.transacciones {
                     let vals = array_to_color(self.json_content.colores[j.categoria]);
-                    let f = Frame::none()
+                    let f = Frame::NONE
                         .fill(faded(vals, ui))
-                        .rounding(Rounding::same(2.0));
+                        .corner_radius(CornerRadius::same(2));
                     if j.fecha == self.mov_sort[self.ver_gra_i] {
                         f.show(ui, |ui: &mut Ui| {
                             ui.horizontal(|ui| {

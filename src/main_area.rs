@@ -244,8 +244,12 @@ impl LeftControls {
                             vault,
                         );
                     };
-                    if btn.ui(ui).context_menu(menu).clicked() {
-                        *current_file = file_location.to_string();
+                    //if btn.ui(ui).context_menu(menu).clicked() {
+                    let btn_res = btn.ui(ui).context_menu(menu);
+                    if let Some(res) = btn_res {
+                        if res.response.clicked() {
+                            *current_file = file_location.to_string();
+                        }
                     }
                 }
             }
@@ -473,7 +477,8 @@ fn file_options(
         let copy = fs::copy(s, &s_copy);
         match copy {
             Ok(_) => {
-                ui.close_menu();
+                //ui.close_menu();
+                ui.close();
                 *error = String::new()
             }
             Err(r) => *error = r.to_string(),
@@ -518,7 +523,8 @@ fn file_options(
                 Err(r) => *error = r.to_string(),
             }
         }
-        ui.close_menu();
+        //ui.close_menu.close();
+        ui.close();
     }
     if ui.button("Rename").clicked() {
         *rename = String::from(s);
@@ -532,7 +538,8 @@ fn file_options(
         ui.label(RichText::new(path_s.to_str().unwrap()).strong());
         ui.add_space(5.);
         if ui.button("No").clicked() {
-            ui.close_menu();
+            ui.close();
+            //ui.close_menu();
         }
         ui.add_space(5.);
         if ui.add(delete).clicked() {
@@ -543,7 +550,8 @@ fn file_options(
                     *error = r.to_string();
                 }
             }
-            ui.close_menu();
+            //ui.close_menu();
+            ui.close()
         }
     });
 }
