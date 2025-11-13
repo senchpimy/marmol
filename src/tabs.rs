@@ -26,9 +26,11 @@ struct Tabe {
 
 impl Tabe {
     fn new(n: usize, path: String) -> Self {
+        dbg!(&path);
         let title = Path::new(&path)
             .file_name()
             .unwrap()
+            //.unwrap_or("")
             .to_str()
             .unwrap()
             .into();
@@ -73,10 +75,11 @@ impl TabViewer for MTabViewer<'_> {
             egui::ScrollArea::vertical()
                 .id_source(format!("{}", tab.id))
                 .show(ui, |ui| {
-                    let img = Image::from_uri(format!("file://{}",&tab.path));
+                    let img = Image::from_uri(format!("file://{}", &tab.path));
                     ui.add(img);
                 });
-        }else if tab.ctype == main_area::Content::View {
+        } else if tab.ctype == main_area::Content::View {
+            //centrar los contenidos
             let cont = StripBuilder::new(ui)
                 .size(Size::relative(0.3))
                 .size(Size::relative(0.3));
@@ -84,8 +87,8 @@ impl TabViewer for MTabViewer<'_> {
                 strip.cell(|_| {});
                 strip.cell(|ui| {
                     egui::ScrollArea::vertical().show(ui, |ui| {
-                        tab.content = files::read_file(&tab.path);  //Reading every time == listen
-                                                                    //changes
+                        tab.content = files::read_file(&tab.path); //Reading every time == listen
+                                                                   //changes
                         let (content, metadata) = files::contents(&tab.content);
                         ui.heading(&tab.title);
                         if !metadata.is_empty() {
@@ -148,9 +151,12 @@ pub struct Tabs {
 }
 
 impl Tabs {
-    pub fn new(path: String) -> Self {
+    pub fn new(path: Option<String>) -> Self {
+        dbg!(&path);
         let mut tabs = Vec::new();
-        tabs.push(Tabe::new(0, path));
+        if let Some(path) = path {
+            tabs.push(Tabe::new(0, path));
+        }
         let tree = DockState::new(tabs);
         Self { tree, counter: 0 }
     }
@@ -178,11 +184,11 @@ impl Tabs {
         });
     }
 
-    pub fn file_changed(&mut self,path:String){
+    pub fn file_changed(&mut self, path: String) {
         match self.tree.find_active_focused() {
-            None=>{},
-            Some((_,obj))=>{
-                obj.path= path; //Change tittle
+            None => {}
+            Some((_, obj)) => {
+                obj.path = path; //Change tittle
             }
         }
     }

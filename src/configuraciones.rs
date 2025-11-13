@@ -6,80 +6,117 @@ use std::fs;
 use std::path::Path;
 use yaml_rust::{Yaml, YamlLoader};
 
-pub struct VaultConfig{
-    graph_json_config:String
+pub struct VaultConfig {
+    graph_json_config: String,
 }
 
 pub fn load_vault() -> (
     String,
     Vec<String>,
-    String,
+    Option<String>,
     String,
     screens::Screen,
     bool,
     f32,
     bool,
 ) {
-    let mut current = String::new();
-    let mut vault_var = String::new();
-    let mut vault_vec_var: Vec<String> = vec![];
-    let mut window = screens::Screen::Default;
     let binding = BaseDirs::new().unwrap();
     let home_dir = binding.home_dir().to_str().unwrap();
-    let mut config_path_var = String::from(home_dir);
-    config_path_var = config_path_var + "/.config/marmol";
-    let mut collpased_left = true;
-    let mut sort_files = true;
-    let mut center_size = 0.8;
-    let dir = Path::new(&config_path_var);
-    if dir.exists() {
-        let file_saved = String::from(&config_path_var) + "/ProgramState";
-        let dir2 = Path::new(&file_saved);
-        if dir2.exists() {
-            println!("Configuration file exists");
-            let data = fs::read_to_string(file_saved).expect("Unable to read file");
-            let docs = YamlLoader::load_from_str(&data).unwrap_or(vec![]);
-            window = screens::Screen::Main;
-            let docs = &docs[0];
-            vault_var = docs["vault"].as_str().unwrap().to_string();
-            current = docs["current"].as_str().unwrap_or("None").to_string();
-            vault_vec_var = docs["vault_vec"]
-                .as_vec()
-                .unwrap_or(&Vec::<Yaml>::new())
-            .iter().map(|x|x.as_str().unwrap_or("").to_owned()).collect();
-            //vault_vec_var = tmp.iter().map(|x|x.as_str().unwrap().to_owned()).collect();
-            collpased_left = docs["left_menu"].as_bool().unwrap_or(true);
-            center_size = docs["center_size"].as_f64().unwrap_or(0.8) as f32;
-            sort_files = docs["sort_files"].as_bool().unwrap_or(false);
-        } else {
-            let res = fs::create_dir(&dir);
-            match res {
-                Ok(_) => println!("Dir created"),
-                Err(r) => println!("Dir cannot be created: {}", r),
-            }
+
+    let config_dir_path = format!("{}/.config/marmol", home_dir);
+    let config_file_path = format!("{}/ProgramState", config_dir_path);
+
+    if Path::new(&config_file_path).exists() {
+        println!("Fichero de configuración encontrado. Cargando estado...");
+
+        let data =
+            fs::read_to_string(&config_file_path).expect("No se pudo leer el archivo de estado");
+        let docs = YamlLoader::load_from_str(&data).unwrap_or_default();
+
+        if docs.is_empty() {
+            println!("Advertencia: El fichero de configuración está vacío o corrupto. Creando uno nuevo.");
+            return create_default_vault(&config_dir_path);
         }
+
+        let doc = &docs[0];
+
+        let vault_var = doc["vault"].as_str().unwrap_or("").to_string();
+        if vault_var.is_empty() {
+            return create_default_vault(&config_dir_path);
+        }
+
+        let mut current = doc["current"].as_str().unwrap_or("").to_string();
+        if current.is_empty() {
+            current = vault_var.clone();
+        }
+
+        let vault_vec_var: Vec<String> = doc["vault_vec"]
+            .as_vec()
+            .unwrap_or(&Vec::<Yaml>::new())
+            .iter()
+            .map(|x| x.as_str().unwrap_or("").to_owned())
+            .collect();
+        let collpased_left = doc["left_menu"].as_bool().unwrap_or(true);
+        let center_size = doc["center_size"].as_f64().unwrap_or(0.8) as f32;
+        let sort_files = doc["sort_files"].as_bool().unwrap_or(false);
+
+        (
+            vault_var,
+            vault_vec_var,
+            Some(current),
+            config_dir_path,
+            screens::Screen::Main,
+            collpased_left,
+            center_size,
+            sort_files,
+        )
+    } else {
+        println!("Fichero de configuración no encontrado. Creando uno por defecto...");
+        create_default_vault(&config_dir_path)
     }
-    return (
-        vault_var.to_string(),
-        vault_vec_var,
-        current.to_string(),
-        config_path_var.to_string(),
-        window,
-        collpased_left,
-        center_size,
-        sort_files,
-    );
+}
+
+fn create_default_vault(
+    config_dir: &str,
+) -> (
+    String,
+    Vec<String>,
+    Option<String>,
+    String,
+    screens::Screen,
+    bool,
+    f32,
+    bool,
+) {
+    let default_vault = String::new();
+    let default_vault_vec = vec![];
+    let default_current = None;
+    let default_collpased_left = true;
+    let default_center_size = 0.8;
+    let default_sort_files = true;
+    let default_window = screens::Screen::Default;
+
+    (
+        default_vault,
+        default_vault_vec,
+        default_current,
+        config_dir.to_string(),
+        default_window,
+        default_collpased_left,
+        default_center_size,
+        default_sort_files,
+    )
 }
 
 pub fn load_context() -> f32 {
     let binding = BaseDirs::new().unwrap();
     let home_dir = binding.home_dir().to_str().unwrap();
-    let config_path_var = format!("{}{}",&home_dir,"/.config/marmol");
+    let config_path_var = format!("{}{}", &home_dir, "/.config/marmol");
     let dir = Path::new(&config_path_var);
 
     let mut font_size: f32 = 12.0;
     if dir.exists() {
-        let file_saved = format!("{}{}",&config_path_var,"/ContextState");
+        let file_saved = format!("{}{}", &config_path_var, "/ContextState");
         let dir2 = Path::new(&file_saved);
         if dir2.exists() {
             let data = fs::read_to_string(file_saved).expect("Unable to read file");
