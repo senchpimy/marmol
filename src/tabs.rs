@@ -78,6 +78,12 @@ impl TabViewer for MTabViewer<'_> {
                     let img = Image::from_uri(format!("file://{}", &tab.path));
                     ui.add(img);
                 });
+        } else if tab.path.ends_with(".inc") {
+            tab.income.set_path(&tab.path);
+            tab.income.show(ui);
+        } else if tab.path.ends_with(".graph") {
+            tab.tasks.set_path(&tab.path);
+            tab.tasks.show(ui);
         } else if tab.ctype == main_area::Content::View {
             //centrar los contenidos
             let cont = StripBuilder::new(ui)
@@ -133,12 +139,6 @@ impl TabViewer for MTabViewer<'_> {
                     });
                 });
             });
-        } else if tab.path.ends_with(".inc") {
-            tab.income.set_path(&tab.path);
-            tab.income.show(ui);
-        } else if tab.path.ends_with(".graph") {
-            tab.tasks.set_path(&tab.path);
-            tab.tasks.show(ui);
         }
     }
     fn on_add(&mut self, surface: egui_dock::SurfaceIndex, node: NodeIndex) {
