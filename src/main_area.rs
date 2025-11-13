@@ -244,13 +244,19 @@ impl LeftControls {
                             vault,
                         );
                     };
-                    //if btn.ui(ui).context_menu(menu).clicked() {
-                    let btn_res = btn.ui(ui).context_menu(menu);
-                    if let Some(res) = btn_res {
-                        if res.response.clicked() {
-                            *current_file = file_location.to_string();
-                        }
+
+                    if ui.add(btn).clicked() {
+                        *current_file = file_location.to_string();
                     }
+
+                    //if btn.ui(ui).context_menu(menu).clicked() {
+                    //let btn_res = btn.ui(ui).context_menu(menu);
+                    //if let Some(res) = btn_res {
+                    //    if res.response.clicked() {
+                    //        *current_file = file_location.to_string();
+                    //    }
+                    //}
+                    //dbg!(&current_file);
                 }
             }
             ui.add_space(2.0);

@@ -145,6 +145,23 @@ impl TabViewer for MTabViewer<'_> {
         self.added_nodes.push((surface, node))
     }
 }
+// Free function to update tab content
+fn update_tab_content(tab: &mut Tabe, path: &String) {
+    let new_title = Path::new(path)
+        .file_name()
+        .unwrap_or_else(|| std::ffi::OsStr::new("untitled"))
+        .to_str()
+        .unwrap_or("untitled")
+        .to_string();
+
+    tab.path = path.clone();
+    tab.title = new_title;
+    tab.ctype = main_area::Content::View;
+    tab.content = String::new();
+    tab.buffer = String::new();
+    tab.common_mark_c = CommonMarkCache::default();
+}
+
 pub struct Tabs {
     //dock_state: DockState<Tabe>,
     tree: DockState<Tabe>,
@@ -161,9 +178,7 @@ impl Tabs {
         let tree = DockState::new(tabs);
         Self { tree, counter: 0 }
     }
-}
 
-impl Tabs {
     pub fn ui(&mut self, ui: &mut Ui) {
         let mut added_nodes = Vec::new();
         DockArea::new(&mut self.tree)
@@ -187,11 +202,20 @@ impl Tabs {
 
     pub fn file_changed(&mut self, path: String) {
         dbg!("file changed");
-        match self.tree.find_active_focused() {
-            None => {}
-            Some((_, obj)) => {
-                obj.path = path; //Change tittle
-            }
+
+        if self.tree.iter_all_tabs().count() == 0 {
+            self.counter += 1;
+            self.tree = DockState::new(vec![Tabe::new(self.counter, path)]);
+            return;
+        }
+
+        if let Some((_, tab)) = self.tree.find_active_focused() {
+            update_tab_content(tab, &path);
+        } else {
+            // If no tab is focused, create a new tab to display the content.
+            self.counter += 1;
+            let new_tab = Tabe::new(self.counter, path);
+            self.tree.push_to_first_leaf(new_tab);
         }
     }
 }
