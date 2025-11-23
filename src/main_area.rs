@@ -4,8 +4,8 @@ use crate::MShape;
 use std::io::Write;
 
 use eframe::egui::{
-    Align, Button, Context, Frame, ImageButton, Layout, RichText, ScrollArea, Separator, SidePanel,
-    Style, TopBottomPanel,
+    Align, Button, Context, Frame, Layout, RichText, ScrollArea, Separator, SidePanel, Style,
+    TopBottomPanel,
 };
 //use egui::ImageSource;
 //use egui::TextBuffer;
@@ -71,13 +71,14 @@ impl LeftControls {
         path: &str,
         current_file: &mut String,
         sort_entrys: &bool,
+        window_size: &MShape,
     ) {
         let left_panel = SidePanel::left("buttons left menu")
             .default_width(100.)
             .min_width(100.)
             .max_width(300.);
         left_panel.show_animated(ctx, *colapse, |ui| {
-            self.top_panel_menu_left(ui, path, current_file, sort_entrys);
+            self.top_panel_menu_left(ui, path, current_file, sort_entrys, window_size);
         });
     }
 
@@ -87,16 +88,21 @@ impl LeftControls {
         path: &str,
         current_file: &mut String,
         sort_entrys: &bool,
+        window_size: &MShape,
     ) {
         let vault = path;
-        let boton_tam = 22.; // TODO relative size
+        //let boton_tam = window_size.height / 30.; // TODO relative size
+        dbg!(window_size.height);
+        let boton_tam = 22.;
         TopBottomPanel::top("Left Menu").show_inside(ui, |ui| {
             ui.with_layout(Layout::left_to_right(Align::Min), |ui| {
                 if ui
                     .add_sized(
                         egui::vec2(boton_tam, boton_tam),
-                        ImageButton::new(egui::include_image!("../resources/files.png"))
-                            .frame(false),
+                        Button::image(
+                            egui::Image::new(egui::include_image!("../resources/folder.svg"))
+                                .tint(egui::Color32::WHITE),
+                        ),
                     )
                     .clicked()
                 {
@@ -105,8 +111,10 @@ impl LeftControls {
                 if ui
                     .add_sized(
                         egui::vec2(boton_tam, boton_tam),
-                        ImageButton::new(egui::include_image!("../resources/search.png"))
-                            .frame(false),
+                        Button::image(
+                            egui::Image::new(egui::include_image!("../resources/search.svg"))
+                                .tint(egui::Color32::WHITE),
+                        ),
                     )
                     .clicked()
                 {
@@ -115,8 +123,12 @@ impl LeftControls {
                 if ui
                     .add_sized(
                         egui::vec2(boton_tam, boton_tam),
-                        ImageButton::new(egui::include_image!("../resources/tasks.png"))
-                            .frame(false),
+                        Button::image(
+                            egui::Image::new(egui::include_image!(
+                                "../resources/square-check-big.svg"
+                            ))
+                            .tint(egui::Color32::WHITE),
+                        ),
                     )
                     .clicked()
                 {
@@ -278,19 +290,19 @@ impl LeftControls {
             .default_width(1.);
         let space = window_size.height / 55.;
         let button_size = match window_size.width / 45. {
-            20.0..=30.0 => window_size.width / 45.,
+            20.0..=35.0 => window_size.width / 45.,
             ..=20. => 20.,
-            _ => 30.,
+            _ => 35.,
         };
         left_panel.show(ctx, |ui| {
             ui.add_space(5.);
             ui.set_max_width(button_size);
             ui.vertical(|ui| {
                 if ui
-                    .add(
-                        ImageButton::new(egui::include_image!("../resources/colapse.png"))
-                            .frame(false),
-                    )
+                    .add(Button::image(
+                        egui::Image::new(egui::include_image!("../resources/fold-horizontal.svg"))
+                            .tint(egui::Color32::WHITE),
+                    ))
                     .clicked()
                 {
                     *colapse = !*colapse;
@@ -298,10 +310,9 @@ impl LeftControls {
                 //ui.add(Separator::default());
                 ui.add_space(space);
                 if ui
-                    .add(
-                        ImageButton::new(egui::include_image!("../resources/switcher.png"))
-                            .frame(false),
-                    )
+                    .add(egui::Button::image(egui::Image::new(egui::include_image!(
+                        "../resources/file-search.svg"
+                    ))))
                     .on_hover_text("Switcher")
                     .clicked()
                 {
@@ -309,10 +320,9 @@ impl LeftControls {
                 } //quick switcher
                 ui.add_space(space);
                 if ui
-                    .add(
-                        ImageButton::new(egui::include_image!("../resources/graph.png"))
-                            .frame(false),
-                    )
+                    .add(egui::Button::image(egui::Image::new(egui::include_image!(
+                        "../resources/graph.svg"
+                    ))))
                     .on_hover_text("Graph")
                     .clicked()
                 {
@@ -320,10 +330,9 @@ impl LeftControls {
                 } //graph
                 ui.add_space(space);
                 if ui
-                    .add(
-                        ImageButton::new(egui::include_image!("../resources/canvas.png"))
-                            .frame(false),
-                    )
+                    .add(egui::Button::image(egui::Image::new(egui::include_image!(
+                        "../resources/canvas.svg"
+                    ))))
                     .on_hover_text("Canvas")
                     .clicked()
                 {
@@ -331,10 +340,10 @@ impl LeftControls {
                 } //canvas
                 ui.add_space(space);
                 if ui
-                    .add(
-                        ImageButton::new(egui::include_image!("../resources/daynote.png"))
-                            .frame(false),
-                    )
+                    .add(egui::Button::image(
+                        egui::Image::new(egui::include_image!("../resources/calendar-check.svg"))
+                            .tint(egui::Color32::WHITE),
+                    ))
                     .on_hover_text("Daily note")
                     .clicked()
                 {
@@ -342,10 +351,10 @@ impl LeftControls {
                 } //note
                 ui.add_space(space);
                 if ui
-                    .add(
-                        ImageButton::new(egui::include_image!("../resources/command.png"))
-                            .frame(false),
-                    )
+                    .add(egui::Button::image(
+                        egui::Image::new(egui::include_image!("../resources/terminal.svg"))
+                            .tint(egui::Color32::WHITE),
+                    ))
                     .on_hover_text("Command Palette")
                     .clicked()
                 {
@@ -354,7 +363,7 @@ impl LeftControls {
                 ui.add_space(space);
                 if ui
                     .add(
-                        ImageButton::new(egui::include_image!("../resources/new_file.png"))
+                        egui::Button::image(egui::include_image!("../resources/new_file.svg"))
                             .frame(false),
                     )
                     .on_hover_text("New File")
@@ -366,8 +375,11 @@ impl LeftControls {
                     ui.add_space(5.);
                     if ui
                         .add(
-                            ImageButton::new(egui::include_image!("../resources/config.png"))
-                                .frame(false),
+                            egui::Button::image(
+                                egui::Image::new(egui::include_image!("../resources/cog.svg"))
+                                    .tint(egui::Color32::WHITE),
+                            )
+                            .frame(false),
                         )
                         .on_hover_text("Configuration")
                         .clicked()
@@ -377,8 +389,10 @@ impl LeftControls {
                     ui.add_space(5.);
                     if ui
                         .add(
-                            ImageButton::new(egui::include_image!("../resources/help.png"))
-                                .frame(false),
+                            egui::Button::image(egui::include_image!(
+                                "../resources/badge-question-mark.svg"
+                            ))
+                            .frame(false),
                         )
                         .on_hover_text("Help")
                         .clicked()

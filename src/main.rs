@@ -190,6 +190,7 @@ impl eframe::App for Marmol {
                 &self.vault,
                 &mut self.current_file,
                 &self.sort_files,
+                &self.window_size,
             );
             CentralPanel::default().show(ctx, |ui| {
                 if self.prev_current_file != self.current_file {
