@@ -27,7 +27,7 @@ enum NewFileType {
     Income,
     Tasks,
 }
-struct MShape {
+pub struct MShape {
     height: f32,
     width: f32,
 }
@@ -40,6 +40,7 @@ impl fmt::Display for NewFileType {
 
 fn main() -> Result<(), eframe::Error> {
     let options = eframe::NativeOptions {
+        viewport: egui::ViewportBuilder::default().with_inner_size([1280.0, 720.0]),
         ..Default::default()
     };
     eframe::run_native(
@@ -153,16 +154,6 @@ impl Default for Marmol {
 
 impl eframe::App for Marmol {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        ctx.input(|i| match i.viewport().outer_rect {
-            Some(a) => {
-                //a.min; // Position
-                self.window_size = MShape {
-                    width: a.max.x,
-                    height: a.max.y,
-                };
-            }
-            None => {}
-        });
         if self.current_window == screens::Screen::Default {
             //welcome screen
             screens::default(
@@ -172,6 +163,7 @@ impl eframe::App for Marmol {
                 &mut self.vault_vec,
                 &mut self.vault,
                 &mut self.content,
+                &self.window_size,
             );
         } else if self.current_window == screens::Screen::Main {
             //Main screen
@@ -238,6 +230,7 @@ impl eframe::App for Marmol {
                 &mut self.center_size,
                 &mut self.center_size_remain,
                 &mut self.sort_files,
+                &self.window_size,
             );
             if self.vault_changed {
                 self.marker.update_vault(Path::new(&self.vault));
@@ -246,6 +239,19 @@ impl eframe::App for Marmol {
             screens::set_server(ctx);
         };
         /////////////////////////////////////////////////////////////////////////////////
+        let rect = ctx.screen_rect();
+        self.window_size = MShape {
+            width: rect.width(),
+            height: rect.height(),
+        };
+        egui::Area::new("window_size_display".into())
+            .anchor(egui::Align2::RIGHT_BOTTOM, egui::vec2(-10.0, -10.0))
+            .show(ctx, |ui| {
+                ui.label(format!(
+                    "w: {:.0}, h: {:.0}",
+                    self.window_size.width, self.window_size.height
+                ));
+            });
     }
 
     //TODO replace with serde?

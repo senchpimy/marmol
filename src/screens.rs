@@ -1,5 +1,6 @@
 use crate::main_area;
 use crate::toggle_switch;
+use crate::MShape;
 use eframe::egui::{Button, CentralPanel, Color32, FontId, RichText};
 use egui::Widget;
 use rfd::FileDialog;
@@ -21,15 +22,24 @@ pub fn default(
     vaults_vec: &mut Vec<String>,
     vault: &mut String,
     content: &mut main_area::Content,
+    window_size: &MShape,
 ) {
     let mut nuevo_bool = false;
     CentralPanel::default().show(ctx, |ui| {
         let text = RichText::new("Marmol").strong().size(60.0);
         ui.with_layout(egui::Layout::top_down(egui::Align::Center), |ui| {
+            let button_width = window_size.width * 0.5;
+            let button_height = 50.0;
             ui.add_space(100.0);
             ui.label(text);
             ui.add_space(100.0);
-            if ui.button("Select a Vault").clicked() {
+            if ui
+                .add_sized(
+                    [button_width, button_height],
+                    egui::Button::new("Select a Vault"),
+                )
+                .clicked()
+            {
                 let files = FileDialog::new().set_title("Select a Folder").pick_folder();
                 match files {
                     Some(x) => {
@@ -57,11 +67,24 @@ pub fn default(
                 }
                 ui.label(open_text);
             }
-            if ui.button("Create new Vault").clicked() && nuevo_bool {
+            if ui
+                .add_sized(
+                    [button_width, button_height],
+                    egui::Button::new("Create new Vault"),
+                )
+                .clicked()
+                && nuevo_bool
+            {
                 unimplemented!();
             };
             ui.add_space(30.0);
-            if ui.button("configuration").clicked() {
+            if ui
+                .add_sized(
+                    [button_width, button_height],
+                    egui::Button::new("configuration"),
+                )
+                .clicked()
+            {
                 *current_window = Screen::Configuracion;
             };
         });
@@ -84,10 +107,15 @@ pub fn configuracion(
     center_size: &mut f32,
     center_size_remain: &mut f32,
     sort_files: &mut bool,
+    window_size: &MShape,
 ) {
     CentralPanel::default().show(ctx, |ui| {
-        if ui.button("Select theme").clicked() {}
-        if ui.button("Create a New Vault").clicked() {
+        let button_width = window_size.width * 0.5;
+        let button_height = 40.0;
+        let button_size = [button_width, button_height];
+
+        if ui.add_sized(button_size, egui::Button::new("Select theme")).clicked() {}
+        if ui.add_sized(button_size, egui::Button::new("Create a New Vault")).clicked() {
             let files = FileDialog::new().set_title("Select a Folder").pick_folder();
             match files {
                 Some(x) => {
@@ -113,7 +141,7 @@ pub fn configuracion(
             }
         }
         if *button {
-            if ui.button("Create!").clicked() {
+            if ui.add_sized(button_size, egui::Button::new("Create!")).clicked() {
                 let full_path = format!("{}/{}", folder, nw_vault_str);
                 let create = fs::create_dir(&full_path);
                 vaults.push(full_path);
@@ -151,10 +179,12 @@ pub fn configuracion(
                         let menu = |ui: &mut egui::Ui| {
                             remove_vault(ui, stri, &mut new_vaults, &mut changed)
                         };
-                        if btn.ui(ui).context_menu(menu).unwrap().response.clicked() {
+                        let response = ui.add_sized(button_size, btn);
+                        if response.clicked() {
                             *vault = String::from(stri);
                             *vault_changed = true;
                         }
+                        response.context_menu(menu);
                     }
                 }
                 if changed {
@@ -162,7 +192,7 @@ pub fn configuracion(
                 }
             });
         });
-        if ui.button("Add a Existing Vault").clicked() {
+        if ui.add_sized(button_size, egui::Button::new("Add a Existing Vault")).clicked() {
             let files = FileDialog::new().set_title("Select a Folder").pick_folder();
             match files {
                 Some(x) => {
@@ -179,7 +209,7 @@ pub fn configuracion(
         ui.add(toggle_switch::toggle_bool(sort_files));
         ui.label("Show files sorted");
         ui.add_space(10.0);
-        if ui.button("Configure Backup Server").clicked() {
+        if ui.add_sized(button_size, egui::Button::new("Configure Backup Server")).clicked() {
             *current_window = Screen::Server;
         };
         ui.add_space(10.0);
@@ -202,7 +232,7 @@ pub fn configuracion(
             ctx.set_style(style);
         }
         ui.add_space(30.0);
-        if ui.button("return").clicked() {
+        if ui.add_sized(button_size, egui::Button::new("return")).clicked() {
             *current_window = *prev_window;
         };
     });
