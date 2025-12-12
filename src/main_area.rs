@@ -11,6 +11,7 @@ use eframe::egui::{
 //use egui::TextBuffer;
 //use egui_extras::{RetainedImage, Size, StripBuilder};
 
+use egui::Vec2;
 use json::JsonValue;
 
 use chrono::prelude::*;
@@ -92,16 +93,17 @@ impl LeftControls {
     ) {
         let vault = path;
         //let boton_tam = window_size.height / 30.; // TODO relative size
-        dbg!(window_size.height);
-        let boton_tam = 22.;
+        //dbg!(window_size.height);
         TopBottomPanel::top("Left Menu").show_inside(ui, |ui| {
             ui.with_layout(Layout::left_to_right(Align::Min), |ui| {
+                let btn_size = Vec2::new(window_size.btn_size, window_size.btn_size);
                 if ui
                     .add_sized(
-                        egui::vec2(boton_tam, boton_tam),
+                        btn_size.clone(),
                         Button::image(
                             egui::Image::new(egui::include_image!("../resources/folder.svg"))
-                                .tint(egui::Color32::WHITE),
+                                .tint(Color32::from_rgb(0, 0, 255))
+                                .fit_to_exact_size(btn_size.clone()),
                         ),
                     )
                     .clicked()
@@ -110,10 +112,10 @@ impl LeftControls {
                 }
                 if ui
                     .add_sized(
-                        egui::vec2(boton_tam, boton_tam),
+                        btn_size.clone(),
                         Button::image(
                             egui::Image::new(egui::include_image!("../resources/search.svg"))
-                                .tint(egui::Color32::WHITE),
+                                .fit_to_exact_size(btn_size.clone()), //.tint(egui::Color32::WHITE), //no se aplica por algun motivo
                         ),
                     )
                     .clicked()
@@ -122,12 +124,12 @@ impl LeftControls {
                 }
                 if ui
                     .add_sized(
-                        egui::vec2(boton_tam, boton_tam),
+                        btn_size.clone(),
                         Button::image(
                             egui::Image::new(egui::include_image!(
                                 "../resources/square-check-big.svg"
                             ))
-                            .tint(egui::Color32::WHITE),
+                            .fit_to_exact_size(btn_size.clone()),
                         ),
                     )
                     .clicked()
@@ -289,19 +291,16 @@ impl LeftControls {
             .resizable(false)
             .default_width(1.);
         let space = window_size.height / 55.;
-        let button_size = match window_size.width / 45. {
-            20.0..=35.0 => window_size.width / 45.,
-            ..=20. => 20.,
-            _ => 35.,
-        };
+        let btn_size = Vec2::new(window_size.btn_size, window_size.btn_size);
         left_panel.show(ctx, |ui| {
             ui.add_space(5.);
-            ui.set_max_width(button_size);
+            ui.set_max_width(window_size.btn_size);
             ui.vertical(|ui| {
                 if ui
                     .add(Button::image(
                         egui::Image::new(egui::include_image!("../resources/fold-horizontal.svg"))
-                            .tint(egui::Color32::WHITE),
+                            .tint(egui::Color32::WHITE)
+                            .fit_to_exact_size(btn_size.clone()),
                     ))
                     .clicked()
                 {
@@ -310,9 +309,10 @@ impl LeftControls {
                 //ui.add(Separator::default());
                 ui.add_space(space);
                 if ui
-                    .add(egui::Button::image(egui::Image::new(egui::include_image!(
-                        "../resources/file-search.svg"
-                    ))))
+                    .add(egui::Button::image(
+                        egui::Image::new(egui::include_image!("../resources/file-search.svg"))
+                            .fit_to_exact_size(btn_size.clone()),
+                    ))
                     .on_hover_text("Switcher")
                     .clicked()
                 {
@@ -320,9 +320,10 @@ impl LeftControls {
                 } //quick switcher
                 ui.add_space(space);
                 if ui
-                    .add(egui::Button::image(egui::Image::new(egui::include_image!(
-                        "../resources/graph.svg"
-                    ))))
+                    .add(egui::Button::image(
+                        egui::Image::new(egui::include_image!("../resources/graph.svg"))
+                            .fit_to_exact_size(btn_size.clone()),
+                    ))
                     .on_hover_text("Graph")
                     .clicked()
                 {
@@ -330,9 +331,10 @@ impl LeftControls {
                 } //graph
                 ui.add_space(space);
                 if ui
-                    .add(egui::Button::image(egui::Image::new(egui::include_image!(
-                        "../resources/canvas.svg"
-                    ))))
+                    .add(egui::Button::image(
+                        egui::Image::new(egui::include_image!("../resources/canvas.svg"))
+                            .fit_to_exact_size(btn_size.clone()),
+                    ))
                     .on_hover_text("Canvas")
                     .clicked()
                 {
@@ -342,7 +344,7 @@ impl LeftControls {
                 if ui
                     .add(egui::Button::image(
                         egui::Image::new(egui::include_image!("../resources/calendar-check.svg"))
-                            .tint(egui::Color32::WHITE),
+                            .fit_to_exact_size(btn_size.clone()),
                     ))
                     .on_hover_text("Daily note")
                     .clicked()
@@ -353,7 +355,7 @@ impl LeftControls {
                 if ui
                     .add(egui::Button::image(
                         egui::Image::new(egui::include_image!("../resources/terminal.svg"))
-                            .tint(egui::Color32::WHITE),
+                            .fit_to_exact_size(btn_size.clone()),
                     ))
                     .on_hover_text("Command Palette")
                     .clicked()
@@ -362,10 +364,10 @@ impl LeftControls {
                 } //palette
                 ui.add_space(space);
                 if ui
-                    .add(
-                        egui::Button::image(egui::include_image!("../resources/new_file.svg"))
-                            .frame(false),
-                    )
+                    .add(egui::Button::image(
+                        egui::Image::new(egui::include_image!("../resources/new_file.svg"))
+                            .fit_to_exact_size(btn_size.clone()),
+                    ))
                     .on_hover_text("New File")
                     .clicked()
                 {
@@ -374,13 +376,11 @@ impl LeftControls {
                 ui.with_layout(Layout::bottom_up(Align::Max), |ui| {
                     ui.add_space(5.);
                     if ui
-                        .add(
-                            egui::Button::image(
-                                egui::Image::new(egui::include_image!("../resources/cog.svg"))
-                                    .tint(egui::Color32::WHITE),
-                            )
-                            .frame(false),
-                        )
+                        .add(egui::Button::image(
+                            egui::Image::new(egui::include_image!("../resources/cog.svg"))
+                                .tint(egui::Color32::WHITE)
+                                .fit_to_exact_size(btn_size.clone()),
+                        ))
                         .on_hover_text("Configuration")
                         .clicked()
                     {
@@ -388,12 +388,12 @@ impl LeftControls {
                     }
                     ui.add_space(5.);
                     if ui
-                        .add(
-                            egui::Button::image(egui::include_image!(
+                        .add(egui::Button::image(
+                            egui::Image::new(egui::include_image!(
                                 "../resources/badge-question-mark.svg"
                             ))
-                            .frame(false),
-                        )
+                            .fit_to_exact_size(btn_size.clone()),
+                        ))
                         .on_hover_text("Help")
                         .clicked()
                     {

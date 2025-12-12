@@ -86,6 +86,7 @@ impl TabViewer for MTabViewer<'_> {
             tab.tasks.show(ui);
         } else if tab.ctype == main_area::Content::View {
             //centrar los contenidos
+
             let cont = StripBuilder::new(ui)
                 .size(Size::relative(0.3))
                 .size(Size::relative(0.3));

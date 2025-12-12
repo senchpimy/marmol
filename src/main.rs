@@ -30,6 +30,7 @@ enum NewFileType {
 pub struct MShape {
     height: f32,
     width: f32,
+    btn_size: f32,
 }
 
 impl fmt::Display for NewFileType {
@@ -119,6 +120,7 @@ impl Default for Marmol {
             window_size: MShape {
                 height: 0.,
                 width: 0.,
+                btn_size: 20.,
             },
             tabs: tabs::Tabs::new(current.clone()),
             center_size,
@@ -240,9 +242,15 @@ impl eframe::App for Marmol {
         };
         /////////////////////////////////////////////////////////////////////////////////
         let rect = ctx.screen_rect();
+        let btn_size = match rect.width() / 45. {
+            20.0..=35.0 => rect.width() / 45.,
+            ..=20. => 20.,
+            _ => 35.,
+        };
         self.window_size = MShape {
             width: rect.width(),
             height: rect.height(),
+            btn_size,
         };
         egui::Area::new("window_size_display".into())
             .anchor(egui::Align2::RIGHT_BOTTOM, egui::vec2(-10.0, -10.0))
