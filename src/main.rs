@@ -187,16 +187,19 @@ impl eframe::App for Marmol {
                 &self.window_size,
             );
             CentralPanel::default().show(ctx, |ui| {
+                if self.content == main_area::Content::NewFile {
+                    self.new_file(ui, ctx.input(|i| i.key_pressed(Key::Enter)));
+                    return;
+                }
+
                 if self.prev_current_file != self.current_file {
-                    self.prev_current_file = self.current_file.clone(); //TODO remove
+                    self.prev_current_file = self.current_file.clone();
                     {
                         self.tabs.file_changed(self.current_file.clone());
                     }
                 }
                 self.tabs.ui(ui);
-                if self.content == main_area::Content::NewFile {
-                    self.new_file(ui, ctx.input(|i| i.key_pressed(Key::Enter)));
-                }
+
                 /*self.buffer = files::read_file(&self.current_file);
                                         ui.label("✏");
                                             RichText::new("👁")
@@ -243,9 +246,9 @@ impl eframe::App for Marmol {
         /////////////////////////////////////////////////////////////////////////////////
         let rect = ctx.screen_rect();
         let btn_size = match rect.width() / 45. {
-            20.0..=35.0 => rect.width() / 45.,
+            20.0..=30.0 => rect.width() / 45.,
             ..=20. => 20.,
-            _ => 35.,
+            _ => 30.,
         };
         self.window_size = MShape {
             width: rect.width(),

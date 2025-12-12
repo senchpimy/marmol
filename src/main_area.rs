@@ -373,6 +373,7 @@ impl LeftControls {
                 {
                     *content = Content::NewFile;
                 }
+
                 ui.with_layout(Layout::bottom_up(Align::Max), |ui| {
                     ui.add_space(5.);
                     if ui
