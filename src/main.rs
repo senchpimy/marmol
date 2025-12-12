@@ -114,6 +114,7 @@ impl Default for Marmol {
             center_size,
             sort_files,
         ) = configuraciones::load_vault();
+        let current_path_str = current.clone().unwrap_or_default();
         println!("Configuracion actual: {:?}", &current);
         Self {
             window_size: MShape {
@@ -137,13 +138,11 @@ impl Default for Marmol {
             show_create_button: false,
             current_window: window,
             prev_window: window,
-            //prev_current_file: current.to_owned(),
-            prev_current_file: String::new(),
+            prev_current_file: current_path_str.clone(),
             create_file_error: String::new(),
             vault: vault_var,
             vault_vec: vault_vec_var,
-            //current_file: current.to_owned(),
-            current_file: String::new(),
+            current_file: current_path_str,
             new_file_type: NewFileType::Markdown,
 
             left_collpased: left_coll,
