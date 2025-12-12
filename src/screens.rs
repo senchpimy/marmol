@@ -1,5 +1,5 @@
 use crate::main_area;
-use crate::toggle_switch;
+//use crate::toggle_switch;
 use crate::MShape;
 use eframe::egui::{Button, CentralPanel, Color32, FontId, RichText};
 use egui::Widget;
@@ -114,8 +114,14 @@ pub fn configuracion(
         let button_height = 40.0;
         let button_size = [button_width, button_height];
 
-        if ui.add_sized(button_size, egui::Button::new("Select theme")).clicked() {}
-        if ui.add_sized(button_size, egui::Button::new("Create a New Vault")).clicked() {
+        if ui
+            .add_sized(button_size, egui::Button::new("Select theme"))
+            .clicked()
+        {}
+        if ui
+            .add_sized(button_size, egui::Button::new("Create a New Vault"))
+            .clicked()
+        {
             let files = FileDialog::new().set_title("Select a Folder").pick_folder();
             match files {
                 Some(x) => {
@@ -141,7 +147,10 @@ pub fn configuracion(
             }
         }
         if *button {
-            if ui.add_sized(button_size, egui::Button::new("Create!")).clicked() {
+            if ui
+                .add_sized(button_size, egui::Button::new("Create!"))
+                .clicked()
+            {
                 let full_path = format!("{}/{}", folder, nw_vault_str);
                 let create = fs::create_dir(&full_path);
                 vaults.push(full_path);
@@ -192,7 +201,10 @@ pub fn configuracion(
                 }
             });
         });
-        if ui.add_sized(button_size, egui::Button::new("Add a Existing Vault")).clicked() {
+        if ui
+            .add_sized(button_size, egui::Button::new("Add a Existing Vault"))
+            .clicked()
+        {
             let files = FileDialog::new().set_title("Select a Folder").pick_folder();
             match files {
                 Some(x) => {
@@ -206,10 +218,14 @@ pub fn configuracion(
             }
         }
         ui.add_space(10.0);
-        ui.add(toggle_switch::toggle_bool(sort_files));
-        ui.label("Show files sorted");
+        //ui.add(toggle_switch::toggle_bool(sort_files));
+        ui.checkbox(sort_files, "Show files sorted");
+        //ui.label("Show files sorted");
         ui.add_space(10.0);
-        if ui.add_sized(button_size, egui::Button::new("Configure Backup Server")).clicked() {
+        if ui
+            .add_sized(button_size, egui::Button::new("Configure Backup Server"))
+            .clicked()
+        {
             *current_window = Screen::Server;
         };
         ui.add_space(10.0);
@@ -232,7 +248,10 @@ pub fn configuracion(
             ctx.set_style(style);
         }
         ui.add_space(30.0);
-        if ui.add_sized(button_size, egui::Button::new("return")).clicked() {
+        if ui
+            .add_sized(button_size, egui::Button::new("return"))
+            .clicked()
+        {
             *current_window = *prev_window;
         };
     });

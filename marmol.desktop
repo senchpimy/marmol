@@ -5,3 +5,4 @@ Exec=/bin/marmol
 Type=Application
 Name=Marmol
 GenericName=Marmol
+Icon=/home/plof/Documents/RustProjects/marmol/logo/cubov2.svg

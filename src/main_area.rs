@@ -279,7 +279,6 @@ impl LeftControls {
                 } else {
                     let is_selected = &file_location == current_file;
 
-                    //let btn = egui::SelectableLabel::new(is_selected, file_name);
                     let btn = Button::selectable(is_selected, file_name);
 
                     let response = ui.add(btn);

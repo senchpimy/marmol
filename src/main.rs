@@ -19,7 +19,6 @@ mod search;
 mod server;
 mod tabs;
 mod tasks;
-mod toggle_switch;
 
 #[derive(PartialEq, Debug)]
 enum NewFileType {
@@ -198,24 +197,8 @@ impl eframe::App for Marmol {
                         self.tabs.file_changed(self.current_file.clone());
                     }
                 }
-                self.tabs.ui(ui);
 
-                /*self.buffer = files::read_file(&self.current_file);
-                                        ui.label("✏");
-                                            RichText::new("👁")
-                    //}else if self.content == main_area::Content::NewTask{
-                    //    self.new_file(ui,ctx.input(|i| i.key_pressed(Key::Enter)));
-                    } else if self.content == main_area::Content::Graph {
-                        self.marker.ui(
-                            ui,
-                            &mut self.current_file,
-                            &mut self.content,
-                            &self.vault,
-                        );
-                        self.marker.controls(ctx);
-                    }
-                }); //termina CentralPanel
-                    //Termina Principal*/
+                self.tabs.ui(ui);
             });
         } else if self.current_window == screens::Screen::Configuracion {
             //TODO fix this mess

@@ -34,13 +34,20 @@ impl Tabe {
             .to_str()
             .unwrap()
             .into();
+        let loaded_content = files::read_file(&path);
+
+        let (initial_ctype, initial_buffer) = if loaded_content.trim().is_empty() {
+            (main_area::Content::Edit, loaded_content.clone())
+        } else {
+            (main_area::Content::View, String::new())
+        };
         Self {
             id: n,
-            ctype: main_area::Content::View,
+            ctype: initial_ctype,
             title,
             path,
-            content: String::new(),
-            buffer: String::new(),
+            content: loaded_content,
+            buffer: initial_buffer,
             is_image: false,
             common_mark_c: CommonMarkCache::default(),
             income: income::IncomeGui::default(),
@@ -103,6 +110,7 @@ impl TabViewer for MTabViewer<'_> {
                                 main_area::create_metadata(metadata, ui);
                             }
                             CommonMarkViewer::new().show(ui, &mut tab.common_mark_c, &content);
+                            ui.allocate_space(ui.available_size());
                         });
 
                         let interact_response = ui.interact(
@@ -161,9 +169,15 @@ fn update_tab_content(tab: &mut Tabe, path: &String) {
 
     tab.path = path.clone();
     tab.title = new_title;
-    tab.ctype = main_area::Content::View;
-    tab.content = String::new();
-    tab.buffer = String::new();
+    let loaded_content = files::read_file(path);
+    if loaded_content.trim().is_empty() {
+        tab.ctype = main_area::Content::Edit;
+        tab.buffer = loaded_content.clone();
+    } else {
+        tab.ctype = main_area::Content::View;
+        tab.buffer = String::new();
+    }
+    tab.content = loaded_content;
     tab.common_mark_c = CommonMarkCache::default();
 }
 
