@@ -3,7 +3,7 @@ use crate::income;
 use crate::main_area;
 use crate::tasks;
 use egui::Image;
-use egui::{FontId, Ui, WidgetText};
+use egui::{FontId, Frame, Sense, Ui, WidgetText};
 use egui_commonmark::*;
 use egui_dock::{DockArea, DockState, NodeIndex, Style, SurfaceIndex, TabViewer};
 use egui_extras::{Size, StripBuilder};
@@ -93,15 +93,27 @@ impl TabViewer for MTabViewer<'_> {
                 strip.cell(|_| {});
                 strip.cell(|ui| {
                     egui::ScrollArea::vertical().show(ui, |ui| {
-                        tab.content = files::read_file(&tab.path); //Reading every time == listen
-                                                                   //changes
-                        let (content, metadata) = files::contents(&tab.content);
-                        ui.heading(&tab.title);
-                        if !metadata.is_empty() {
-                            main_area::create_metadata(metadata, ui);
+                        tab.content = files::read_file(&tab.path);
+                        let frame = Frame::new();
+                        let inner_response = frame.show(ui, |ui| {
+                            let (content, metadata) = files::contents(&tab.content);
+                            ui.heading(&tab.title);
+                            if !metadata.is_empty() {
+                                main_area::create_metadata(metadata, ui);
+                            }
+                            CommonMarkViewer::new().show(ui, &mut tab.common_mark_c, &content);
+                        });
+
+                        let interact_response = ui.interact(
+                            inner_response.response.rect,
+                            ui.id().with("frame_interact"),
+                            Sense::click(),
+                        );
+
+                        if interact_response.double_clicked() {
+                            tab.ctype = main_area::Content::Edit;
+                            tab.buffer = tab.content.clone();
                         }
-                        //CommonMarkViewer::new(tab.id).show(ui, &mut tab.common_mark_c, &content);
-                        CommonMarkViewer::new().show(ui, &mut tab.common_mark_c, &content);
                     });
                 });
             });
@@ -125,17 +137,9 @@ impl TabViewer for MTabViewer<'_> {
                             f.write_all(tab.buffer.as_bytes()).unwrap();
                             f.flush().unwrap();
                         }
-                        //Why ?
-                        /*if ctx.input(|i| i.key_pressed(Key::Enter)) && response.has_focus() {
-                            let mut f = std::fs::OpenOptions::new()
-                                .write(true)
-                                .truncate(true)
-                                .open(&tab.path)
-                                .unwrap();
-                            f.write_all(format::indent(&self.text_edit).as_bytes())
-                                .unwrap();
-                            f.flush().unwrap();
-                        }*/
+                        if ui.input(|i| i.key_pressed(egui::Key::Escape)) {
+                            tab.ctype = main_area::Content::View;
+                        }
                     });
                 });
             });
