@@ -4,15 +4,11 @@ use crate::MShape;
 use std::io::Write;
 
 use eframe::egui::{
-    Align, Button, Context, Frame, Layout, RichText, ScrollArea, Separator, SidePanel, Style,
+    Align, Button, Context, Frame, Layout, RichText, ScrollArea, SelectableLabel, SidePanel, Style,
     TopBottomPanel,
 };
-use egui::{Id, Popup, PopupCloseBehavior};
-//use egui::ImageSource;
-//use egui::TextBuffer;
-//use egui_extras::{RetainedImage, Size, StripBuilder};
-
 use egui::Vec2;
+use egui::{Id, Popup, PopupCloseBehavior};
 use json::JsonValue;
 
 use chrono::prelude::*;
@@ -49,6 +45,7 @@ pub struct LeftControls {
     //right_collpased:bool,
     //starred_image: RetainedImage,
     rename: String,
+    renaming_path: Option<String>,
     menu_error: String,
 }
 
@@ -57,6 +54,7 @@ impl Default for LeftControls {
         Self {
             current_left_tab: LeftTab::Files,
             rename: "".to_owned(),
+            renaming_path: None,
             menu_error: "".to_owned(),
             search_string_menu: "".to_owned(),
             prev_search_string_menu: "".to_owned(),
@@ -65,6 +63,7 @@ impl Default for LeftControls {
         }
     }
 }
+
 impl LeftControls {
     pub fn left_side_menu(
         &mut self,
@@ -140,6 +139,7 @@ impl LeftControls {
                 }
             });
         });
+
         if self.current_left_tab == LeftTab::Files {
             let scrolling_files = ScrollArea::vertical();
             scrolling_files.show(ui, |ui| {
@@ -234,24 +234,57 @@ impl LeftControls {
         if *sort_entrys {
             entrys_vec.sort(); //Stop sorting every frame
         }
+
         for file_location in entrys_vec {
             let file_name = Path::new(&file_location)
                 .file_name()
                 .expect("No fails")
                 .to_str()
                 .unwrap();
+
             if Path::new(&file_location).is_dir() {
                 let col = egui::containers::collapsing_header::CollapsingHeader::new(file_name);
                 col.show(ui, |ui| {
                     self.render_files(ui, &file_location, current_file, vault, sort_entrys);
                 });
             } else {
-                if &file_location == current_file {
-                    ui.label(RichText::new(file_name).color(ui.style().visuals.selection.bg_fill));
+                let is_renaming_this = self
+                    .renaming_path
+                    .as_ref()
+                    .map_or(false, |p| *p == file_location);
+
+                if is_renaming_this {
+                    let response = ui.text_edit_singleline(&mut self.rename);
+                    response.request_focus();
+
+                    if ui.input(|i| i.key_pressed(egui::Key::Enter)) {
+                        let path_obj = Path::new(&file_location);
+                        let parent = path_obj.parent().unwrap();
+                        let new_path = parent.join(&self.rename);
+
+                        match fs::rename(&file_location, &new_path) {
+                            Ok(_) => {
+                                if *current_file == file_location {
+                                    *current_file = new_path.to_str().unwrap().to_string();
+                                }
+                                self.renaming_path = None;
+                            }
+                            Err(e) => {
+                                self.menu_error = format!("Error renaming: {}", e);
+                            }
+                        }
+                    } else if ui.input(|i| i.key_pressed(egui::Key::Escape)) {
+                        self.renaming_path = None;
+                    }
                 } else {
-                    let btn = Button::new(file_name).frame(false);
-                    let popup_id = Id::new("file_menu").with(&file_location);
+                    let is_selected = &file_location == current_file;
+
+                    //let btn = egui::SelectableLabel::new(is_selected, file_name);
+                    let btn = Button::selectable(is_selected, file_name);
+
                     let response = ui.add(btn);
+                    let popup_id = Id::new("file_menu").with(&file_location);
+
                     Popup::context_menu(&response)
                         .id(popup_id)
                         .close_behavior(PopupCloseBehavior::CloseOnClickOutside)
@@ -261,12 +294,16 @@ impl LeftControls {
                                 &file_location,
                                 &path,
                                 &mut self.rename,
+                                &mut self.renaming_path,
                                 &mut self.menu_error,
                                 vault,
                             );
                         });
 
-                    if response.clicked() {
+                    if response.double_clicked() {
+                        self.renaming_path = Some(file_location.clone());
+                        self.rename = file_name.to_string();
+                    } else if response.clicked() {
                         *current_file = file_location.to_string();
                     }
                 }
@@ -305,7 +342,6 @@ impl LeftControls {
                 {
                     *colapse = !*colapse;
                 }
-                //ui.add(Separator::default());
                 ui.add_space(space);
                 if ui
                     .add(egui::Button::image(
@@ -489,6 +525,7 @@ fn file_options(
     s: &str,
     path: &str,
     rename: &mut String,
+    renaming_path: &mut Option<String>,
     error: &mut String,
     vault: &str,
 ) {
@@ -550,7 +587,13 @@ fn file_options(
     }
 
     if ui.button("Rename").clicked() {
-        *rename = String::from(s);
+        *renaming_path = Some(s.to_string());
+        *rename = Path::new(s)
+            .file_name()
+            .unwrap()
+            .to_str()
+            .unwrap()
+            .to_string();
         ui.close();
     }
 
@@ -592,7 +635,7 @@ fn file_options(
         });
     } else {
         let btn_delete =
-            egui::SelectableLabel::new(false, RichText::new("Delete file").color(Color32::RED));
+            Button::selectable(false, RichText::new("Delete file").color(Color32::RED));
 
         if ui.add(btn_delete).clicked() {
             is_confirming = true;
