@@ -7,6 +7,7 @@ use eframe::egui::{
     Align, Button, Context, Frame, Layout, RichText, ScrollArea, Separator, SidePanel, Style,
     TopBottomPanel,
 };
+use egui::{Id, Popup, PopupCloseBehavior};
 //use egui::ImageSource;
 //use egui::TextBuffer;
 //use egui_extras::{RetainedImage, Size, StripBuilder};
@@ -92,17 +93,16 @@ impl LeftControls {
         window_size: &MShape,
     ) {
         let vault = path;
-        //let boton_tam = window_size.height / 30.; // TODO relative size
-        //dbg!(window_size.height);
         TopBottomPanel::top("Left Menu").show_inside(ui, |ui| {
             ui.with_layout(Layout::left_to_right(Align::Min), |ui| {
                 let btn_size = Vec2::new(window_size.btn_size, window_size.btn_size);
+                let color = Color32::BLACK;
                 if ui
                     .add_sized(
                         btn_size.clone(),
                         Button::image(
                             egui::Image::new(egui::include_image!("../resources/folder.svg"))
-                                .tint(Color32::from_rgb(0, 0, 255))
+                                .tint(color)
                                 .fit_to_exact_size(btn_size.clone()),
                         ),
                     )
@@ -115,7 +115,8 @@ impl LeftControls {
                         btn_size.clone(),
                         Button::image(
                             egui::Image::new(egui::include_image!("../resources/search.svg"))
-                                .fit_to_exact_size(btn_size.clone()), //.tint(egui::Color32::WHITE), //no se aplica por algun motivo
+                                .tint(color)
+                                .fit_to_exact_size(btn_size.clone()),
                         ),
                     )
                     .clicked()
@@ -129,7 +130,8 @@ impl LeftControls {
                             egui::Image::new(egui::include_image!(
                                 "../resources/square-check-big.svg"
                             ))
-                            .fit_to_exact_size(btn_size.clone()),
+                            .fit_to_exact_size(btn_size.clone())
+                            .tint(color),
                         ),
                     )
                     .clicked()
@@ -248,29 +250,25 @@ impl LeftControls {
                     ui.label(RichText::new(file_name).color(ui.style().visuals.selection.bg_fill));
                 } else {
                     let btn = Button::new(file_name).frame(false);
-                    let menu = |ui: &mut egui::Ui| {
-                        file_options(
-                            ui,
-                            &file_location,
-                            &path,
-                            &mut self.rename,
-                            &mut self.menu_error,
-                            vault,
-                        );
-                    };
+                    let popup_id = Id::new("file_menu").with(&file_location);
+                    let response = ui.add(btn);
+                    Popup::context_menu(&response)
+                        .id(popup_id)
+                        .close_behavior(PopupCloseBehavior::CloseOnClickOutside)
+                        .show(|ui| {
+                            file_options(
+                                ui,
+                                &file_location,
+                                &path,
+                                &mut self.rename,
+                                &mut self.menu_error,
+                                vault,
+                            );
+                        });
 
-                    if ui.add(btn).clicked() {
+                    if response.clicked() {
                         *current_file = file_location.to_string();
                     }
-
-                    //if btn.ui(ui).context_menu(menu).clicked() {
-                    //let btn_res = btn.ui(ui).context_menu(menu);
-                    //if let Some(res) = btn_res {
-                    //    if res.response.clicked() {
-                    //        *current_file = file_location.to_string();
-                    //    }
-                    //}
-                    //dbg!(&current_file);
                 }
             }
             ui.add_space(2.0);
@@ -292,6 +290,7 @@ impl LeftControls {
             .default_width(1.);
         let space = window_size.height / 55.;
         let btn_size = Vec2::new(window_size.btn_size, window_size.btn_size);
+        let color = Color32::BLACK;
         left_panel.show(ctx, |ui| {
             ui.add_space(5.);
             ui.set_max_width(window_size.btn_size);
@@ -299,8 +298,8 @@ impl LeftControls {
                 if ui
                     .add(Button::image(
                         egui::Image::new(egui::include_image!("../resources/fold-horizontal.svg"))
-                            .tint(egui::Color32::WHITE)
-                            .fit_to_exact_size(btn_size.clone()),
+                            .fit_to_exact_size(btn_size.clone())
+                            .tint(color),
                     ))
                     .clicked()
                 {
@@ -311,7 +310,8 @@ impl LeftControls {
                 if ui
                     .add(egui::Button::image(
                         egui::Image::new(egui::include_image!("../resources/file-search.svg"))
-                            .fit_to_exact_size(btn_size.clone()),
+                            .fit_to_exact_size(btn_size.clone())
+                            .tint(color),
                     ))
                     .on_hover_text("Switcher")
                     .clicked()
@@ -322,7 +322,8 @@ impl LeftControls {
                 if ui
                     .add(egui::Button::image(
                         egui::Image::new(egui::include_image!("../resources/graph.svg"))
-                            .fit_to_exact_size(btn_size.clone()),
+                            .fit_to_exact_size(btn_size.clone())
+                            .tint(color),
                     ))
                     .on_hover_text("Graph")
                     .clicked()
@@ -333,7 +334,8 @@ impl LeftControls {
                 if ui
                     .add(egui::Button::image(
                         egui::Image::new(egui::include_image!("../resources/canvas.svg"))
-                            .fit_to_exact_size(btn_size.clone()),
+                            .fit_to_exact_size(btn_size.clone())
+                            .tint(color),
                     ))
                     .on_hover_text("Canvas")
                     .clicked()
@@ -344,7 +346,8 @@ impl LeftControls {
                 if ui
                     .add(egui::Button::image(
                         egui::Image::new(egui::include_image!("../resources/calendar-check.svg"))
-                            .fit_to_exact_size(btn_size.clone()),
+                            .fit_to_exact_size(btn_size.clone())
+                            .tint(color),
                     ))
                     .on_hover_text("Daily note")
                     .clicked()
@@ -355,7 +358,8 @@ impl LeftControls {
                 if ui
                     .add(egui::Button::image(
                         egui::Image::new(egui::include_image!("../resources/terminal.svg"))
-                            .fit_to_exact_size(btn_size.clone()),
+                            .fit_to_exact_size(btn_size.clone())
+                            .tint(color),
                     ))
                     .on_hover_text("Command Palette")
                     .clicked()
@@ -366,7 +370,8 @@ impl LeftControls {
                 if ui
                     .add(egui::Button::image(
                         egui::Image::new(egui::include_image!("../resources/new_file.svg"))
-                            .fit_to_exact_size(btn_size.clone()),
+                            .fit_to_exact_size(btn_size.clone())
+                            .tint(color),
                     ))
                     .on_hover_text("New File")
                     .clicked()
@@ -379,8 +384,8 @@ impl LeftControls {
                     if ui
                         .add(egui::Button::image(
                             egui::Image::new(egui::include_image!("../resources/cog.svg"))
-                                .tint(egui::Color32::WHITE)
-                                .fit_to_exact_size(btn_size.clone()),
+                                .fit_to_exact_size(btn_size.clone())
+                                .tint(color),
                         ))
                         .on_hover_text("Configuration")
                         .clicked()
@@ -393,7 +398,8 @@ impl LeftControls {
                             egui::Image::new(egui::include_image!(
                                 "../resources/badge-question-mark.svg"
                             ))
-                            .fit_to_exact_size(btn_size.clone()),
+                            .fit_to_exact_size(btn_size.clone())
+                            .tint(color),
                         ))
                         .on_hover_text("Help")
                         .clicked()
@@ -487,24 +493,27 @@ fn file_options(
     vault: &str,
 ) {
     let stared_path = format!("{}/.obsidian/starred.json", vault);
+
     ui.label(RichText::new(&*error).color(Color32::RED));
     let copy = egui::Button::new("Copy file").frame(false);
     let star = egui::Button::new("Star this file").frame(false);
     let path_s = Path::new(s).file_name().unwrap();
+
     ui.label("Move");
+
     if ui.add(copy).clicked() {
         let tmp = s.to_owned() + ".copy";
         let s_copy = Path::new(&tmp);
         let copy = fs::copy(s, &s_copy);
         match copy {
             Ok(_) => {
-                //ui.close_menu();
+                *error = String::new();
                 ui.close();
-                *error = String::new()
             }
             Err(r) => *error = r.to_string(),
         }
     }
+
     if ui.add(star).clicked() {
         let nw_json = object! {
             "type":"file",
@@ -512,8 +521,6 @@ fn file_options(
             "path":"testi"
         };
         if Path::new(&stared_path).exists() {
-            println!("{}", s);
-            println!("{}", path);
             let contents =
                 fs::read_to_string(&stared_path).expect("Should have been able to read the file");
             let mut parsed = json::parse(&contents).unwrap();
@@ -530,12 +537,7 @@ fn file_options(
             let file = File::create(stared_path);
             match file {
                 Ok(mut w) => {
-                    let text = format!(
-                        "{{
-                        items:[{}]
-                    }}",
-                        nw_json.dump()
-                    );
+                    let text = format!("{{ items:[{}] }}", nw_json.dump());
                     match w.write(text.as_bytes()) {
                         Ok(_) => *error = String::new(),
                         Err(r) => *error = r.to_string(),
@@ -544,35 +546,57 @@ fn file_options(
                 Err(r) => *error = r.to_string(),
             }
         }
-        //ui.close_menu.close();
         ui.close();
     }
+
     if ui.button("Rename").clicked() {
         *rename = String::from(s);
+        ui.close();
     }
-    let delete = egui::Button::new(RichText::new("Delete file").color(Color32::RED));
-    let col = egui::containers::collapsing_header::CollapsingHeader::new(
-        RichText::new("Delete file").color(Color32::RED),
-    );
-    col.show(ui, |ui| {
-        ui.label("Are you sure you want to delete");
-        ui.label(RichText::new(path_s.to_str().unwrap()).strong());
-        ui.add_space(5.);
-        if ui.button("No").clicked() {
-            ui.close();
-            //ui.close_menu();
-        }
-        ui.add_space(5.);
-        if ui.add(delete).clicked() {
-            let delete = fs::remove_file(s);
-            match delete {
-                Ok(_) => *error = String::new(),
-                Err(r) => {
-                    *error = r.to_string();
+
+    ui.separator();
+
+    let id = ui.make_persistent_id(format!("del_{}", s));
+    let mut is_confirming: bool = ui.data(|d| d.get_temp(id).unwrap_or(false));
+
+    if is_confirming {
+        ui.vertical_centered(|ui| {
+            ui.label(RichText::new("Are you sure?").strong().color(Color32::RED));
+            ui.label(RichText::new(path_s.to_str().unwrap()).italics().weak());
+            ui.add_space(5.);
+
+            ui.horizontal(|ui| {
+                // Cancelar
+                if ui.button("No").clicked() {
+                    is_confirming = false;
+                    ui.data_mut(|d| d.insert_temp(id, false));
                 }
-            }
-            //ui.close_menu();
-            ui.close()
+
+                let btn_yes = egui::Button::new(RichText::new("Yes, Delete").color(Color32::WHITE))
+                    .fill(Color32::RED);
+
+                if ui.add(btn_yes).clicked() {
+                    let delete = fs::remove_file(s);
+                    match delete {
+                        Ok(_) => {
+                            *error = String::new();
+                            ui.data_mut(|d| d.remove_temp::<bool>(id));
+                            ui.close();
+                        }
+                        Err(r) => {
+                            *error = r.to_string();
+                        }
+                    }
+                }
+            });
+        });
+    } else {
+        let btn_delete =
+            egui::SelectableLabel::new(false, RichText::new("Delete file").color(Color32::RED));
+
+        if ui.add(btn_delete).clicked() {
+            is_confirming = true;
+            ui.data_mut(|d| d.insert_temp(id, true));
         }
-    });
+    }
 }
