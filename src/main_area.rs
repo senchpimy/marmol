@@ -319,6 +319,8 @@ impl LeftControls {
         current_file: &mut String,
         current_window: &mut screens::Screen,
         content: &mut Content,
+        tabs: &mut crate::tabs::Tabs,
+        tabs_counter: &mut usize,
         window_size: &MShape,
     ) {
         let left_panel = SidePanel::left("buttons left")
@@ -363,7 +365,8 @@ impl LeftControls {
                     .on_hover_text("Graph")
                     .clicked()
                 {
-                    *content = Content::Graph;
+                    tabs.add_tab(crate::tabs::Tabe::new_graph(*tabs_counter));
+                    *tabs_counter += 1;
                 } //graph
                 ui.add_space(space);
                 if ui

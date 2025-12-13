@@ -11,17 +11,18 @@ use std::io::Write;
 use std::path::Path;
 
 //type Tabe = String;
-struct Tabe {
-    id: usize,
-    title: String,
-    path: String,
-    content: String,
-    buffer: String,
-    is_image: bool,
-    ctype: main_area::Content,
-    common_mark_c: CommonMarkCache,
-    income: income::IncomeGui,
-    tasks: tasks::TasksGui,
+pub struct Tabe {
+    pub id: usize,
+    pub title: String,
+    pub path: String,
+    pub content: String,
+    pub buffer: String,
+    pub is_image: bool,
+    pub is_graph: bool,
+    pub ctype: main_area::Content,
+    pub common_mark_c: CommonMarkCache,
+    pub income: income::IncomeGui,
+    pub tasks: tasks::TasksGui,
 }
 
 impl Tabe {
@@ -49,6 +50,23 @@ impl Tabe {
             content: loaded_content,
             buffer: initial_buffer,
             is_image: false,
+            is_graph: false,
+            common_mark_c: CommonMarkCache::default(),
+            income: income::IncomeGui::default(),
+            tasks: tasks::TasksGui::default(),
+        }
+    }
+
+    pub fn new_graph(n: usize) -> Self {
+        Self {
+            id: n,
+            ctype: main_area::Content::Graph,
+            title: "Graph".to_string(),
+            path: String::new(),
+            content: String::new(),
+            buffer: String::new(),
+            is_image: false,
+            is_graph: true,
             common_mark_c: CommonMarkCache::default(),
             income: income::IncomeGui::default(),
             tasks: tasks::TasksGui::default(),
@@ -58,6 +76,9 @@ impl Tabe {
 
 struct MTabViewer<'a> {
     added_nodes: &'a mut Vec<(SurfaceIndex, NodeIndex)>,
+    graph: &'a mut crate::graph::Graph,
+    content: &'a mut main_area::Content,
+    vault: &'a str,
 }
 
 impl TabViewer for MTabViewer<'_> {
@@ -68,6 +89,10 @@ impl TabViewer for MTabViewer<'_> {
     }
 
     fn ui(&mut self, ui: &mut Ui, tab: &mut Self::Tab) {
+        if tab.is_graph {
+            self.graph.ui(ui, self.content, self.vault);
+            return;
+        }
         //ui.label(format!("Content of {}", tab.title));
         //if ctx.input(|i| i.key_pressed(Key::F)) {
         //    println!("Search");
@@ -201,7 +226,14 @@ impl Tabs {
         Self { tree, counter: 0 }
     }
 
-    pub fn ui(&mut self, ui: &mut Ui) {
+    pub fn ui(
+        &mut self,
+        ui: &mut Ui,
+        marker: &mut crate::graph::Graph,
+        //current_file: &mut String,
+        content: &mut main_area::Content,
+        vault: &str,
+    ) {
         let mut added_nodes = Vec::new();
         DockArea::new(&mut self.tree)
             .style(Style::from_egui(ui.style().as_ref()))
@@ -210,6 +242,10 @@ impl Tabs {
                 ui,
                 &mut MTabViewer {
                     added_nodes: &mut added_nodes,
+                    graph: marker,
+                    //current_file,
+                    content,
+                    vault,
                 },
             );
         added_nodes.drain(..).for_each(|(surface, node)| {
@@ -239,5 +275,9 @@ impl Tabs {
             let new_tab = Tabe::new(self.counter, path);
             self.tree.push_to_first_leaf(new_tab);
         }
+    }
+
+    pub fn add_tab(&mut self, tab: Tabe) {
+        self.tree.push_to_focused_leaf(tab);
     }
 }

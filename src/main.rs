@@ -55,6 +55,7 @@ fn main() -> Result<(), eframe::Error> {
 }
 
 struct Marmol {
+    tabs_counter: usize,
     switcher: switcher::QuickSwitcher,
     prev_current_file: String,
     new_vault_str: String,
@@ -126,6 +127,7 @@ impl Default for Marmol {
         let current_path_str = current.clone().unwrap_or_default();
         println!("Configuracion actual: {:?}", &current);
         Self {
+            tabs_counter: 0,
             window_size: MShape {
                 height: 0.,
                 width: 0.,
@@ -187,6 +189,8 @@ impl eframe::App for Marmol {
                 &mut self.current_file,
                 &mut self.current_window,
                 &mut self.content,
+                &mut self.tabs,
+                &mut self.tabs_counter,
                 &self.window_size,
             );
             self.left_controls.left_side_menu(
@@ -198,9 +202,10 @@ impl eframe::App for Marmol {
                 &self.window_size,
             );
             CentralPanel::default().show(ctx, |ui| {
-                if self.content == main_area::Content::Graph {
-                    self.marker.ui(ui, &mut self.current_file, &mut self.content, &self.vault);
-                    return;
+                if self.prev_current_file != self.current_file {
+                    self.content = main_area::Content::View;
+                    self.prev_current_file = self.current_file.clone();
+                    self.tabs.file_changed(self.current_file.clone());
                 }
 
                 if self.content == main_area::Content::NewFile {
@@ -214,11 +219,15 @@ impl eframe::App for Marmol {
                     if let Ok(metadata) = std::fs::metadata(&self.current_file) {
                         self.content = crate::main_area::Content::View;
                     }
-
-                    self.tabs.file_changed(self.current_file.clone());
                 }
 
-                self.tabs.ui(ui);
+                self.tabs.ui(
+                    ui,
+                    &mut self.marker,
+                    //&mut self.current_file,
+                    &mut self.content,
+                    &self.vault,
+                );
                 ctx.send_viewport_cmd(egui::ViewportCommand::Title(format!(
                     "Marmol - {}",
                     self.current_file.split("/").last().unwrap()
