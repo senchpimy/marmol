@@ -10,28 +10,33 @@ use egui_extras::{Size, StripBuilder};
 use std::io::Write;
 use std::path::Path;
 
+pub enum TabContent {
+    Empty,
+    Graph(crate::graph::Graph),
+    Image(String),
+    Income(income::IncomeGui),
+    Tasks(tasks::TasksGui),
+    Markdown {
+        content: String,
+        buffer: String,
+        cache: CommonMarkCache,
+    },
+}
+
 //type Tabe = String;
 pub struct Tabe {
     pub id: usize,
     pub title: String,
     pub path: String,
-    pub content: String,
-    pub buffer: String,
-    pub is_image: bool,
-    pub is_graph: bool,
+    pub content: TabContent,
     pub ctype: main_area::Content,
-    pub common_mark_c: CommonMarkCache,
-    pub income: income::IncomeGui,
-    pub tasks: tasks::TasksGui,
 }
 
 impl Tabe {
     fn new(n: usize, path: String) -> Self {
-        dbg!(&path);
         let title = Path::new(&path)
             .file_name()
             .unwrap()
-            //.unwrap_or("")
             .to_str()
             .unwrap()
             .into();
@@ -42,34 +47,41 @@ impl Tabe {
         } else {
             (main_area::Content::View, String::new())
         };
+
+        let content = if path.ends_with(".png") || path.ends_with("jpeg") || path.ends_with("jpg") {
+            TabContent::Image(path.clone())
+        } else if path.ends_with(".inc") {
+            let mut income = income::IncomeGui::default();
+            income.set_path(&path);
+            TabContent::Income(income)
+        } else if path.ends_with(".graph") {
+            let mut tasks = tasks::TasksGui::default();
+            tasks.set_path(&path);
+            TabContent::Tasks(tasks)
+        } else {
+            TabContent::Markdown {
+                content: loaded_content,
+                buffer: initial_buffer,
+                cache: CommonMarkCache::default(),
+            }
+        };
+
         Self {
             id: n,
             ctype: initial_ctype,
             title,
             path,
-            content: loaded_content,
-            buffer: initial_buffer,
-            is_image: false,
-            is_graph: false,
-            common_mark_c: CommonMarkCache::default(),
-            income: income::IncomeGui::default(),
-            tasks: tasks::TasksGui::default(),
+            content,
         }
     }
 
-    pub fn new_graph(n: usize) -> Self {
+    pub fn new_graph(n: usize, vault: &str) -> Self {
         Self {
             id: n,
             ctype: main_area::Content::Graph,
             title: "Graph".to_string(),
             path: String::new(),
-            content: String::new(),
-            buffer: String::new(),
-            is_image: false,
-            is_graph: true,
-            common_mark_c: CommonMarkCache::default(),
-            income: income::IncomeGui::default(),
-            tasks: tasks::TasksGui::default(),
+            content: TabContent::Graph(crate::graph::Graph::new(vault)),
         }
     }
 }
@@ -89,97 +101,96 @@ impl TabViewer for MTabViewer<'_> {
     }
 
     fn ui(&mut self, ui: &mut Ui, tab: &mut Self::Tab) {
-        if tab.is_graph {
-            self.graph.ui(ui, self.content, self.vault);
-            return;
-        }
-        //ui.label(format!("Content of {}", tab.title));
-        //if ctx.input(|i| i.key_pressed(Key::F)) {
-        //    println!("Search");
-        //}
-        if tab.path.ends_with(".png") || tab.path.ends_with("jpeg") || tab.path.ends_with("jpg") {
-            tab.is_image = true;
-        } else {
-            tab.is_image = false;
-        }
+        match &mut tab.content {
+            TabContent::Graph(graph) => {
+                graph.ui(ui, &mut String::new(), self.content, self.vault);
+            }
+            TabContent::Image(image_path) => {
+                egui::ScrollArea::vertical()
+                    .id_salt(format!("{}", tab.id))
+                    .show(ui, |ui| {
+                        let img = Image::from_uri(format!("file://{}", image_path));
+                        ui.add(img);
+                    });
+            }
+            TabContent::Income(income) => {
+                income.set_path(&tab.path);
+                income.show(ui);
+            }
+            TabContent::Tasks(tasks) => {
+                tasks.set_path(&tab.path);
+                tasks.show(ui);
+            }
+            TabContent::Markdown {
+                content,
+                buffer,
+                cache,
+            } => {
+                if tab.ctype == main_area::Content::View {
+                    let cont = StripBuilder::new(ui)
+                        .size(Size::relative(0.25))
+                        .size(Size::relative(0.5));
+                    cont.horizontal(|mut strip| {
+                        strip.cell(|_| {});
+                        strip.cell(|ui| {
+                            egui::ScrollArea::vertical().show(ui, |ui| {
+                                *content = files::read_file(&tab.path);
+                                let frame =
+                                    Frame::none().inner_margin(egui::Margin::symmetric(30, 10));
+                                let inner_response = frame.show(ui, |ui| {
+                                    let (markdown_content, metadata) = files::contents(content);
+                                    ui.heading(&tab.title);
+                                    if !metadata.is_empty() {
+                                        main_area::create_metadata(metadata, ui);
+                                    }
+                                    CommonMarkViewer::new().show(ui, cache, &markdown_content);
+                                    ui.allocate_space(ui.available_size());
+                                });
 
-        if tab.is_image {
-            egui::ScrollArea::vertical()
-                .id_salt(format!("{}", tab.id))
-                .show(ui, |ui| {
-                    let img = Image::from_uri(format!("file://{}", &tab.path));
-                    ui.add(img);
-                });
-        } else if tab.path.ends_with(".inc") {
-            tab.income.set_path(&tab.path);
-            tab.income.show(ui);
-        } else if tab.path.ends_with(".graph") {
-            tab.tasks.set_path(&tab.path);
-            tab.tasks.show(ui);
-        } else if tab.ctype == main_area::Content::View {
-            //centrar los contenidos
+                                let interact_response = ui.interact(
+                                    inner_response.response.rect,
+                                    ui.id().with("frame_interact"),
+                                    Sense::click(),
+                                );
 
-            let cont = StripBuilder::new(ui)
-                .size(Size::relative(0.25))
-                .size(Size::relative(0.5));
-            cont.horizontal(|mut strip| {
-                strip.cell(|_| {});
-                strip.cell(|ui| {
-                    egui::ScrollArea::vertical().show(ui, |ui| {
-                        tab.content = files::read_file(&tab.path);
-                        //let frame = Frame::new();
-                        let frame = Frame::none().inner_margin(egui::Margin::symmetric(30, 10));
-                        let inner_response = frame.show(ui, |ui| {
-                            let (content, metadata) = files::contents(&tab.content);
-                            //ui.label(egui::RichText::new(&tab.path).size(10.0).weak()); //show
-                            //full path??
-                            ui.heading(&tab.title);
-                            if !metadata.is_empty() {
-                                main_area::create_metadata(metadata, ui);
-                            }
-                            CommonMarkViewer::new().show(ui, &mut tab.common_mark_c, &content);
-                            ui.allocate_space(ui.available_size());
+                                if interact_response.double_clicked() {
+                                    tab.ctype = main_area::Content::Edit;
+                                    *buffer = content.clone();
+                                }
+                            });
                         });
-
-                        let interact_response = ui.interact(
-                            inner_response.response.rect,
-                            ui.id().with("frame_interact"),
-                            Sense::click(),
-                        );
-
-                        if interact_response.double_clicked() {
-                            tab.ctype = main_area::Content::Edit;
-                            tab.buffer = tab.content.clone();
-                        }
                     });
-                });
-            });
-        } else if tab.ctype == main_area::Content::Edit {
-            let cont = StripBuilder::new(ui)
-                .size(Size::relative(0.25))
-                .size(Size::relative(0.5));
-            cont.horizontal(|mut strip| {
-                strip.cell(|_| {});
-                strip.cell(|ui| {
-                    egui::ScrollArea::vertical().show(ui, |ui| {
-                        let zone = egui::TextEdit::multiline(&mut tab.buffer)
-                            .font(FontId::proportional(15.0));
-                        let response = ui.add_sized(ui.available_size(), zone);
-                        if response.changed() {
-                            let mut f = std::fs::OpenOptions::new()
-                                .write(true)
-                                .truncate(true)
-                                .open(&tab.path)
-                                .unwrap();
-                            f.write_all(tab.buffer.as_bytes()).unwrap();
-                            f.flush().unwrap();
-                        }
-                        if ui.input(|i| i.key_pressed(egui::Key::Escape)) {
-                            tab.ctype = main_area::Content::View;
-                        }
+                } else if tab.ctype == main_area::Content::Edit {
+                    let cont = StripBuilder::new(ui)
+                        .size(Size::relative(0.25))
+                        .size(Size::relative(0.5));
+                    cont.horizontal(|mut strip| {
+                        strip.cell(|_| {});
+                        strip.cell(|ui| {
+                            egui::ScrollArea::vertical().show(ui, |ui| {
+                                let zone = egui::TextEdit::multiline(buffer)
+                                    .font(FontId::proportional(15.0));
+                                let response = ui.add_sized(ui.available_size(), zone);
+                                if response.changed() {
+                                    let mut f = std::fs::OpenOptions::new()
+                                        .write(true)
+                                        .truncate(true)
+                                        .open(&tab.path)
+                                        .unwrap();
+                                    f.write_all(buffer.as_bytes()).unwrap();
+                                    f.flush().unwrap();
+                                }
+                                if ui.input(|i| i.key_pressed(egui::Key::Escape)) {
+                                    tab.ctype = main_area::Content::View;
+                                }
+                            });
+                        });
                     });
-                });
-            });
+                }
+            }
+            TabContent::Empty => {
+                ui.label("Empty tab content.");
+            }
         }
     }
     fn on_add(&mut self, surface: egui_dock::SurfaceIndex, node: NodeIndex) {
@@ -200,13 +211,31 @@ fn update_tab_content(tab: &mut Tabe, path: &String) {
     let loaded_content = files::read_file(path);
     if loaded_content.trim().is_empty() {
         tab.ctype = main_area::Content::Edit;
-        tab.buffer = loaded_content.clone();
     } else {
         tab.ctype = main_area::Content::View;
-        tab.buffer = String::new();
     }
-    tab.content = loaded_content;
-    tab.common_mark_c = CommonMarkCache::default();
+
+    tab.content = if path.ends_with(".png") || path.ends_with("jpeg") || path.ends_with("jpg") {
+        TabContent::Image(path.clone())
+    } else if path.ends_with(".inc") {
+        let mut income = income::IncomeGui::default();
+        income.set_path(path);
+        TabContent::Income(income)
+    } else if path.ends_with(".graph") {
+        let mut tasks = tasks::TasksGui::default();
+        tasks.set_path(path);
+        TabContent::Tasks(tasks)
+    } else {
+        TabContent::Markdown {
+            content: loaded_content.clone(),
+            buffer: if tab.ctype == main_area::Content::Edit {
+                loaded_content
+            } else {
+                String::new()
+            },
+            cache: CommonMarkCache::default(),
+        }
+    };
 }
 
 pub struct Tabs {
@@ -259,7 +288,6 @@ impl Tabs {
     }
 
     pub fn file_changed(&mut self, path: String) {
-        dbg!("file changed");
 
         if self.tree.iter_all_tabs().count() == 0 {
             self.counter += 1;

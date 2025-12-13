@@ -365,7 +365,7 @@ impl LeftControls {
                     .on_hover_text("Graph")
                     .clicked()
                 {
-                    tabs.add_tab(crate::tabs::Tabe::new_graph(*tabs_counter));
+                    tabs.add_tab(crate::tabs::Tabe::new_graph(*tabs_counter, vault));
                     *tabs_counter += 1;
                 } //graph
                 ui.add_space(space);
