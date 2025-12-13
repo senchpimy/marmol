@@ -55,6 +55,7 @@ fn main() -> Result<(), eframe::Error> {
 }
 
 struct Marmol {
+    switcher: switcher::QuickSwitcher,
     prev_current_file: String,
     new_vault_str: String,
     content: main_area::Content,
@@ -130,6 +131,7 @@ impl Default for Marmol {
                 width: 0.,
                 btn_size: 20.,
             },
+            switcher: switcher::QuickSwitcher::default(),
             tabs: tabs::Tabs::new(current.clone()),
             center_size,
             center_size_remain: (1.0 - center_size) / 2.0,
@@ -174,6 +176,9 @@ impl eframe::App for Marmol {
                 &self.window_size,
             );
         } else if self.current_window == screens::Screen::Main {
+            if ctx.input(|i| i.modifiers.command && i.key_pressed(egui::Key::O)) {
+                self.switcher.open(&self.vault);
+            }
             //Main screen
             self.left_controls.left_side_settings(
                 ctx,
@@ -193,16 +198,24 @@ impl eframe::App for Marmol {
                 &self.window_size,
             );
             CentralPanel::default().show(ctx, |ui| {
+                if self.content == main_area::Content::Graph {
+                    self.marker.ui(ui, &mut self.current_file, &mut self.content, &self.vault);
+                    return;
+                }
+
                 if self.content == main_area::Content::NewFile {
                     self.new_file(ui, ctx.input(|i| i.key_pressed(Key::Enter)));
                     return;
                 }
 
-                if self.prev_current_file != self.current_file {
-                    self.prev_current_file = self.current_file.clone();
-                    {
-                        self.tabs.file_changed(self.current_file.clone());
+                if let Some(file_to_open) = self.switcher.ui(ctx) {
+                    self.current_file = file_to_open;
+
+                    if let Ok(metadata) = std::fs::metadata(&self.current_file) {
+                        self.content = crate::main_area::Content::View;
                     }
+
+                    self.tabs.file_changed(self.current_file.clone());
                 }
 
                 self.tabs.ui(ui);
