@@ -288,27 +288,31 @@ impl eframe::App for Marmol {
         //for i in &self.vault_vec {
         //    vec_str = vec_str.to_owned() + format!(" '{}' ,", &i).as_str();
         //}
-        let vec_str: String = self
+        let vault_vec_str: String = self
             .vault_vec
             .iter()
-            .map(|item| format!("'{}'", item))
+            .map(|item| format!("  - '{}'", item)) // Each item on a new line, indented
             .collect::<Vec<String>>()
-            .join(", ");
+            .join("\n");
 
         let dir = Path::new(&self.config_path);
         println!("{}", &self.config_path);
         if !dir.exists() {
             _ = fs::create_dir(&self.config_path);
         }
-        let vault_vec_str = format!("vault_vec: [ {} ]", vec_str);
+        let vault_vec_line = if vault_vec_str.is_empty() {
+            String::from("vault_vec: []")
+        } else {
+            format!("vault_vec:\n{}", vault_vec_str)
+        };
         let file_path = String::from(&self.config_path) + "/ProgramState";
-        let current_file = format!("current: {}", &self.current_file);
+        let current_file = format!("current: '{}'", &self.current_file); // Add quotes for consistency
         let center_size = format!("center_size: {}", &self.center_size);
         let left_menu = format!("left_menu: {}", &self.left_collpased);
         let sort_files = format!("sort_files: {}", &self.sort_files);
         let new_content = format!(
             "{}\n{}\n{}\n{}\n{}\n{}",
-            &vault_vec_str, vault_str, current_file, left_menu, center_size, sort_files
+            &vault_vec_line, vault_str, current_file, left_menu, center_size, sort_files
         );
         let mut file = fs::File::create(file_path).unwrap();
         file.write_all(new_content.as_bytes()).unwrap();

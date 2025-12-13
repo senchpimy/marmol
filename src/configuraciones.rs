@@ -1,6 +1,6 @@
 use crate::screens;
 use directories::BaseDirs;
-use egui::{style, Color32, CornerRadius, Rounding, Stroke};
+use egui::{style, Color32, CornerRadius, Stroke};
 use json;
 use std::fs;
 use std::path::Path;
@@ -40,12 +40,12 @@ pub fn load_vault() -> (
 
         let doc = &docs[0];
 
-        let vault_var = doc["vault"].as_str().unwrap_or("").to_string();
+        let vault_var = doc["vault"].as_str().unwrap_or("").trim_matches('\'').to_string();
         if vault_var.is_empty() {
             return create_default_vault(&config_dir_path);
         }
 
-        let mut current = doc["current"].as_str().unwrap_or("").to_string();
+        let mut current = doc["current"].as_str().unwrap_or("").trim_matches('\'').to_string();
         if current.is_empty() {
             current = vault_var.clone();
         }

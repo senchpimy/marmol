@@ -4,7 +4,7 @@ use crate::MShape;
 use std::io::Write;
 
 use eframe::egui::{
-    Align, Button, Context, Frame, Layout, RichText, ScrollArea, SelectableLabel, SidePanel, Style,
+    Align, Button, Context, Frame, Layout, RichText, ScrollArea, SidePanel, Style,
     TopBottomPanel,
 };
 use egui::Vec2;
