@@ -459,7 +459,20 @@ impl LeftControls {
 }
 
 pub fn create_metadata(metadata: String, ui: &mut egui::Ui) {
-    let docs = YamlLoader::load_from_str(&metadata).unwrap();
+    let result = YamlLoader::load_from_str(&metadata);
+    let Ok(docs) = result else {
+        egui::Frame::group(ui.style())
+            .fill(ui.visuals().faint_bg_color)
+            .corner_radius(5.0)
+            .inner_margin(10.0)
+            .stroke(egui::Stroke::new(1.0, Color32::RED))
+            .show(ui, |ui| {
+                ui.set_width(ui.available_width());
+                ui.label("Bad Formatting! :(");
+            });
+        ui.add_space(5.0);
+        return;
+    };
     let metadata_parsed = &docs[0];
     let mut job = LayoutJob::default();
 
@@ -516,7 +529,18 @@ pub fn create_metadata(metadata: String, ui: &mut egui::Ui) {
             );
         }
     });
-    ui.label(job);
+    egui::Frame::group(ui.style())
+        .fill(ui.visuals().faint_bg_color)
+        .corner_radius(5.0)
+        .inner_margin(10.0)
+        .stroke(egui::Stroke::new(
+            1.0,
+            ui.visuals().widgets.noninteractive.bg_stroke.color,
+        ))
+        .show(ui, |ui| {
+            ui.set_width(ui.available_width());
+            ui.label(job);
+        });
 }
 
 fn file_options(

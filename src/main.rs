@@ -17,6 +17,7 @@ mod main_area;
 mod screens;
 mod search;
 mod server;
+mod switcher;
 mod tabs;
 mod tasks;
 
@@ -93,6 +94,13 @@ impl Marmol {
         ctx.style_mut(|style| {
             let font_id = FontId::proportional(font_size);
             style.override_font_id = Some(font_id);
+            style.visuals.widgets.noninteractive.corner_radius = egui::CornerRadius::same(4);
+            style.visuals.widgets.noninteractive.corner_radius = egui::CornerRadius::same(4);
+            style.visuals.widgets.inactive.corner_radius = egui::CornerRadius::same(4);
+            style.visuals.widgets.hovered.corner_radius = egui::CornerRadius::same(4);
+            style.visuals.widgets.active.corner_radius = egui::CornerRadius::same(4);
+
+            style.spacing.item_spacing = egui::vec2(8.0, 5.0);
         });
         //ctx.set_visuals(configuraciones::load_colors());
         Self {
@@ -198,6 +206,10 @@ impl eframe::App for Marmol {
                 }
 
                 self.tabs.ui(ui);
+                ctx.send_viewport_cmd(egui::ViewportCommand::Title(format!(
+                    "Marmol - {}",
+                    self.current_file.split("/").last().unwrap()
+                )));
             });
         } else if self.current_window == screens::Screen::Configuracion {
             //TODO fix this mess

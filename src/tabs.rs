@@ -95,16 +95,19 @@ impl TabViewer for MTabViewer<'_> {
             //centrar los contenidos
 
             let cont = StripBuilder::new(ui)
-                .size(Size::relative(0.3))
-                .size(Size::relative(0.3));
+                .size(Size::relative(0.25))
+                .size(Size::relative(0.5));
             cont.horizontal(|mut strip| {
                 strip.cell(|_| {});
                 strip.cell(|ui| {
                     egui::ScrollArea::vertical().show(ui, |ui| {
                         tab.content = files::read_file(&tab.path);
-                        let frame = Frame::new();
+                        //let frame = Frame::new();
+                        let frame = Frame::none().inner_margin(egui::Margin::symmetric(30, 10));
                         let inner_response = frame.show(ui, |ui| {
                             let (content, metadata) = files::contents(&tab.content);
+                            //ui.label(egui::RichText::new(&tab.path).size(10.0).weak()); //show
+                            //full path??
                             ui.heading(&tab.title);
                             if !metadata.is_empty() {
                                 main_area::create_metadata(metadata, ui);
@@ -128,8 +131,8 @@ impl TabViewer for MTabViewer<'_> {
             });
         } else if tab.ctype == main_area::Content::Edit {
             let cont = StripBuilder::new(ui)
-                .size(Size::relative(0.3))
-                .size(Size::relative(0.3));
+                .size(Size::relative(0.25))
+                .size(Size::relative(0.5));
             cont.horizontal(|mut strip| {
                 strip.cell(|_| {});
                 strip.cell(|ui| {
