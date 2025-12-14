@@ -416,6 +416,18 @@ impl LeftControls {
                 {
                     *content = Content::NewFile;
                 }
+                ui.add_space(space);
+                if ui
+                    .add(egui::Button::image(
+                        egui::Image::new(egui::include_image!("../resources/tasks.png"))
+                            .fit_to_exact_size(btn_size.clone())
+                            .tint(color),
+                    ))
+                    .on_hover_text("New Task")
+                    .clicked()
+                {
+                    *content = Content::NewTask;
+                }
 
                 ui.with_layout(Layout::bottom_up(Align::Max), |ui| {
                     ui.add_space(5.);

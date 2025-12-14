@@ -6,6 +6,7 @@ use std::fs;
 use std::path::Path;
 use yaml_rust::{Yaml, YamlLoader};
 
+#[allow(dead_code)]
 pub struct VaultConfig {
     graph_json_config: String,
 }
@@ -137,9 +138,16 @@ pub fn load_colors() -> style::Visuals {
     if !themes.exists() {
         return style::Visuals::default();
     };
-    let data = fs::read_to_string(themes).expect("Unable to read file");
-    let data = json::parse(&data).unwrap_or(return style::Visuals::default());
-    let vis = json::parse(&data["visuals"].dump()).unwrap().entries();
+    let data = match fs::read_to_string(themes){
+        Ok(data) => data,
+        Err(_) => return style::Visuals::default(),
+    };
+    let vis = match json::parse(&data){
+        Ok(data) => data,
+        Err(_) => return style::Visuals::default(),
+    };
+    let binding = json::parse(&vis["visuals"].dump()).unwrap();
+    let vis = binding.entries();
     for _theme in vis {}
 
     //https://docs.rs/egui/0.21.0/egui/style/struct.Visuals.html

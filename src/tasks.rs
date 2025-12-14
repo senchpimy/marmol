@@ -218,6 +218,7 @@ impl TasksGui {
                                 del_bool = true;
                                 id = element.id;
                                 self.save_file = true;
+                                self.update_graph = true;
                             }
                         });
                     });
@@ -253,6 +254,7 @@ impl TasksGui {
                             self.add_task = false;
                         }
                         if ui.button("Add").clicked() {
+                            self.update_graph = true;
                             let new_id = self.json_content.top_id + 1;
                             let desc: Option<String> = if self.new_task_desc.is_empty() {
                                 None
@@ -297,6 +299,7 @@ impl TasksGui {
                         }
                         if ui.button("Add").clicked() {
                             self.save_file = true;
+                            self.update_graph = true;
                             let mut tasks = vec![];
                             for i in &self.json_content.tasks {
                                 tasks.push(TaskCompleted::new(i.id));

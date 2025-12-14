@@ -1,4 +1,3 @@
-use filebuffer::FileBuffer;
 use std::fs::File;
 use std::io::Read;
 
@@ -15,17 +14,6 @@ pub fn read_file(file_name: &str) -> String {
         }
     }
     contents
-}
-
-pub fn read_image(path: &str) -> Vec<u8> {
-    let fbuffer = FileBuffer::open(path);
-    match fbuffer {
-        Ok(val)=>{
-    let vec = val.leak().to_vec();
-    vec
-        }
-        Err(_)=>{vec![]}
-    }
 }
 
 pub fn contents(contents: &String) -> (String, String) {

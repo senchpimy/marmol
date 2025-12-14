@@ -3,6 +3,7 @@ use crate::income;
 use crate::main_area;
 use crate::tasks;
 use egui::Image;
+use crate::format;
 use egui::{FontId, Frame, Sense, Ui, WidgetText};
 use egui_commonmark::*;
 use egui_dock::{DockArea, DockState, NodeIndex, Style, SurfaceIndex, TabViewer};
@@ -173,6 +174,10 @@ impl TabViewer for MTabViewer<'_> {
                                     .font(FontId::proportional(15.0));
                                 let response = ui.add_sized(ui.available_size(), zone);
                                 if response.changed() {
+                                    if buffer.ends_with('\n') {
+                                        *buffer = format::indent(buffer);
+                                        response.request_focus();
+                                    }
                                     let mut f = std::fs::OpenOptions::new()
                                         .write(true)
                                         .truncate(true)
@@ -259,7 +264,7 @@ impl Tabs {
     pub fn ui(
         &mut self,
         ui: &mut Ui,
-        marker: &mut crate::graph::Graph,
+        _marker: &mut crate::graph::Graph,
         current_file: &mut String,
         content: &mut main_area::Content,
         vault: &str,

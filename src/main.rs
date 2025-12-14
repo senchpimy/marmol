@@ -104,7 +104,7 @@ impl Marmol {
 
             style.spacing.item_spacing = egui::vec2(8.0, 5.0);
         });
-        //ctx.set_visuals(configuraciones::load_colors());
+        ctx.set_visuals(configuraciones::load_colors());
         Self {
             font_size,
             ..Default::default()
@@ -208,7 +208,9 @@ impl eframe::App for Marmol {
                     self.tabs.file_changed(self.current_file.clone());
                 }
 
-                if self.content == main_area::Content::NewFile {
+                if self.content == main_area::Content::NewFile
+                    || self.content == main_area::Content::NewTask
+                {
                     self.new_file(ui, ctx.input(|i| i.key_pressed(Key::Enter)));
                     return;
                 }
@@ -324,6 +326,9 @@ impl eframe::App for Marmol {
 
 impl Marmol {
     fn new_file(&mut self, ui: &mut Ui, enter_clicked: bool) {
+        if self.content == main_area::Content::NewTask {
+            self.new_file_type = NewFileType::Tasks
+        }
         ui.label("Create New File");
         ui.add(egui::TextEdit::singleline(&mut self.new_file_str));
         let new_path = format!("{}/{}", &self.vault, &self.new_file_str);
