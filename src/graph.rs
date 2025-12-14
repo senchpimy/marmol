@@ -7,7 +7,7 @@ use std::path::Path;
 use yaml_rust::YamlLoader;
 
 use egui::*;
-use egui_plot::{Line, LineStyle, MarkerShape, Plot, PlotPoint, Points, Text};
+use egui_plot::{MarkerShape, Plot, PlotPoint, Points, Text};
 
 #[derive(Clone)]
 struct MarmolPoint {
@@ -186,7 +186,7 @@ impl Graph {
                         );
                         plot_ui.text(texto);
                     }
-                    if plot_ui.response().clicked()
+                    if plot_ui.response().double_clicked()
                         && is_close(plot_ui.pointer_coordinate(), self.points_coord[index], 0.05)
                     {
                         *current_file = format!("{}/{}", vault, &self.points[index].text);

@@ -215,16 +215,13 @@ impl eframe::App for Marmol {
 
                 if let Some(file_to_open) = self.switcher.ui(ctx) {
                     self.current_file = file_to_open;
-
-                    if let Ok(metadata) = std::fs::metadata(&self.current_file) {
-                        self.content = crate::main_area::Content::View;
-                    }
+                    self.content = crate::main_area::Content::View;
                 }
 
                 self.tabs.ui(
                     ui,
                     &mut self.marker,
-                    //&mut self.current_file,
+                    &mut self.current_file,
                     &mut self.content,
                     &self.vault,
                 );
@@ -260,7 +257,7 @@ impl eframe::App for Marmol {
             screens::set_server(ctx);
         };
         /////////////////////////////////////////////////////////////////////////////////
-        let rect = ctx.screen_rect();
+        let rect = ctx.content_rect();
         let btn_size = match rect.width() / 45. {
             20.0..=30.0 => rect.width() / 45.,
             ..=20. => 20.,

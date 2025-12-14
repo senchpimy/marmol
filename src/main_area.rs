@@ -549,7 +549,7 @@ pub fn create_metadata(metadata: String, ui: &mut egui::Ui) {
 fn file_options(
     ui: &mut egui::Ui,
     s: &str,
-    path: &str,
+    _path: &str,
     rename: &mut String,
     renaming_path: &mut Option<String>,
     error: &mut String,
@@ -626,9 +626,8 @@ fn file_options(
     ui.separator();
 
     let id = ui.make_persistent_id(format!("del_{}", s));
-    let mut is_confirming: bool = ui.data(|d| d.get_temp(id).unwrap_or(false));
 
-    if is_confirming {
+    if ui.data(|d| d.get_temp(id).unwrap_or(false)) {
         ui.vertical_centered(|ui| {
             ui.label(RichText::new("Are you sure?").strong().color(Color32::RED));
             ui.label(RichText::new(path_s.to_str().unwrap()).italics().weak());
@@ -637,7 +636,6 @@ fn file_options(
             ui.horizontal(|ui| {
                 // Cancelar
                 if ui.button("No").clicked() {
-                    is_confirming = false;
                     ui.data_mut(|d| d.insert_temp(id, false));
                 }
 
@@ -664,7 +662,6 @@ fn file_options(
             Button::selectable(false, RichText::new("Delete file").color(Color32::RED));
 
         if ui.add(btn_delete).clicked() {
-            is_confirming = true;
             ui.data_mut(|d| d.insert_temp(id, true));
         }
     }

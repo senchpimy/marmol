@@ -225,7 +225,7 @@ impl IncomeGui {
 
     pub fn show(&mut self, ui: &mut egui::Ui) {
         let scroll = ScrollArea::vertical().max_height(ui.available_height() * 0.6);
-        let scroll2 = ScrollArea::vertical().id_source("second");
+        let scroll2 = ScrollArea::vertical().id_salt("second");
         self.escojer(ui);
         if self.ventana == Ventana::Normal {
             scroll.show(ui, |ui| {
@@ -623,8 +623,7 @@ impl IncomeGui {
                 .show_x(false)
                 .show_y(false)
                 .clamp_grid(true)
-                .auto_bounds_y()
-                .auto_bounds_x()
+                .auto_bounds(true)
                 .x_axis_formatter(g);
             let p = PlotPoints::new(self.points.clone());
             let l = PlotPoints::new(self.lines.clone());

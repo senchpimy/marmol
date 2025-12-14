@@ -140,7 +140,7 @@ pub fn load_colors() -> style::Visuals {
     let data = fs::read_to_string(themes).expect("Unable to read file");
     let data = json::parse(&data).unwrap_or(return style::Visuals::default());
     let vis = json::parse(&data["visuals"].dump()).unwrap().entries();
-    for theme in vis {}
+    for _theme in vis {}
 
     //https://docs.rs/egui/0.21.0/egui/style/struct.Visuals.html
     let widget_visuals_active = style::WidgetVisuals {

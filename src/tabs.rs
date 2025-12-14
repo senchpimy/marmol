@@ -88,7 +88,8 @@ impl Tabe {
 
 struct MTabViewer<'a> {
     added_nodes: &'a mut Vec<(SurfaceIndex, NodeIndex)>,
-    graph: &'a mut crate::graph::Graph,
+    //graph: &'a mut crate::graph::Graph,
+    current_file: &'a mut String,
     content: &'a mut main_area::Content,
     vault: &'a str,
 }
@@ -103,7 +104,7 @@ impl TabViewer for MTabViewer<'_> {
     fn ui(&mut self, ui: &mut Ui, tab: &mut Self::Tab) {
         match &mut tab.content {
             TabContent::Graph(graph) => {
-                graph.ui(ui, &mut String::new(), self.content, self.vault);
+                graph.ui(ui, self.current_file, self.content, self.vault);
             }
             TabContent::Image(image_path) => {
                 egui::ScrollArea::vertical()
@@ -136,7 +137,7 @@ impl TabViewer for MTabViewer<'_> {
                             egui::ScrollArea::vertical().show(ui, |ui| {
                                 *content = files::read_file(&tab.path);
                                 let frame =
-                                    Frame::none().inner_margin(egui::Margin::symmetric(30, 10));
+                                    Frame::NONE.inner_margin(egui::Margin::symmetric(30, 10));
                                 let inner_response = frame.show(ui, |ui| {
                                     let (markdown_content, metadata) = files::contents(content);
                                     ui.heading(&tab.title);
@@ -259,7 +260,7 @@ impl Tabs {
         &mut self,
         ui: &mut Ui,
         marker: &mut crate::graph::Graph,
-        //current_file: &mut String,
+        current_file: &mut String,
         content: &mut main_area::Content,
         vault: &str,
     ) {
@@ -271,8 +272,8 @@ impl Tabs {
                 ui,
                 &mut MTabViewer {
                     added_nodes: &mut added_nodes,
-                    graph: marker,
-                    //current_file,
+                    //graph: marker,
+                    current_file,
                     content,
                     vault,
                 },
@@ -288,7 +289,6 @@ impl Tabs {
     }
 
     pub fn file_changed(&mut self, path: String) {
-
         if self.tree.iter_all_tabs().count() == 0 {
             self.counter += 1;
             self.tree = DockState::new(vec![Tabe::new(self.counter, path)]);

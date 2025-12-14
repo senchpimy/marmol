@@ -182,8 +182,7 @@ impl TasksGui {
             .height(200.0)
             .x_axis_formatter(x_fmt)
             .data_aspect(0.70)
-            .auto_bounds_y()
-            .auto_bounds_x()
+            .auto_bounds(true)
             .clamp_grid(true);
         ui.label(&format!("{} completed tasks a day done", self.prom));
         markers_plot.show(ui, |plot_ui| {
