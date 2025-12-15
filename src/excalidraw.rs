@@ -1,4 +1,5 @@
 use base64::{engine::general_purpose, Engine as _};
+use egui::UiBuilder;
 use egui::{
     emath::Rot2, Color32, ColorImage, Context, FontFamily, FontId, PointerButton, Pos2, Rect,
     Sense, Shape, Stroke, TextureHandle, TextureOptions, Ui, Vec2,
@@ -8,7 +9,17 @@ use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::fs;
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub enum Tool {
+    Selection,
+    Rectangle,
+    Ellipse,
+    Diamond,
+    Line,
+    Arrow,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 struct ExcalidrawRoundness {
     #[serde(rename = "type")]
     round_type: i32,
@@ -55,6 +66,8 @@ struct ExcalidrawElement {
     #[serde(default)]
     opacity: f32,
     #[serde(default)]
+    roughness: f32,
+    #[serde(default)]
     points: Vec<[f32; 2]>,
     #[serde(default)]
     text: String,
@@ -72,6 +85,36 @@ struct ExcalidrawElement {
     file_id: Option<String>,
     #[serde(default)]
     scale: Option<[f32; 2]>,
+}
+
+impl Default for ExcalidrawElement {
+    fn default() -> Self {
+        Self {
+            id: "".to_string(),
+            element_type: "rectangle".to_string(),
+            x: 0.0,
+            y: 0.0,
+            width: 0.0,
+            height: 0.0,
+            angle: 0.0,
+            stroke_color: "#000000".to_string(),
+            background_color: "transparent".to_string(),
+            fill_style: "solid".to_string(),
+            stroke_width: 1.0,
+            stroke_style: "solid".to_string(),
+            opacity: 100.0,
+            roughness: 1.0,
+            points: vec![],
+            text: "".to_string(),
+            font_size: 20.0,
+            roundness: Some(ExcalidrawRoundness { round_type: 3 }),
+            end_arrowhead: None,
+            bound_elements: None,
+            container_id: None,
+            file_id: None,
+            scale: None,
+        }
+    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -96,19 +139,26 @@ pub struct ExcalidrawGui {
     scene: Option<ExcalidrawScene>,
     #[serde(skip)]
     error_msg: Option<String>,
-
     pan: Vec2,
     scale: f32,
-
+    #[serde(skip)]
+    active_tool: Option<Tool>,
+    #[serde(skip)]
+    selected_element_idx: Option<usize>,
+    #[serde(skip)]
+    default_props: ExcalidrawElement,
     #[serde(skip)]
     dragged_element_idx: Option<usize>,
     #[serde(skip)]
     last_mouse_pos_world: Option<Pos2>,
     #[serde(skip)]
+    drawing_start_pos: Option<Pos2>,
+    #[serde(skip)]
+    drawing_element: Option<ExcalidrawElement>,
+    #[serde(skip)]
     is_dirty: bool,
     #[serde(skip)]
     is_panning: bool,
-
     #[serde(skip)]
     texture_cache: HashMap<String, TextureHandle>,
     #[serde(skip)]
@@ -123,8 +173,13 @@ impl Default for ExcalidrawGui {
             error_msg: None,
             pan: Vec2::ZERO,
             scale: 1.0,
+            active_tool: Some(Tool::Selection),
+            selected_element_idx: None,
+            default_props: ExcalidrawElement::default(),
             dragged_element_idx: None,
             last_mouse_pos_world: None,
+            drawing_start_pos: None,
+            drawing_element: None,
             is_dirty: false,
             is_panning: false,
             texture_cache: HashMap::new(),
@@ -145,16 +200,15 @@ impl ExcalidrawGui {
         if self.path.is_empty() {
             return;
         }
-
         match fs::read_to_string(&self.path) {
-            Ok(json_content) => match serde_json::from_str::<ExcalidrawScene>(&json_content) {
-                Ok(mut scene) => {
-                    for (i, el) in scene.elements.iter_mut().enumerate() {
+            Ok(json) => match serde_json::from_str::<ExcalidrawScene>(&json) {
+                Ok(mut sc) => {
+                    for (i, el) in sc.elements.iter_mut().enumerate() {
                         if el.id.is_empty() {
-                            el.id = format!("gen_id_{}", i);
+                            el.id = format!("gen_{}", i);
                         }
                     }
-                    self.scene = Some(scene);
+                    self.scene = Some(sc);
                     self.error_msg = None;
                     self.is_dirty = false;
                     self.texture_cache.clear();
@@ -162,25 +216,21 @@ impl ExcalidrawGui {
                     if self.scale == 0.0 {
                         self.scale = 1.0;
                     }
+                    if self.active_tool.is_none() {
+                        self.active_tool = Some(Tool::Selection);
+                    }
                 }
-                Err(e) => {
-                    self.error_msg = Some(format!("Error parsing JSON: {}", e));
-                }
+                Err(e) => self.error_msg = Some(format!("Error parsing: {}", e)),
             },
-            Err(e) => {
-                self.error_msg = Some(format!("Error reading file: {}", e));
-            }
+            Err(e) => self.error_msg = Some(format!("Error reading: {}", e)),
         }
     }
 
     fn save_file(&mut self) {
         if let Some(scene) = &self.scene {
             if let Ok(json) = serde_json::to_string_pretty(scene) {
-                if let Err(e) = fs::write(&self.path, json) {
-                    self.error_msg = Some(format!("Error saving file: {}", e));
-                } else {
-                    self.is_dirty = false;
-                }
+                let _ = fs::write(&self.path, json);
+                self.is_dirty = false;
             }
         }
     }
@@ -188,55 +238,48 @@ impl ExcalidrawGui {
     fn get_or_load_texture(
         &mut self,
         ctx: &Context,
-        file_id: &str,
+        fid: &str,
         files: &HashMap<String, ExcalidrawFile>,
     ) -> Option<TextureHandle> {
-        if let Some(handle) = self.texture_cache.get(file_id) {
-            return Some(handle.clone());
+        if let Some(h) = self.texture_cache.get(fid) {
+            return Some(h.clone());
         }
-        if self.failed_textures.contains(file_id) {
+        if self.failed_textures.contains(fid) {
             return None;
         }
-
-        if let Some(file_data) = files.get(file_id) {
-            if file_data.mime_type.contains("svg") {
-                self.failed_textures.insert(file_id.to_string());
+        if let Some(fd) = files.get(fid) {
+            if fd.mime_type.contains("svg") {
+                self.failed_textures.insert(fid.to_string());
                 return None;
             }
-
-            let parts: Vec<&str> = file_data.data_url.split(',').collect();
+            let parts: Vec<&str> = fd.data_url.split(',').collect();
             if parts.len() == 2 {
-                let base64_data = parts[1];
-                if let Ok(bytes) = general_purpose::STANDARD.decode(base64_data) {
-                    if let Ok(mut dynamic_image) = image::load_from_memory(&bytes) {
-                        const MAX_SIZE: u32 = 1024;
-                        if dynamic_image.width() > MAX_SIZE || dynamic_image.height() > MAX_SIZE {
-                            dynamic_image =
-                                dynamic_image.resize(MAX_SIZE, MAX_SIZE, FilterType::Triangle);
+                if let Ok(b) = general_purpose::STANDARD.decode(parts[1]) {
+                    if let Ok(mut img) = image::load_from_memory(&b) {
+                        if img.width() > 1024 || img.height() > 1024 {
+                            img = img.resize(1024, 1024, FilterType::Triangle);
                         }
-
-                        let size = [dynamic_image.width() as _, dynamic_image.height() as _];
-                        let image_buffer = dynamic_image.to_rgba8();
-                        let pixels = image_buffer.as_flat_samples();
-                        let color_image =
-                            ColorImage::from_rgba_unmultiplied(size, pixels.as_slice());
-
-                        let texture =
-                            ctx.load_texture(file_id, color_image, TextureOptions::LINEAR);
-                        self.texture_cache
-                            .insert(file_id.to_string(), texture.clone());
-                        return Some(texture);
+                        let t = ctx.load_texture(
+                            fid,
+                            ColorImage::from_rgba_unmultiplied(
+                                [img.width() as _, img.height() as _],
+                                img.to_rgba8().as_flat_samples().as_slice(),
+                            ),
+                            TextureOptions::LINEAR,
+                        );
+                        self.texture_cache.insert(fid.to_string(), t.clone());
+                        return Some(t);
                     }
                 }
             }
         }
-        self.failed_textures.insert(file_id.to_string());
+        self.failed_textures.insert(fid.to_string());
         None
     }
 
     pub fn show(&mut self, ui: &mut Ui) {
-        if let Some(err) = &self.error_msg {
-            ui.colored_label(Color32::RED, err);
+        if let Some(e) = &self.error_msg {
+            ui.colored_label(Color32::RED, e);
             return;
         }
         if self.scene.is_none() {
@@ -247,31 +290,80 @@ impl ExcalidrawGui {
             }
         }
 
+        ui.horizontal(|ui| {
+            ui.label("Tools:");
+            if ui
+                .selectable_label(self.active_tool == Some(Tool::Selection), "✋")
+                .clicked()
+            {
+                self.active_tool = Some(Tool::Selection);
+            }
+            ui.separator();
+            if ui
+                .selectable_label(self.active_tool == Some(Tool::Rectangle), "⬜")
+                .clicked()
+            {
+                self.active_tool = Some(Tool::Rectangle);
+            }
+            if ui
+                .selectable_label(self.active_tool == Some(Tool::Ellipse), "⭕")
+                .clicked()
+            {
+                self.active_tool = Some(Tool::Ellipse);
+            }
+            if ui
+                .selectable_label(self.active_tool == Some(Tool::Diamond), "🔶")
+                .clicked()
+            {
+                self.active_tool = Some(Tool::Diamond);
+            }
+            ui.separator();
+            if ui
+                .selectable_label(self.active_tool == Some(Tool::Line), "➖")
+                .clicked()
+            {
+                self.active_tool = Some(Tool::Line);
+            }
+            if ui
+                .selectable_label(self.active_tool == Some(Tool::Arrow), "➡")
+                .clicked()
+            {
+                self.active_tool = Some(Tool::Arrow);
+            }
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                if ui.button("💾").clicked() {
+                    self.save_file();
+                }
+            });
+        });
+
         let (response, painter) = ui.allocate_painter(ui.available_size(), Sense::click_and_drag());
         painter.rect_filled(response.rect, 0.0, Color32::WHITE);
 
-        let screen_rect_min = response.rect.min;
-        let screen_rect_max = response.rect.max;
+        let panel_width = 220.0;
+        let panel_rect = Rect::from_min_size(
+            Pos2::new(
+                response.rect.max.x - panel_width - 10.0,
+                response.rect.min.y + 10.0,
+            ),
+            Vec2::new(panel_width, 400.0),
+        );
 
-        // ZOOM & PAN
         let scroll_delta = ui.input(|i| i.raw_scroll_delta);
+        let screen_rect_min = response.rect.min;
         if ui.input(|i| i.modifiers.ctrl) && scroll_delta.y != 0.0 {
-            let zoom_factor = if scroll_delta.y > 0.0 { 1.1 } else { 0.9 };
-            let old_scale = self.scale;
-            self.scale *= zoom_factor;
-            self.scale = self.scale.clamp(0.1, 10.0);
-
-            if let Some(mouse_pos) = response.hover_pos() {
-                let mouse_in_canvas = mouse_pos - screen_rect_min;
-                let mouse_world_relative = (mouse_in_canvas - self.pan) / old_scale;
-                self.pan = mouse_in_canvas - (mouse_world_relative * self.scale);
+            let zf = if scroll_delta.y > 0.0 { 1.1 } else { 0.9 };
+            let old_s = self.scale;
+            self.scale = (self.scale * zf).clamp(0.1, 10.0);
+            if let Some(mp) = response.hover_pos() {
+                let mc = mp - screen_rect_min;
+                self.pan = mc - ((mc - self.pan) / old_s) * self.scale;
             }
-        } else if scroll_delta.y != 0.0 || scroll_delta.x != 0.0 {
+        } else if scroll_delta != Vec2::ZERO {
             self.pan += scroll_delta;
         }
 
         if response.dragged_by(PointerButton::Middle)
-            || response.dragged_by(PointerButton::Secondary)
             || (ui.input(|i| i.modifiers.alt) && response.dragged_by(PointerButton::Primary))
         {
             self.pan += response.drag_delta();
@@ -280,126 +372,419 @@ impl ExcalidrawGui {
             self.is_panning = false;
         }
 
-        let current_pan = self.pan;
-        let current_scale = self.scale;
-
-        let to_screen = move |pos_world: Pos2| -> Pos2 {
-            screen_rect_min + current_pan + (pos_world.to_vec2() * current_scale)
-        };
-
-        let to_world = move |pos_screen: Pos2| -> Pos2 {
-            let rel = pos_screen - screen_rect_min - current_pan;
-            Pos2::ZERO + rel / current_scale
-        };
-
-        let visible_world_rect =
-            Rect::from_min_max(to_world(screen_rect_min), to_world(screen_rect_max));
+        let cp = self.pan;
+        let cs = self.scale;
+        let to_screen = move |pw: Pos2| screen_rect_min + cp + (pw.to_vec2() * cs);
+        let to_world = move |ps: Pos2| Pos2::ZERO + (ps - screen_rect_min - cp) / cs;
+        let vis_rect = Rect::from_min_max(to_world(response.rect.min), to_world(response.rect.max));
 
         if let Some(mut scene) = self.scene.take() {
             let mut dirty = self.is_dirty;
-            let mut should_save = false;
+            let mut save = false;
+            let tool = self.active_tool.unwrap_or(Tool::Selection);
 
-            if response.drag_started_by(PointerButton::Primary)
-                && !self.is_panning
-                && !ui.input(|i| i.modifiers.alt)
-            {
-                if let Some(mouse_pos) = response.interact_pointer_pos() {
-                    let world_pos = to_world(mouse_pos);
-                    for (i, el) in scene.elements.iter().enumerate().rev() {
-                        if is_point_inside(el, world_pos) {
-                            self.dragged_element_idx = Some(i);
-                            self.last_mouse_pos_world = Some(world_pos);
-                            break;
-                        }
-                    }
-                }
-            }
+            let mouse_over_panel = if let Some(mp) = response.hover_pos() {
+                panel_rect.contains(mp)
+            } else {
+                false
+            };
 
-            if let Some(idx) = self.dragged_element_idx {
-                if response.dragged_by(PointerButton::Primary) {
-                    if let Some(mouse_pos) = response.interact_pointer_pos() {
-                        let current_world_pos = to_world(mouse_pos);
-                        if let Some(last_pos) = self.last_mouse_pos_world {
-                            let delta = current_world_pos - last_pos;
-                            if delta.length_sq() > 0.0001 {
-                                move_element_group(&mut scene.elements, idx, delta);
-                                dirty = true;
+            if !mouse_over_panel {
+                match tool {
+                    Tool::Selection => {
+                        if response.drag_started_by(PointerButton::Primary)
+                            && !self.is_panning
+                            && !ui.input(|i| i.modifiers.alt)
+                        {
+                            if let Some(mp) = response.interact_pointer_pos() {
+                                let wp = to_world(mp);
+                                let mut f = false;
+                                for (i, el) in scene.elements.iter().enumerate().rev() {
+                                    if is_point_inside(el, wp) {
+                                        self.dragged_element_idx = Some(i);
+                                        self.selected_element_idx = Some(i);
+                                        self.last_mouse_pos_world = Some(wp);
+                                        f = true;
+                                        break;
+                                    }
+                                }
+                                if !f {
+                                    self.selected_element_idx = None;
+                                }
                             }
                         }
-                        self.last_mouse_pos_world = Some(current_world_pos);
+                        if let Some(idx) = self.dragged_element_idx {
+                            if response.dragged_by(PointerButton::Primary) {
+                                if let Some(mp) = response.interact_pointer_pos() {
+                                    let cwp = to_world(mp);
+                                    if let Some(lp) = self.last_mouse_pos_world {
+                                        let d = cwp - lp;
+                                        if d.length_sq() > 0.0001 {
+                                            move_element_group(&mut scene.elements, idx, d);
+                                            dirty = true;
+                                        }
+                                    }
+                                    self.last_mouse_pos_world = Some(cwp);
+                                }
+                            }
+                        }
+                    }
+                    _ => {
+                        // Dibujo
+                        if response.drag_started_by(PointerButton::Primary)
+                            && !self.is_panning
+                            && !ui.input(|i| i.modifiers.alt)
+                        {
+                            if let Some(mp) = response.interact_pointer_pos() {
+                                let sw = to_world(mp);
+                                self.drawing_start_pos = Some(sw);
+                                self.selected_element_idx = None;
+                                let mut new_el = self.default_props.clone();
+                                let ts = std::time::SystemTime::now()
+                                    .duration_since(std::time::UNIX_EPOCH)
+                                    .unwrap_or_default()
+                                    .as_nanos();
+                                new_el.id = format!("gen_{}", ts);
+                                new_el.x = sw.x;
+                                new_el.y = sw.y;
+                                new_el.points = vec![];
+                                match tool {
+                                    Tool::Line => {
+                                        new_el.element_type = "line".into();
+                                        new_el.points = vec![[0.0, 0.0]];
+                                    }
+                                    Tool::Arrow => {
+                                        new_el.element_type = "arrow".into();
+                                        new_el.points = vec![[0.0, 0.0]];
+                                        new_el.end_arrowhead = Some("arrow".into());
+                                    }
+                                    Tool::Rectangle => new_el.element_type = "rectangle".into(),
+                                    Tool::Ellipse => new_el.element_type = "ellipse".into(),
+                                    Tool::Diamond => new_el.element_type = "diamond".into(),
+                                    _ => {}
+                                }
+                                self.drawing_element = Some(new_el);
+                            }
+                        }
+                        if let Some(sp) = self.drawing_start_pos {
+                            if response.dragged_by(PointerButton::Primary) {
+                                if let Some(mp) = response.interact_pointer_pos() {
+                                    let cw = to_world(mp);
+                                    if let Some(el) = &mut self.drawing_element {
+                                        if tool == Tool::Line || tool == Tool::Arrow {
+                                            let dx = cw.x - sp.x;
+                                            let dy = cw.y - sp.y;
+                                            el.points = vec![[0.0, 0.0], [dx, dy]];
+                                            el.width = dx.abs();
+                                            el.height = dy.abs();
+                                        } else {
+                                            el.x = sp.x.min(cw.x);
+                                            el.y = sp.y.min(cw.y);
+                                            el.width = (sp.x - cw.x).abs();
+                                            el.height = (sp.y - cw.y).abs();
+                                        }
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }
 
             if response.drag_stopped() {
-                if self.dragged_element_idx.is_some() && dirty {
-                    should_save = true;
-                }
                 self.dragged_element_idx = None;
                 self.last_mouse_pos_world = None;
+                if let Some(el) = self.drawing_element.take() {
+                    if el.width > 2.0 || el.height > 2.0 {
+                        scene.elements.push(el);
+                        self.selected_element_idx = Some(scene.elements.len() - 1);
+                        dirty = true;
+                        save = true;
+                    }
+                    self.active_tool = Some(Tool::Selection);
+                }
+                if dirty && self.dragged_element_idx.is_some() {
+                    save = true;
+                }
+                self.drawing_start_pos = None;
             }
 
             let ctx = ui.ctx().clone();
-            let files_ref = &scene.files;
-
-            for el in &scene.elements {
-                let el_rect =
+            let files = &scene.files;
+            for (i, el) in scene.elements.iter().enumerate() {
+                let rect =
                     Rect::from_min_size(Pos2::new(el.x, el.y), Vec2::new(el.width, el.height))
                         .expand(100.0);
-
-                if !visible_world_rect.intersects(el_rect) {
+                if !vis_rect.intersects(rect) {
                     continue;
                 }
-
-                let texture = if let Some(fid) = &el.file_id {
-                    self.get_or_load_texture(&ctx, fid, files_ref)
+                let tex = if let Some(fid) = &el.file_id {
+                    self.get_or_load_texture(&ctx, fid, files)
                 } else {
                     None
                 };
-
-                draw_element(&painter, el, texture, &to_screen, current_scale);
+                draw_element(&painter, el, tex, &to_screen, cs);
+                if self.selected_element_idx == Some(i) {
+                    draw_selection_border(&painter, el, &to_screen, cs);
+                }
+            }
+            if let Some(el) = &self.drawing_element {
+                draw_element(&painter, el, None, &to_screen, cs);
             }
 
             self.scene = Some(scene);
             self.is_dirty = dirty;
-            if should_save {
+            if save {
                 self.save_file();
             }
+
+            ui.scope_builder(UiBuilder::new().max_rect(panel_rect), |ui| {
+                egui::Frame::NONE
+                    .fill(Color32::from_rgba_premultiplied(30, 30, 30, 240))
+                    .stroke(Stroke::new(1.0, Color32::from_gray(60)))
+                    .corner_radius(12.0)
+                    .inner_margin(16.0)
+                    .show(ui, |ui| {
+                        ui.set_width(panel_rect.width() - 32.0);
+
+                        ui.vertical_centered(|ui| {
+                            ui.label(egui::RichText::new("Propiedades").size(18.0).strong());
+                        });
+                        ui.add_space(8.0);
+                        ui.separator();
+                        ui.add_space(8.0);
+
+                        let props_opt = if let Some(sc) = self.scene.as_mut() {
+                            if let Some(idx) = self.selected_element_idx {
+                                if idx < sc.elements.len() {
+                                    Some(&mut sc.elements[idx])
+                                } else {
+                                    None
+                                }
+                            } else {
+                                Some(&mut self.default_props)
+                            }
+                        } else {
+                            None
+                        };
+
+                        if let Some(p) = props_opt {
+                            let mut ch = false;
+
+                            egui::Grid::new("pgrid")
+                                .num_columns(2)
+                                .spacing([12.0, 16.0]) // Más espacio entre elementos
+                                .min_col_width(70.0)
+                                .striped(false)
+                                .show(ui, |ui| {
+                                    // Borde
+                                    ui.label("Borde:");
+                                    ui.horizontal(|ui| {
+                                        let mut c = hex_to_color(&p.stroke_color);
+                                        if egui::color_picker::color_edit_button_srgba(
+                                            ui,
+                                            &mut c,
+                                            egui::color_picker::Alpha::Opaque,
+                                        )
+                                        .changed()
+                                        {
+                                            p.stroke_color = color_to_hex(c);
+                                            ch = true;
+                                        }
+                                        ui.weak(&p.stroke_color);
+                                    });
+                                    ui.end_row();
+
+                                    // Fondo
+                                    ui.label("Fondo:");
+                                    ui.horizontal(|ui| {
+                                        let mut c = hex_to_color(&p.background_color);
+                                        if egui::color_picker::color_edit_button_srgba(
+                                            ui,
+                                            &mut c,
+                                            egui::color_picker::Alpha::Opaque,
+                                        )
+                                        .changed()
+                                        {
+                                            p.background_color = color_to_hex(c);
+                                            ch = true;
+                                        }
+                                        if ui.button("🚫").on_hover_text("Sin fondo").clicked() {
+                                            p.background_color = "transparent".into();
+                                            ch = true;
+                                        }
+                                    });
+                                    ui.end_row();
+
+                                    // Grosor
+                                    ui.label("Grosor:");
+                                    if ui
+                                        .add(
+                                            egui::Slider::new(&mut p.stroke_width, 0.5..=20.0)
+                                                .show_value(true),
+                                        )
+                                        .changed()
+                                    {
+                                        ch = true;
+                                    }
+                                    ui.end_row();
+
+                                    // Estilo
+                                    ui.label("Estilo:");
+                                    egui::ComboBox::from_id_salt("style")
+                                        .selected_text(match p.stroke_style.as_str() {
+                                            "solid" => "Sólido",
+                                            "dashed" => "Guiones",
+                                            "dotted" => "Puntos",
+                                            _ => &p.stroke_style,
+                                        })
+                                        .width(130.0)
+                                        .show_ui(ui, |ui| {
+                                            if ui
+                                                .selectable_value(
+                                                    &mut p.stroke_style,
+                                                    "solid".into(),
+                                                    "Sólido ────",
+                                                )
+                                                .clicked()
+                                            {
+                                                ch = true;
+                                            }
+                                            if ui
+                                                .selectable_value(
+                                                    &mut p.stroke_style,
+                                                    "dashed".into(),
+                                                    "Guiones ─ ─",
+                                                )
+                                                .clicked()
+                                            {
+                                                ch = true;
+                                            }
+                                            if ui
+                                                .selectable_value(
+                                                    &mut p.stroke_style,
+                                                    "dotted".into(),
+                                                    "Puntos . . .",
+                                                )
+                                                .clicked()
+                                            {
+                                                ch = true;
+                                            }
+                                        });
+                                    ui.end_row();
+
+                                    if p.element_type == "rectangle" || p.element_type == "diamond"
+                                    {
+                                        ui.label("Esquinas:");
+                                        ui.horizontal(|ui| {
+                                            ui.style_mut().spacing.item_spacing.x = 2.0;
+                                            let is_r = p
+                                                .roundness
+                                                .as_ref()
+                                                .map(|r| r.round_type == 3)
+                                                .unwrap_or(false);
+
+                                            if ui
+                                                .add(egui::Button::selectable(!is_r, "Rectas"))
+                                                .clicked()
+                                            {
+                                                p.roundness = None;
+                                                ch = true;
+                                            }
+                                            if ui
+                                                .add(egui::Button::selectable(is_r, "Curvas"))
+                                                .clicked()
+                                            {
+                                                p.roundness =
+                                                    Some(ExcalidrawRoundness { round_type: 3 });
+                                                ch = true;
+                                            }
+                                        });
+                                        ui.end_row();
+                                    }
+
+                                    // Opacidad
+                                    ui.label("Opacidad:");
+                                    if ui
+                                        .add(
+                                            egui::Slider::new(&mut p.opacity, 0.0..=100.0)
+                                                .show_value(true)
+                                                .suffix("%"),
+                                        )
+                                        .changed()
+                                    {
+                                        ch = true;
+                                    }
+                                    ui.end_row();
+                                });
+
+                            if ch {
+                                self.is_dirty = true;
+                                if self.selected_element_idx.is_some() {
+                                    self.save_file();
+                                }
+                            }
+                        } else {
+                            ui.vertical_centered(|ui| {
+                                ui.label("Selecciona un elemento");
+                            });
+                        }
+                    });
+            });
         }
     }
 }
 
+fn hex_to_color(hex: &str) -> Color32 {
+    if hex == "transparent" {
+        return Color32::TRANSPARENT;
+    }
+    let h = hex.trim_start_matches('#');
+    if let Ok(n) = u32::from_str_radix(h, 16) {
+        if h.len() == 6 {
+            return Color32::from_rgb(
+                ((n >> 16) & 0xFF) as u8,
+                ((n >> 8) & 0xFF) as u8,
+                (n & 0xFF) as u8,
+            );
+        }
+    }
+    Color32::BLACK
+}
+
+fn color_to_hex(c: Color32) -> String {
+    if c == Color32::TRANSPARENT {
+        return "transparent".into();
+    }
+    format!("#{:02x}{:02x}{:02x}", c.r(), c.g(), c.b())
+}
+
 fn move_element_group(elements: &mut Vec<ExcalidrawElement>, root_idx: usize, delta: Vec2) {
-    let mut indices_to_move = vec![root_idx];
-    let root_id = elements[root_idx].id.clone();
-    let root_container_id = elements[root_idx].container_id.clone();
-
-    if let Some(container_id) = root_container_id {
-        if let Some(parent_idx) = elements.iter().position(|e| e.id == container_id) {
-            indices_to_move.push(parent_idx);
+    let mut indices = vec![root_idx];
+    let rid = elements[root_idx].id.clone();
+    let cid = elements[root_idx].container_id.clone();
+    if let Some(c) = cid {
+        if let Some(p) = elements.iter().position(|e| e.id == c) {
+            indices.push(p);
         }
     }
-
-    if let Some(bounds) = &elements[root_idx].bound_elements {
-        for bound in bounds {
-            if let Some(child_idx) = elements.iter().position(|e| e.id == bound.id) {
-                indices_to_move.push(child_idx);
+    if let Some(bs) = &elements[root_idx].bound_elements {
+        for b in bs {
+            if let Some(c) = elements.iter().position(|e| e.id == b.id) {
+                indices.push(c);
             }
         }
     }
-
     for (i, el) in elements.iter().enumerate() {
-        if let Some(cid) = &el.container_id {
-            if *cid == root_id && !indices_to_move.contains(&i) {
-                indices_to_move.push(i);
+        if let Some(c) = &el.container_id {
+            if *c == rid && !indices.contains(&i) {
+                indices.push(i);
             }
         }
     }
-
-    indices_to_move.sort_unstable();
-    indices_to_move.dedup();
-
-    for idx in indices_to_move {
+    indices.sort_unstable();
+    indices.dedup();
+    for idx in indices {
         if let Some(el) = elements.get_mut(idx) {
             el.x += delta.x;
             el.y += delta.y;
@@ -408,121 +793,93 @@ fn move_element_group(elements: &mut Vec<ExcalidrawElement>, root_idx: usize, de
 }
 
 fn is_point_inside(el: &ExcalidrawElement, p: Pos2) -> bool {
-    let margin = 10.0;
-    let rect =
-        Rect::from_min_size(Pos2::new(el.x, el.y), Vec2::new(el.width, el.height)).expand(margin);
-    rect.contains(p)
+    Rect::from_min_size(Pos2::new(el.x, el.y), Vec2::new(el.width, el.height))
+        .expand(10.0)
+        .contains(p)
 }
 
-fn parse_color(hex: &str, alpha: u8) -> Color32 {
-    if hex == "transparent" {
-        return Color32::TRANSPARENT;
-    }
-    let hex_clean = hex.trim_start_matches('#');
-    if hex_clean.len() == 6 {
-        if let Ok(num) = u32::from_str_radix(hex_clean, 16) {
-            return Color32::from_rgba_unmultiplied(
-                ((num >> 16) & 0xFF) as u8,
-                ((num >> 8) & 0xFF) as u8,
-                (num & 0xFF) as u8,
-                alpha,
-            );
-        }
-    } else if hex_clean.len() == 3 {
-        if let Ok(num) = u16::from_str_radix(hex_clean, 16) {
-            let r = ((num >> 8) & 0xF) as u8;
-            let g = ((num >> 4) & 0xF) as u8;
-            let b = (num & 0xF) as u8;
-            return Color32::from_rgba_unmultiplied(r * 17, g * 17, b * 17, alpha);
-        }
-    }
-    Color32::from_rgba_unmultiplied(0, 0, 0, alpha)
+fn draw_selection_border<F>(painter: &egui::Painter, el: &ExcalidrawElement, to_screen: &F, _s: f32)
+where
+    F: Fn(Pos2) -> Pos2,
+{
+    let c = Pos2::new(el.x + el.width / 2.0, el.y + el.height / 2.0);
+    let cl = Pos2::new(el.width / 2.0, el.height / 2.0);
+    let r = Rot2::from_angle(el.angle);
+    let pts: Vec<Pos2> = [
+        Pos2::new(0.0, 0.0),
+        Pos2::new(el.width, 0.0),
+        Pos2::new(el.width, el.height),
+        Pos2::new(0.0, el.height),
+    ]
+    .iter()
+    .map(|&p| to_screen(c + r * (p - cl)))
+    .collect();
+    painter.add(Shape::closed_line(
+        pts,
+        Stroke::new(1.0, Color32::from_rgb(100, 100, 255)),
+    ));
 }
-
-fn draw_stroke(
-    painter: &egui::Painter,
-    points: Vec<Pos2>,
-    stroke: Stroke,
-    style: &str,
-    scale: f32,
-    closed: bool,
-) {
-    if points.len() < 2 {
+fn draw_stroke(painter: &egui::Painter, pts: Vec<Pos2>, s: Stroke, st: &str, sc: f32, cl: bool) {
+    if pts.len() < 2 {
         return;
     }
-
-    match style {
-        "dashed" | "dotted" => {
-            let (dash, gap) = if style == "dashed" {
-                (10.0 * scale, 10.0 * scale)
-            } else {
-                (2.0 * scale, 6.0 * scale)
-            };
-
-            let mut final_points = points.clone();
-            if closed {
-                final_points.push(points[0]); // Cerrar el loop para shapes
-            }
-
-            painter.add(Shape::dashed_line(&final_points, stroke, dash, gap));
+    let mut fp = pts.clone();
+    if cl {
+        fp.push(pts[0]);
+    }
+    match st {
+        "dashed" => {
+            painter.add(Shape::dashed_line(&fp, s, 10.0 * sc, 10.0 * sc));
+        }
+        "dotted" => {
+            painter.add(Shape::dashed_line(&fp, s, 2.0 * sc, 6.0 * sc));
         }
         _ => {
-            if closed {
-                painter.add(Shape::closed_line(points, stroke));
+            if cl {
+                painter.add(Shape::closed_line(pts, s));
             } else {
-                painter.add(Shape::line(points, stroke));
+                painter.add(Shape::line(pts, s));
             }
         }
-    }
+    };
 }
 
-fn draw_arrow_head(painter: &egui::Painter, p_end: Pos2, p_prev: Pos2, scale: f32, stroke: Stroke) {
-    let vec = p_end - p_prev;
-    let angle = vec.angle();
-    let arrow_len = 20.0 * scale;
-    let spread = std::f32::consts::PI / 6.0;
-
-    let angle_left = angle + std::f32::consts::PI - spread;
-    let angle_right = angle + std::f32::consts::PI + spread;
-
-    let p_left = p_end + Vec2::new(arrow_len * angle_left.cos(), arrow_len * angle_left.sin());
-    let p_right = p_end + Vec2::new(arrow_len * angle_right.cos(), arrow_len * angle_right.sin());
-
-    painter.add(Shape::line(vec![p_left, p_end, p_right], stroke));
+fn draw_arrow_head(painter: &egui::Painter, end: Pos2, prev: Pos2, sc: f32, s: Stroke) {
+    let v = end - prev;
+    let a = v.angle();
+    let l = 20.0 * sc;
+    let sp = 0.52; // 30deg
+    painter.add(Shape::line(
+        vec![
+            end + Vec2::new(l * (a + 3.14 - sp).cos(), l * (a + 3.14 - sp).sin()),
+            end,
+            end + Vec2::new(l * (a + 3.14 + sp).cos(), l * (a + 3.14 + sp).sin()),
+        ],
+        s,
+    ));
 }
 
 fn draw_element<F>(
     painter: &egui::Painter,
     el: &ExcalidrawElement,
-    texture: Option<TextureHandle>,
+    tex: Option<TextureHandle>,
     to_screen: &F,
-    scale: f32,
+    sc: f32,
 ) where
     F: Fn(Pos2) -> Pos2,
 {
     if el.opacity == 0.0 {
         return;
     }
-
-    let alpha = ((el.opacity / 100.0) * 255.0) as u8;
-    let stroke_color = parse_color(&el.stroke_color, alpha);
-    let bg_color = parse_color(&el.background_color, alpha);
-
-    let stroke = Stroke::new(el.stroke_width * scale, stroke_color);
-
-    let center_world = Pos2::new(el.x + el.width / 2.0, el.y + el.height / 2.0);
-    let center_local = Pos2::new(el.width / 2.0, el.height / 2.0);
+    let a = ((el.opacity / 100.0) * 255.0) as u8;
+    let sc_col = hex_to_color(&el.stroke_color).linear_multiply(a as f32 / 255.0); // Simple alpha fix
+    let bg_col = hex_to_color(&el.background_color).linear_multiply(a as f32 / 255.0);
+    let s = Stroke::new(el.stroke_width * sc, sc_col);
+    let cw = Pos2::new(el.x + el.width / 2.0, el.y + el.height / 2.0);
+    let cl = Pos2::new(el.width / 2.0, el.height / 2.0);
     let rot = Rot2::from_angle(el.angle);
-
-    let tr = |ps: &[Pos2]| -> Vec<Pos2> {
-        ps.iter()
-            .map(|&p| {
-                let offset = p - center_local;
-                let rotated_offset = rot * offset;
-                to_screen(center_world + rotated_offset)
-            })
-            .collect()
-    };
+    let tr =
+        |ps: &[Pos2]| -> Vec<Pos2> { ps.iter().map(|&p| to_screen(cw + rot * (p - cl))).collect() };
 
     match el.element_type.as_str() {
         "rectangle" | "diamond" | "ellipse" => {
@@ -546,121 +903,98 @@ fn draw_element<F>(
             } else {
                 discretize_ellipse(el.width, el.height)
             };
-
-            let s_pts = tr(&pts);
-
+            let sp = tr(&pts);
             if el.background_color != "transparent" {
-                painter.add(Shape::convex_polygon(s_pts.clone(), bg_color, Stroke::NONE));
+                painter.add(Shape::convex_polygon(sp.clone(), bg_col, Stroke::NONE));
             }
-
-            draw_stroke(painter, s_pts, stroke, &el.stroke_style, scale, true);
+            draw_stroke(painter, sp, s, &el.stroke_style, sc, true);
         }
         "image" => {
-            if let Some(tex) = texture {
-                let rect_local = Rect::from_min_size(Pos2::ZERO, Vec2::new(el.width, el.height));
-                let corners = [
-                    rect_local.min,
-                    rect_local.right_top(),
-                    rect_local.max,
-                    rect_local.left_bottom(),
-                ];
-                let s_pts = tr(&corners);
-
-                let mut mesh = egui::Mesh::with_texture(tex.id());
-                let tint = Color32::from_white_alpha(alpha);
-                mesh.add_triangle(0, 1, 2);
-                mesh.add_triangle(0, 2, 3);
-                let uvs = [
+            if let Some(t) = tex {
+                let r = Rect::from_min_size(Pos2::ZERO, Vec2::new(el.width, el.height));
+                let sp = tr(&[r.min, r.right_top(), r.max, r.left_bottom()]);
+                let mut m = egui::Mesh::with_texture(t.id());
+                let tint = Color32::from_white_alpha(a);
+                m.add_triangle(0, 1, 2);
+                m.add_triangle(0, 2, 3);
+                let uv = [
                     Pos2::new(0.0, 0.0),
                     Pos2::new(1.0, 0.0),
                     Pos2::new(1.0, 1.0),
                     Pos2::new(0.0, 1.0),
                 ];
-                for (i, p) in s_pts.iter().enumerate() {
-                    mesh.vertices.push(egui::epaint::Vertex {
+                for (i, p) in sp.iter().enumerate() {
+                    m.vertices.push(egui::epaint::Vertex {
                         pos: *p,
-                        uv: uvs[i],
+                        uv: uv[i],
                         color: tint,
                     });
                 }
-                painter.add(Shape::mesh(mesh));
+                painter.add(Shape::mesh(m));
             }
         }
         "line" | "arrow" | "draw" | "freedraw" => {
             if !el.points.is_empty() {
                 let raw: Vec<Pos2> = el.points.iter().map(|p| Pos2::new(p[0], p[1])).collect();
-                let s_pts = tr(&raw);
-
-                draw_stroke(
-                    painter,
-                    s_pts.clone(),
-                    stroke,
-                    &el.stroke_style,
-                    scale,
-                    false,
-                );
-
-                if let Some(arrow_type) = &el.end_arrowhead {
-                    if arrow_type == "arrow" && s_pts.len() >= 2 {
-                        let last = s_pts[s_pts.len() - 1];
-                        let prev = s_pts[s_pts.len() - 2];
-                        let arrow_stroke = Stroke::new(el.stroke_width * scale, stroke_color);
-                        draw_arrow_head(painter, last, prev, scale, arrow_stroke);
+                let sp = tr(&raw);
+                draw_stroke(painter, sp.clone(), s, &el.stroke_style, sc, false);
+                if let Some(at) = &el.end_arrowhead {
+                    if at == "arrow" && sp.len() >= 2 {
+                        draw_arrow_head(painter, sp[sp.len() - 1], sp[sp.len() - 2], sc, s);
                     }
                 }
             }
         }
         "text" => {
-            let tl = tr(&[Pos2::ZERO])[0];
             painter.text(
-                tl,
+                tr(&[Pos2::ZERO])[0],
                 egui::Align2::LEFT_TOP,
                 &el.text,
-                FontId::new(el.font_size * scale, FontFamily::Proportional),
-                stroke_color,
+                FontId::new(el.font_size * sc, FontFamily::Proportional),
+                sc_col,
             );
         }
         _ => {}
     }
 }
 
-// --- GEOMETRÍA ---
-fn discretize_rect(rect: Rect, radius: f32) -> Vec<Pos2> {
-    if radius <= 1.0 {
-        return vec![rect.min, rect.right_top(), rect.max, rect.left_bottom()];
+fn discretize_rect(r: Rect, rad: f32) -> Vec<Pos2> {
+    if rad <= 1.0 {
+        return vec![r.min, r.right_top(), r.max, r.left_bottom()];
     }
-    let mut pts = Vec::new();
-    let r = radius.min(rect.width() / 2.0).min(rect.height() / 2.0);
+    let mut p = Vec::new();
+    let rad = rad.min(r.width() / 2.0).min(r.height() / 2.0);
     add_arc(
-        &mut pts,
-        Pos2::new(rect.max.x - r, rect.min.y + r),
-        r,
+        &mut p,
+        Pos2::new(r.max.x - rad, r.min.y + rad),
+        rad,
         -1.57,
         0.0,
     );
     add_arc(
-        &mut pts,
-        Pos2::new(rect.max.x - r, rect.max.y - r),
-        r,
+        &mut p,
+        Pos2::new(r.max.x - rad, r.max.y - rad),
+        rad,
         0.0,
         1.57,
     );
     add_arc(
-        &mut pts,
-        Pos2::new(rect.min.x + r, rect.max.y - r),
-        r,
+        &mut p,
+        Pos2::new(r.min.x + rad, r.max.y - rad),
+        rad,
         1.57,
         3.14,
     );
     add_arc(
-        &mut pts,
-        Pos2::new(rect.min.x + r, rect.min.y + r),
-        r,
+        &mut p,
+        Pos2::new(r.min.x + rad, r.min.y + rad),
+        rad,
         3.14,
         4.71,
     );
-    pts
+    p
 }
+
 fn discretize_ellipse(w: f32, h: f32) -> Vec<Pos2> {
     let rx = w / 2.0;
     let ry = h / 2.0;
@@ -672,10 +1006,11 @@ fn discretize_ellipse(w: f32, h: f32) -> Vec<Pos2> {
         })
         .collect()
 }
-fn add_arc(pts: &mut Vec<Pos2>, c: Pos2, r: f32, start: f32, end: f32) {
+
+fn add_arc(p: &mut Vec<Pos2>, c: Pos2, r: f32, s: f32, e: f32) {
     for i in 0..=8 {
         let t = i as f32 / 8.0;
-        let a = start + (end - start) * t;
-        pts.push(c + Vec2::new(r * a.cos(), r * a.sin()));
+        let a = s + (e - s) * t;
+        p.push(c + Vec2::new(r * a.cos(), r * a.sin()));
     }
 }
