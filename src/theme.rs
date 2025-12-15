@@ -1,56 +1,34 @@
 use directories::BaseDirs;
 use egui::{
-    style::{Selection, WidgetVisuals, Widgets},
-    Color32, Context, CornerRadius, FontData, FontDefinitions, FontFamily, FontId, Shadow, Stroke,
-    TextStyle, Visuals,
+    Color32, Context, CornerRadius, FontData, FontDefinitions, FontFamily, FontId, TextStyle,
+    Visuals,
 };
 use font_loader::system_fonts::{self, FontPropertyBuilder};
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::sync::Arc;
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Default)]
 #[serde(default)]
 struct ThemeConfig {
-    bg_window: String,
-    bg_panel: String,
-    bg_input: String,
-    bg_faint: String,
+    bg_window: Option<String>,
+    bg_panel: Option<String>,
+    bg_input: Option<String>,
+    bg_faint: Option<String>,
 
-    text_primary: String,
-    text_secondary: String,
+    text_primary: Option<String>,
+    text_secondary: Option<String>,
 
-    accent: String,
-    border: String,
+    accent: Option<String>,
+    border: Option<String>,
 
-    success: String,
-    error: String,
-    warn: String,
+    success: Option<String>,
+    error: Option<String>,
+    warn: Option<String>,
 
     font_family: Option<String>,
-    base_font_size: f32,
-    corner_radius: u8,
-}
-
-impl Default for ThemeConfig {
-    fn default() -> Self {
-        Self {
-            bg_window: "#1b1b1b".to_string(),
-            bg_panel: "#252525".to_string(),
-            bg_input: "#151515".to_string(),
-            bg_faint: "#202020".to_string(),
-            text_primary: "#e0e0e0".to_string(),
-            text_secondary: "#909090".to_string(),
-            accent: "#7daea3".to_string(),
-            border: "#404040".to_string(),
-            success: "#a3be8c".to_string(),
-            error: "#bf616a".to_string(),
-            warn: "#ebcb8b".to_string(),
-            font_family: None,
-            base_font_size: 14.0,
-            corner_radius: 4,
-        }
-    }
+    base_font_size: Option<f32>,
+    corner_radius: Option<u8>,
 }
 
 pub fn load_and_apply_theme(ctx: &Context) {
@@ -60,134 +38,108 @@ pub fn load_and_apply_theme(ctx: &Context) {
 
     println!("Intentando cargar tema desde: {:?}", theme_path);
 
-    let theme_config: ThemeConfig = if theme_path.exists() {
-        match fs::read_to_string(&theme_path) {
-            Ok(data) => {
-                println!("Archivo encontrado. Parseando...");
-                match serde_json::from_str(&data) {
-                    Ok(cfg) => {
-                        println!("Tema cargado exitosamente.");
-                        cfg
-                    }
-                    Err(e) => {
-                        eprintln!("Error de sintaxis en theme.json: {}. Usando default.", e);
-                        ThemeConfig::default()
-                    }
+    if !theme_path.exists() {
+        println!("No existe theme.json. Usando tema por defecto de la librería.");
+        return;
+    }
+
+    let theme_config: ThemeConfig = match fs::read_to_string(&theme_path) {
+        Ok(data) => {
+            println!("Archivo encontrado. Parseando...");
+            match serde_json::from_str(&data) {
+                Ok(cfg) => {
+                    println!("Tema cargado exitosamente.");
+                    cfg
+                }
+                Err(e) => {
+                    eprintln!("Error de sintaxis en theme.json: {}. Se usarán valores por defecto de la librería para los campos ilegibles.", e);
+                    ThemeConfig::default()
                 }
             }
-            Err(_) => ThemeConfig::default(),
         }
-    } else {
-        println!("No existe theme.json. Creando uno nuevo.");
-        let def = ThemeConfig::default();
-        // Crear carpeta si no existe
-        if let Some(parent) = theme_path.parent() {
-            let _ = fs::create_dir_all(parent);
+        Err(e) => {
+            eprintln!(
+                "Error leyendo archivo: {}. Usando tema por defecto de la librería.",
+                e
+            );
+            return;
         }
-        if let Ok(json) = serde_json::to_string_pretty(&def) {
-            let _ = fs::write(&theme_path, json);
-        }
-        def
     };
 
-    let visuals = create_complete_visuals(&theme_config);
-    ctx.set_visuals(visuals);
+    apply_visuals(ctx, &theme_config);
 
     if let Some(font_name) = &theme_config.font_family {
         load_system_font(ctx, font_name);
     }
 
-    setup_font_sizes(ctx, theme_config.base_font_size);
+    if let Some(size) = theme_config.base_font_size {
+        setup_font_sizes(ctx, size);
+    }
 }
 
-fn create_complete_visuals(t: &ThemeConfig) -> Visuals {
-    let bg_win = hex_to_color(&t.bg_window);
-    let bg_panel = hex_to_color(&t.bg_panel);
-    let bg_input = hex_to_color(&t.bg_input);
-    let bg_faint = hex_to_color(&t.bg_faint);
+fn apply_visuals(ctx: &Context, t: &ThemeConfig) {
+    let mut v = Visuals::dark();
 
-    let txt_pri = hex_to_color(&t.text_primary);
+    let to_col = |opt: &Option<String>| opt.as_deref().map(hex_to_color);
 
-    let accent = hex_to_color(&t.accent);
-    let border = hex_to_color(&t.border);
+    if let Some(c) = to_col(&t.bg_window) {
+        v.window_fill = c;
+    }
+    if let Some(c) = to_col(&t.bg_panel) {
+        v.panel_fill = c;
+    }
+    if let Some(c) = to_col(&t.bg_faint) {
+        v.faint_bg_color = c;
+    }
+    if let Some(c) = to_col(&t.bg_input) {
+        v.extreme_bg_color = c;
+        v.code_bg_color = c;
+        v.text_edit_bg_color = Some(c);
+    }
 
-    let err = hex_to_color(&t.error);
-    let warn = hex_to_color(&t.warn);
+    if let Some(c) = to_col(&t.text_primary) {
+        v.override_text_color = Some(c);
+        v.widgets.noninteractive.fg_stroke.color = c;
+        v.widgets.inactive.fg_stroke.color = c;
+        v.widgets.open.fg_stroke.color = c;
+    }
 
-    let radius = CornerRadius::same(t.corner_radius);
+    if let Some(c) = to_col(&t.accent) {
+        v.selection.bg_fill = c.linear_multiply(0.3);
+        v.selection.stroke.color = c;
+        v.hyperlink_color = c;
 
-    let widgets = Widgets {
-        noninteractive: WidgetVisuals {
-            weak_bg_fill: bg_win,
-            bg_fill: bg_win,
-            bg_stroke: Stroke::new(1.0, border),
-            fg_stroke: Stroke::new(1.0, txt_pri),
-            corner_radius: radius,
-            expansion: 0.0,
-        },
-        inactive: WidgetVisuals {
-            weak_bg_fill: bg_panel,
-            bg_fill: bg_panel,
-            bg_stroke: Stroke::new(1.0, border),
-            fg_stroke: Stroke::new(1.0, txt_pri),
-            corner_radius: radius,
-            expansion: 0.0,
-        },
-        hovered: WidgetVisuals {
-            weak_bg_fill: accent.linear_multiply(0.2),
-            bg_fill: accent.linear_multiply(0.2),
-            bg_stroke: Stroke::new(1.0, accent),
-            fg_stroke: Stroke::new(1.5, txt_pri),
-            corner_radius: radius,
-            expansion: 1.0,
-        },
-        active: WidgetVisuals {
-            weak_bg_fill: accent.linear_multiply(0.4),
-            bg_fill: accent.linear_multiply(0.4),
-            bg_stroke: Stroke::new(2.0, accent),
-            fg_stroke: Stroke::new(2.0, Color32::WHITE),
-            corner_radius: radius,
-            expansion: 1.0,
-        },
-        open: WidgetVisuals {
-            weak_bg_fill: bg_panel,
-            bg_fill: bg_panel,
-            bg_stroke: Stroke::new(1.0, border),
-            fg_stroke: Stroke::new(1.0, txt_pri),
-            corner_radius: radius,
-            expansion: 0.0,
-        },
-    };
+        v.widgets.hovered.bg_stroke.color = c;
+        v.widgets.active.bg_stroke.color = c;
+        v.widgets.active.bg_fill = c.linear_multiply(0.4);
+    }
 
-    let selection = Selection {
-        bg_fill: accent.linear_multiply(0.3),
-        stroke: Stroke::new(1.0, accent),
-    };
+    if let Some(c) = to_col(&t.border) {
+        v.window_stroke.color = c;
+        v.widgets.noninteractive.bg_stroke.color = c;
+        v.widgets.inactive.bg_stroke.color = c;
+    }
 
-    let mut visuals = Visuals::dark();
+    if let Some(c) = to_col(&t.warn) {
+        v.warn_fg_color = c;
+    }
+    if let Some(c) = to_col(&t.error) {
+        v.error_fg_color = c;
+    }
 
-    visuals.override_text_color = Some(txt_pri);
-    visuals.widgets = widgets;
-    visuals.selection = selection;
-    visuals.window_fill = bg_win;
-    visuals.panel_fill = bg_panel;
-    visuals.extreme_bg_color = bg_input;
-    visuals.faint_bg_color = bg_faint;
-    visuals.code_bg_color = bg_input;
-    visuals.warn_fg_color = warn;
-    visuals.error_fg_color = err;
-    visuals.hyperlink_color = accent;
+    if let Some(r) = t.corner_radius {
+        let cr = CornerRadius::same(r);
+        v.window_corner_radius = cr;
+        v.menu_corner_radius = cr;
 
-    visuals.window_corner_radius = radius;
-    visuals.menu_corner_radius = radius;
-    visuals.window_stroke = Stroke::new(1.0, border);
+        v.widgets.noninteractive.corner_radius = cr;
+        v.widgets.inactive.corner_radius = cr;
+        v.widgets.hovered.corner_radius = cr;
+        v.widgets.active.corner_radius = cr;
+        v.widgets.open.corner_radius = cr;
+    }
 
-    visuals.window_shadow = Shadow::default();
-    visuals.popup_shadow = Shadow::default();
-
-    visuals.text_edit_bg_color = Some(bg_input);
-
-    visuals
+    ctx.set_visuals(v);
 }
 
 fn hex_to_color(hex: &str) -> Color32 {
