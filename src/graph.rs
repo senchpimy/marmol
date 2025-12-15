@@ -9,7 +9,7 @@ use std::path::Path;
 use yaml_rust::YamlLoader;
 
 use egui::*;
-use egui_plot::{Line, MarkerShape, Plot, PlotPoint, Points, Text};
+use egui_plot::{Arrows, Line, MarkerShape, Plot, PlotPoint, Points, Text};
 
 #[derive(Clone)]
 struct MarmolPoint {
@@ -19,7 +19,24 @@ struct MarmolPoint {
     rel_path: String,
     abs_path: String,
     is_attachment: bool,
+    is_tag: bool, // NUEVO CAMPO
     exists: bool,
+}
+
+#[derive(Clone, PartialEq)]
+enum MatchType {
+    Filename,
+    Tag,
+    Path,
+    Content,
+    Section,
+}
+
+#[derive(Clone)]
+struct CustomGroup {
+    match_type: MatchType,
+    value: String,
+    color: Color32,
 }
 
 pub struct Graph {
@@ -34,6 +51,7 @@ pub struct Graph {
     repel_force: f32,
     link_force: f32,
     group_force: f32,
+    tag_force: f32, // NUEVO CAMPO: Fuerza de atracción extra para tags
 
     // Filtros de Texto
     filter_filename: String,
@@ -46,6 +64,13 @@ pub struct Graph {
     show_attachments: bool,
     show_existing_only: bool,
     show_orphans: bool,
+    show_tags: bool, // NUEVO TOGGLE
+
+    // Visualización
+    show_arrows: bool,
+    text_zoom_threshold: f64,
+    node_size: f32,
+    line_thickness: f32,
 
     dragged_node_index: Option<usize>,
     orphan_color: Color32,
@@ -53,6 +78,11 @@ pub struct Graph {
     attachment_color: Color32,
     palette: Vec<Color32>,
     tags_colors: HashMap<String, Color32>,
+
+    custom_groups: Vec<CustomGroup>,
+    new_group_type: MatchType,
+    new_group_val: String,
+    new_group_col: Color32,
 }
 
 impl MarmolPoint {
@@ -63,6 +93,7 @@ impl MarmolPoint {
         rel_path: String,
         abs_path: String,
         is_attachment: bool,
+        is_tag: bool, // NUEVO ARGUMENTO
         exists: bool,
     ) -> Self {
         Self {
@@ -72,6 +103,7 @@ impl MarmolPoint {
             rel_path,
             abs_path,
             is_attachment,
+            is_tag,
             exists,
         }
     }
@@ -80,7 +112,6 @@ impl MarmolPoint {
 impl Graph {
     pub fn new(vault: &str) -> Self {
         let mut tags_colors = HashMap::new();
-        // Carga opcional de colores
         if let Ok(file_content) = fs::read_to_string("./test.json") {
             if let Ok(parsed) = json::parse(&file_content) {
                 if let json::JsonValue::Array(color_groups) = &parsed["colorGroups"] {
@@ -123,6 +154,7 @@ impl Graph {
             repel_force: 30.0,
             link_force: 0.8,
             group_force: 1.5,
+            tag_force: 3.0, // Fuerza extra por defecto
 
             filter_filename: String::new(),
             filter_tag: String::new(),
@@ -133,6 +165,12 @@ impl Graph {
             show_attachments: true,
             show_existing_only: false,
             show_orphans: true,
+            show_tags: false, // Apagado por defecto
+
+            show_arrows: false,
+            text_zoom_threshold: 500.0,
+            node_size: 7.0,
+            line_thickness: 2.0,
 
             dragged_node_index: None,
             orphan_color: Color32::from_rgb(100, 110, 120),
@@ -140,19 +178,59 @@ impl Graph {
             attachment_color: Color32::from_rgb(100, 200, 100),
             palette,
             tags_colors,
+
+            custom_groups: vec![],
+            new_group_type: MatchType::Tag,
+            new_group_val: String::new(),
+            new_group_col: Color32::from_rgb(255, 0, 0),
         };
 
         graph.update_vault(Path::new(vault));
         graph
     }
-}
 
-impl Graph {
+    fn check_match(&self, m_type: &MatchType, val: &str, point: &MarmolPoint) -> bool {
+        if val.is_empty() {
+            return false;
+        }
+        let search = val.to_lowercase();
+
+        match m_type {
+            MatchType::Tag => point
+                .tags
+                .iter()
+                .any(|t| t.to_lowercase().contains(&search)),
+            MatchType::Filename => point.text.to_lowercase().contains(&search),
+            MatchType::Path => point.rel_path.to_lowercase().contains(&search),
+            MatchType::Content => {
+                if point.is_attachment || point.is_tag {
+                    return false;
+                }
+                if let Ok(c) = fs::read_to_string(&point.abs_path) {
+                    c.to_lowercase().contains(&search)
+                } else {
+                    false
+                }
+            }
+            MatchType::Section => {
+                if point.is_attachment || point.is_tag {
+                    return false;
+                }
+                if let Ok(c) = fs::read_to_string(&point.abs_path) {
+                    c.lines()
+                        .any(|l| l.trim().starts_with('#') && l.to_lowercase().contains(&search))
+                } else {
+                    false
+                }
+            }
+        }
+    }
+
     pub fn update_vault(&mut self, vault: &Path) {
         let mut new_points = vec![];
         let mut elements = 0;
 
-        // 1. Obtener archivos reales
+        // 1. Obtener Archivos
         get_data(
             vault,
             &mut new_points,
@@ -160,7 +238,7 @@ impl Graph {
             vault.to_str().unwrap(),
         );
 
-        // 2. Generar "Nodos Fantasma"
+        // 2. Generar Nodos Fantasma (Links rotos)
         let mut existing_names: HashSet<String> = HashSet::new();
         for p in &new_points {
             existing_names.insert(p.text.to_lowercase());
@@ -182,29 +260,74 @@ impl Graph {
                             "".to_string(),
                             "".to_string(),
                             false,
-                            false,
+                            false, // is_tag
+                            false, // exists
                         ));
                     }
                 }
             }
         }
 
-        // Evitar duplicados
-        let mut unique_ghosts = vec![];
+        // Eliminar duplicados de fantasmas
         let mut seen_ghosts = HashSet::new();
         for g in ghost_points {
             if seen_ghosts.insert(g.text.to_lowercase()) {
-                unique_ghosts.push(g);
+                new_points.push(g);
             }
         }
 
-        new_points.extend(unique_ghosts);
+        // 3. Generar Nodos de TAGS (Si el toggle está activo)
+        if self.show_tags {
+            let mut tag_map: HashMap<String, usize> = HashMap::new();
+
+            // Primero identificamos todos los tags únicos y creamos sus nodos
+            // Nota: Iteramos sobre una copia temporal de los tags para no borrow new_points
+            let mut all_tags = HashSet::new();
+            for p in &new_points {
+                if p.is_tag {
+                    continue;
+                }
+                for tag in &p.tags {
+                    if tag != "Orphan" {
+                        all_tags.insert(tag.clone());
+                    }
+                }
+            }
+
+            // Crear puntos para los tags
+            let start_idx = new_points.len();
+            for (i, tag) in all_tags.iter().enumerate() {
+                let tag_point = MarmolPoint::new(
+                    tag,
+                    vec![],
+                    vec![],
+                    "".to_string(),
+                    "".to_string(),
+                    false, // attachment
+                    true,  // is_tag
+                    true,  // exists
+                );
+                new_points.push(tag_point);
+                tag_map.insert(tag.clone(), start_idx + i);
+            }
+
+            // Calcular edges para tags (se hace en build_edges, pero necesitamos pasar info o hacerlo aqui)
+            // Dado que build_edges usa links, y los tags no son links textuales,
+            // necesitamos inyectar estas conexiones manualmente después.
+            // Para simplificar, añadimos los indices de los tags a una lista auxiliar en Graph,
+            // pero mejor modificamos build_edges para soportar tags o lo hacemos aquí.
+
+            // Vamos a hacerlo en build_edges modificado abajo.
+        }
+
         let total_count = new_points.len();
 
         let mut new_coords = vec![];
         get_coords(&mut new_coords, total_count as i32);
 
-        self.edges = build_edges(&new_points);
+        // Construir Edges (Links + Conexiones a Tags)
+        self.edges = build_edges(&new_points, self.show_tags);
+
         self.points = new_points;
         self.points_coord = new_coords;
         self.velocities = vec![Vec2::ZERO; self.points_coord.len()];
@@ -234,6 +357,11 @@ impl Graph {
         if !self.show_orphans && self.node_degrees[index] == 0 {
             return false;
         }
+        // Si el toggle de tags está apagado, los puntos is_tag no deberían existir en el array,
+        // pero por seguridad filtramos.
+        if !self.show_tags && p.is_tag {
+            return false;
+        }
 
         if !self.filter_filename.is_empty() {
             if !p
@@ -246,8 +374,15 @@ impl Graph {
         }
         if !self.filter_tag.is_empty() {
             let search = self.filter_tag.to_lowercase();
-            if !p.tags.iter().any(|t| t.to_lowercase().contains(&search)) {
-                return false;
+            // Si es un nodo TAG, filtramos por su propio nombre
+            if p.is_tag {
+                if !p.text.to_lowercase().contains(&search) {
+                    return false;
+                }
+            } else {
+                if !p.tags.iter().any(|t| t.to_lowercase().contains(&search)) {
+                    return false;
+                }
             }
         }
         if !self.filter_path.is_empty() {
@@ -260,9 +395,9 @@ impl Graph {
             }
         }
 
-        // Filtros de contenido (lectura de disco)
+        // Filtros de contenido (excluyen tags y ghosts)
         if !self.filter_line.is_empty() {
-            if !p.exists || p.is_attachment {
+            if !p.exists || p.is_attachment || p.is_tag {
                 return false;
             }
             if let Ok(content) = fs::read_to_string(&p.abs_path) {
@@ -277,7 +412,7 @@ impl Graph {
             }
         }
         if !self.filter_section.is_empty() {
-            if !p.exists || p.is_attachment {
+            if !p.exists || p.is_attachment || p.is_tag {
                 return false;
             }
             if let Ok(content) = fs::read_to_string(&p.abs_path) {
@@ -297,12 +432,16 @@ impl Graph {
         true
     }
 
-    pub fn controls(&mut self, ui: &mut Ui) {
+    pub fn controls(&mut self, ui: &mut Ui) -> bool {
+        let mut changed = false;
+
         ui.collapsing("Configuración Física", |ui| {
             ui.add(egui::Slider::new(&mut self.repel_force, 1.0..=100.0).text("Repulsión"));
             ui.add(egui::Slider::new(&mut self.link_force, 0.1..=3.0).text("Links"));
             ui.add(egui::Slider::new(&mut self.group_force, 0.0..=5.0).text("Agrupación"));
             ui.add(egui::Slider::new(&mut self.center_force, 0.01..=1.0).text("Gravedad"));
+            ui.add(egui::Slider::new(&mut self.tag_force, 0.1..=10.0).text("Atracción Tags"));
+
             ui.horizontal(|ui| {
                 color_picker::color_edit_button_srgba(
                     ui,
@@ -313,27 +452,121 @@ impl Graph {
             });
         });
 
+        ui.collapsing("Visualización", |ui| {
+            ui.checkbox(&mut self.show_arrows, "Mostrar Flechas (Dirección)");
+
+            ui.add(egui::Slider::new(&mut self.node_size, 2.0..=20.0).text("Tamaño Nodo"));
+            ui.add(egui::Slider::new(&mut self.line_thickness, 0.5..=10.0).text("Grosor Línea"));
+
+            ui.label("Visibilidad de Texto (Zoom):");
+            ui.add(
+                egui::Slider::new(&mut self.text_zoom_threshold, 10.0..=2000.0)
+                    .text("Umbral")
+                    .logarithmic(true),
+            );
+        });
+
+        ui.collapsing("Crear Grupos (Colores)", |ui| {
+            ui.label("Define reglas para colorear nodos.");
+
+            ui.horizontal(|ui| {
+                egui::ComboBox::from_id_salt("group_type_combo")
+                    .selected_text(match self.new_group_type {
+                        MatchType::Tag => "Tag",
+                        MatchType::Filename => "Filename",
+                        MatchType::Path => "Path",
+                        MatchType::Content => "Content",
+                        MatchType::Section => "Section",
+                    })
+                    .show_ui(ui, |ui| {
+                        ui.selectable_value(&mut self.new_group_type, MatchType::Tag, "Tag");
+                        ui.selectable_value(
+                            &mut self.new_group_type,
+                            MatchType::Filename,
+                            "Filename",
+                        );
+                        ui.selectable_value(&mut self.new_group_type, MatchType::Path, "Path");
+                        ui.selectable_value(
+                            &mut self.new_group_type,
+                            MatchType::Content,
+                            "Content",
+                        );
+                        ui.selectable_value(
+                            &mut self.new_group_type,
+                            MatchType::Section,
+                            "Section",
+                        );
+                    });
+
+                color_picker::color_edit_button_srgba(
+                    ui,
+                    &mut self.new_group_col,
+                    egui::widgets::color_picker::Alpha::Opaque,
+                );
+            });
+
+            ui.text_edit_singleline(&mut self.new_group_val)
+                .on_hover_text("Valor a buscar");
+
+            if ui.button("Agregar Grupo").clicked() {
+                if !self.new_group_val.is_empty() {
+                    self.custom_groups.push(CustomGroup {
+                        match_type: self.new_group_type.clone(),
+                        value: self.new_group_val.clone(),
+                        color: self.new_group_col,
+                    });
+                    self.new_group_val.clear();
+                }
+            }
+
+            ui.separator();
+            ui.label("Grupos Activos:");
+            let mut index_to_remove = None;
+            for (i, group) in self.custom_groups.iter().enumerate() {
+                ui.horizontal(|ui| {
+                    let (rect, _) = ui.allocate_exact_size(egui::vec2(12.0, 12.0), Sense::hover());
+                    ui.painter().rect_filled(rect, 2.0, group.color);
+                    let type_str = match group.match_type {
+                        MatchType::Tag => "Tag",
+                        MatchType::Filename => "File",
+                        MatchType::Path => "Path",
+                        MatchType::Content => "Cont",
+                        MatchType::Section => "Sect",
+                    };
+                    ui.label(format!("{}: '{}'", type_str, group.value));
+                    if ui.button("x").clicked() {
+                        index_to_remove = Some(i);
+                    }
+                });
+            }
+            if let Some(i) = index_to_remove {
+                self.custom_groups.remove(i);
+            }
+        });
+
         ui.collapsing("Filtros", |ui| {
-            // Se agregaron los LABELS explicitos antes de cada campo
             ui.label("Filename (Nombre):");
             ui.text_edit_singleline(&mut self.filter_filename);
-
             ui.label("Tag (Etiqueta):");
             ui.text_edit_singleline(&mut self.filter_tag);
-
             ui.label("Path (Carpeta):");
             ui.text_edit_singleline(&mut self.filter_path);
-
-            ui.label("Line (Contenido - Lento):");
+            ui.label("Line (Contenido):");
             ui.text_edit_singleline(&mut self.filter_line);
-
             ui.label("Section (Heading #):");
             ui.text_edit_singleline(&mut self.filter_section);
 
             ui.separator();
-            ui.checkbox(&mut self.show_attachments, "Mostrar Adjuntos (img/pdf)");
+            ui.checkbox(&mut self.show_attachments, "Mostrar Adjuntos");
             ui.checkbox(&mut self.show_existing_only, "Ocultar Nodos Fantasma");
             ui.checkbox(&mut self.show_orphans, "Mostrar Huérfanos");
+
+            if ui
+                .checkbox(&mut self.show_tags, "Mostrar Nodos de Tags")
+                .changed()
+            {
+                changed = true;
+            }
 
             if ui.button("Limpiar Todo").clicked() {
                 self.filter_filename.clear();
@@ -343,6 +576,8 @@ impl Graph {
                 self.filter_section.clear();
             }
         });
+
+        changed
     }
 
     fn simulate_physics(&mut self) {
@@ -355,6 +590,7 @@ impl Graph {
         let center_k = self.center_force;
         let spring_k = self.link_force;
         let group_k = self.group_force;
+        let tag_k = self.tag_force;
 
         let count = self.points_coord.len();
         let mut tag_centers: HashMap<String, Vec2> = HashMap::new();
@@ -365,6 +601,10 @@ impl Graph {
                 continue;
             }
             let point = &self.points[i];
+            if point.is_tag {
+                continue;
+            }
+
             let main_tag = if point.tags.is_empty() {
                 "Orphan"
             } else {
@@ -397,14 +637,16 @@ impl Graph {
             let mut force = Vec2::ZERO;
             force -= pos_i * center_k;
 
-            let main_tag = if self.points[i].tags.is_empty() {
-                "Orphan"
-            } else {
-                &self.points[i].tags[0]
-            };
-            if let Some(&group_center) = tag_centers.get(main_tag) {
-                let dist_to_group = group_center - pos_i;
-                force += dist_to_group * group_k;
+            if !self.points[i].is_tag {
+                let main_tag = if self.points[i].tags.is_empty() {
+                    "Orphan"
+                } else {
+                    &self.points[i].tags[0]
+                };
+                if let Some(&group_center) = tag_centers.get(main_tag) {
+                    let dist_to_group = group_center - pos_i;
+                    force += dist_to_group * group_k;
+                }
             }
 
             for j in 0..count {
@@ -423,7 +665,13 @@ impl Graph {
                     continue;
                 }
                 let safe_dist_sq = dist_sq.max(10.0);
-                force += delta.normalized() * (repulsion_k / safe_dist_sq);
+
+                let multiplier = if self.points[i].is_tag || self.points[j].is_tag {
+                    2.0
+                } else {
+                    1.0
+                };
+                force += delta.normalized() * (repulsion_k * multiplier / safe_dist_sq);
             }
             self.velocities[i] += force * dt;
         }
@@ -443,7 +691,15 @@ impl Graph {
 
             let delta = pos_b - pos_a;
             let dist = delta.length();
-            let force = delta.normalized() * (dist * spring_k);
+
+            let is_tag_connection = self.points[idx_a].is_tag || self.points[idx_b].is_tag;
+            let current_k = if is_tag_connection {
+                spring_k * tag_k
+            } else {
+                spring_k
+            };
+
+            let force = delta.normalized() * (dist * current_k);
 
             if !dragging_a {
                 self.velocities[idx_a] += force * dt;
@@ -505,22 +761,44 @@ impl Graph {
 
                 let line_color = Color32::from_rgba_unmultiplied(100, 100, 100, 100);
 
-                for &(idx_a, idx_b) in &self.edges {
-                    if self.is_visible(idx_a)
-                        && self.is_visible(idx_b)
-                        && idx_a < self.points_coord.len()
-                        && idx_b < self.points_coord.len()
-                    {
-                        let p1 = self.points_coord[idx_a];
-                        let p2 = self.points_coord[idx_b];
+                if self.show_arrows {
+                    let mut origins = vec![];
+                    let mut tips = vec![];
 
-                        let line = Line::new(
-                            "".to_string(),
-                            vec![[p1.0 as f64, p1.1 as f64], [p2.0 as f64, p2.1 as f64]],
-                        )
+                    for &(idx_a, idx_b) in &self.edges {
+                        if self.is_visible(idx_a)
+                            && self.is_visible(idx_b)
+                            && idx_a < self.points_coord.len()
+                            && idx_b < self.points_coord.len()
+                        {
+                            let p1 = self.points_coord[idx_a];
+                            let p2 = self.points_coord[idx_b];
+                            origins.push([p1.0 as f64, p1.1 as f64]);
+                            tips.push([p2.0 as f64, p2.1 as f64]);
+                        }
+                    }
+
+                    let arrows = Arrows::new("".to_string(), origins, tips)
                         .color(line_color)
-                        .width(2.0);
-                        plot_ui.line(line);
+                        .tip_length(25.0);
+                    plot_ui.arrows(arrows);
+                } else {
+                    for &(idx_a, idx_b) in &self.edges {
+                        if self.is_visible(idx_a)
+                            && self.is_visible(idx_b)
+                            && idx_a < self.points_coord.len()
+                            && idx_b < self.points_coord.len()
+                        {
+                            let p1 = self.points_coord[idx_a];
+                            let p2 = self.points_coord[idx_b];
+                            let line = Line::new(
+                                "".to_string(),
+                                vec![[p1.0 as f64, p1.1 as f64], [p2.0 as f64, p2.1 as f64]],
+                            )
+                            .color(line_color)
+                            .width(self.line_thickness);
+                            plot_ui.line(line);
+                        }
                     }
                 }
 
@@ -544,12 +822,18 @@ impl Graph {
                         self.points_coord[index].1 as f64,
                     ];
 
-                    let mut radius = 7.0;
-                    if point.is_attachment {
-                        radius = 5.0;
-                    }
-                    if !point.exists {
-                        radius = 6.0;
+                    let mut radius = self.node_size;
+
+                    if point.is_tag {
+                        let degree = self.node_degrees[index] as f32;
+                        radius = (self.node_size * 1.5) + (degree * 0.5);
+                        if radius > 50.0 {
+                            radius = 50.0;
+                        }
+                    } else if point.is_attachment {
+                        radius = self.node_size * 0.7;
+                    } else if !point.exists {
+                        radius = self.node_size * 0.85;
                     }
 
                     let mut punto = Points::new("".to_string(), coords)
@@ -560,13 +844,16 @@ impl Graph {
                     if point.is_attachment {
                         punto = punto.shape(MarkerShape::Square);
                     }
+                    if point.is_tag {
+                        punto = punto.shape(MarkerShape::Diamond);
+                    }
 
                     plot_ui.points(punto);
 
                     let bounds = plot_ui.plot_bounds();
                     let diff = bounds.max()[1] - bounds.min()[1];
 
-                    if diff < 500.0 {
+                    if diff < self.text_zoom_threshold {
                         let texto = Text::new(
                             "".to_string(),
                             PlotPoint::new(
@@ -582,8 +869,10 @@ impl Graph {
                         let node_pos = self.points_coord[index];
                         if is_close(ptr, node_pos, 1.2) {
                             if is_double_click && self.dragged_node_index.is_none() {
-                                *current_file = format!("{}/{}", vault, &point.rel_path);
-                                *content = main_area::Content::View;
+                                if point.exists && !point.is_attachment && !point.is_tag {
+                                    *current_file = point.abs_path.clone();
+                                    *content = main_area::Content::View;
+                                }
                             }
                             if is_drag_started {
                                 self.dragged_node_index = Some(index);
@@ -603,6 +892,8 @@ impl Graph {
             .response;
 
         let plot_rect = response.rect;
+        let mut controls_changed = false;
+
         egui::Area::new("graph_controls_overlay".into())
             .fixed_pos(plot_rect.min + egui::vec2(10.0, 10.0))
             .order(Order::Foreground)
@@ -617,10 +908,16 @@ impl Graph {
                         ui.set_max_height(plot_rect.height() - 40.0);
 
                         egui::ScrollArea::vertical().show(ui, |ui| {
-                            self.controls(ui);
+                            if self.controls(ui) {
+                                controls_changed = true;
+                            }
                         });
                     });
             });
+
+        if controls_changed {
+            self.update_vault(Path::new(vault));
+        }
 
         response
     }
@@ -629,8 +926,35 @@ impl Graph {
         if !point.exists {
             return self.ghost_color;
         }
+
+        let mut matching_colors = vec![];
+
+        for group in &self.custom_groups {
+            if self.check_match(&group.match_type, &group.value, point) {
+                matching_colors.push(group.color);
+            }
+        }
+
+        if !self.new_group_val.is_empty() {
+            if self.check_match(&self.new_group_type, &self.new_group_val, point) {
+                matching_colors.push(self.new_group_col);
+            }
+        }
+
+        if !matching_colors.is_empty() {
+            return mix_colors(&matching_colors);
+        }
+
         if point.is_attachment {
             return self.attachment_color;
+        }
+
+        if point.is_tag {
+            let mut hasher = DefaultHasher::new();
+            point.text.hash(&mut hasher);
+            let hash = hasher.finish();
+            let index = (hash as usize) % self.palette.len();
+            return self.palette[index].linear_multiply(1.2); // Más brillante
         }
 
         let valid_tags: Vec<&String> = point.tags.iter().filter(|t| *t != "Orphan").collect();
@@ -659,21 +983,40 @@ fn is_close(delta: PlotPoint, point_pos: (f32, f32), tol: f32) -> bool {
     dx < tol && dy < tol
 }
 
-fn build_edges(points: &Vec<MarmolPoint>) -> Vec<(usize, usize)> {
+fn build_edges(points: &Vec<MarmolPoint>, show_tags: bool) -> Vec<(usize, usize)> {
     let mut edges = vec![];
     let mut name_to_index = HashMap::new();
+    let mut tag_to_index = HashMap::new();
 
     for (idx, point) in points.iter().enumerate() {
-        let clean = point.text.trim().to_lowercase();
-        name_to_index.insert(clean, idx);
+        if point.is_tag {
+            tag_to_index.insert(point.text.clone(), idx);
+        } else {
+            let clean = point.text.trim().to_lowercase();
+            name_to_index.insert(clean, idx);
+        }
     }
 
     for (i, point) in points.iter().enumerate() {
+        if point.is_tag {
+            continue;
+        }
+
         for link in &point.links {
             let link_clean = link.trim().to_lowercase();
             if let Some(&target_idx) = name_to_index.get(&link_clean) {
                 if i != target_idx {
                     edges.push((i, target_idx));
+                }
+            }
+        }
+
+        if show_tags {
+            for tag in &point.tags {
+                if tag != "Orphan" {
+                    if let Some(&tag_idx) = tag_to_index.get(tag) {
+                        edges.push((i, tag_idx));
+                    }
                 }
             }
         }
@@ -757,13 +1100,11 @@ fn get_data(dir: &Path, marmol_vec: &mut Vec<MarmolPoint>, total_entries: &mut i
                             }
 
                             marmol_vec.push(MarmolPoint::new(
-                                &node_name, tag_vecs, links_vec, rel_path, abs_path, false, true,
+                                &node_name, tag_vecs, links_vec, rel_path, abs_path, false, false,
+                                true,
                             ));
                         } else if ["png", "jpg", "jpeg", "pdf", "gif"].contains(&ext.as_str()) {
                             *total_entries += 1;
-                            dbg!(&node_name);
-                            dbg!(&rel_path);
-                            dbg!(&abs_path);
                             marmol_vec.push(MarmolPoint::new(
                                 &node_name,
                                 vec!["Attachment".to_string()],
@@ -771,6 +1112,7 @@ fn get_data(dir: &Path, marmol_vec: &mut Vec<MarmolPoint>, total_entries: &mut i
                                 rel_path,
                                 abs_path,
                                 true,
+                                false,
                                 true,
                             ));
                         }
@@ -792,4 +1134,28 @@ fn get_coords(coords_vec: &mut Vec<(f32, f32)>, total_entries: i32) {
         let y: f32 = radio * a.sin();
         coords_vec.push((x, y));
     }
+}
+
+fn mix_colors(colors: &[Color32]) -> Color32 {
+    if colors.is_empty() {
+        return Color32::WHITE;
+    }
+    let mut r = 0u32;
+    let mut g = 0u32;
+    let mut b = 0u32;
+    let mut a = 0u32;
+
+    for c in colors {
+        r += c.r() as u32;
+        g += c.g() as u32;
+        b += c.b() as u32;
+        a += c.a() as u32;
+    }
+    let count = colors.len() as u32;
+    Color32::from_rgba_premultiplied(
+        (r / count) as u8,
+        (g / count) as u8,
+        (b / count) as u8,
+        (a / count) as u8,
+    )
 }

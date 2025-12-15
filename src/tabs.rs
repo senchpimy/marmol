@@ -18,6 +18,8 @@ pub enum TabContent {
     Empty,
     Graph {
         vault_path: String,
+        #[serde(skip)]
+        state: Option<Box<crate::graph::Graph>>,
     },
     Image(String),
     Income {
@@ -49,8 +51,9 @@ impl Clone for TabContent {
     fn clone(&self) -> Self {
         match self {
             TabContent::Empty => TabContent::Empty,
-            TabContent::Graph { vault_path } => TabContent::Graph {
+            TabContent::Graph { vault_path, .. } => TabContent::Graph {
                 vault_path: vault_path.clone(),
+                state: None,
             },
             TabContent::Image(path) => TabContent::Image(path.clone()),
             TabContent::Income { path } => TabContent::Income { path: path.clone() },
@@ -141,6 +144,7 @@ impl Tabe {
             path: String::new(),
             content: TabContent::Graph {
                 vault_path: vault.to_string(),
+                state: None,
             },
         }
     }
@@ -162,9 +166,14 @@ impl TabViewer for MTabViewer<'_> {
 
     fn ui(&mut self, ui: &mut Ui, tab: &mut Self::Tab) {
         match &mut tab.content {
-            TabContent::Graph { vault_path } => {
-                let mut graph = crate::graph::Graph::new(vault_path);
-                graph.ui(ui, self.current_file, self.content, vault_path);
+            TabContent::Graph { vault_path, state } => {
+                if state.is_none() {
+                    *state = Some(Box::new(crate::graph::Graph::new(vault_path)));
+                }
+
+                if let Some(graph) = state {
+                    graph.ui(ui, self.current_file, self.content, vault_path);
+                }
             }
             TabContent::Excalidraw { path, gui } => {
                 gui.set_path(path);
