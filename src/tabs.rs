@@ -1,3 +1,4 @@
+use crate::excalidraw;
 use crate::files;
 use crate::format;
 use crate::income;
@@ -17,6 +18,7 @@ pub enum TabContent {
     Image(String),
     Income(income::IncomeGui),
     Tasks(tasks::TasksGui),
+    Excalidraw(excalidraw::ExcalidrawGui),
     Markdown {
         content: String,
         buffer: String,
@@ -55,6 +57,10 @@ impl Tabe {
             let mut income = income::IncomeGui::default();
             income.set_path(&path);
             TabContent::Income(income)
+        } else if path.ends_with(".excalidraw") {
+            let mut exc = excalidraw::ExcalidrawGui::default();
+            exc.set_path(&path);
+            TabContent::Excalidraw(exc)
         } else if path.ends_with(".graph") {
             let mut tasks = tasks::TasksGui::default();
             tasks.set_path(&path);
@@ -105,6 +111,10 @@ impl TabViewer for MTabViewer<'_> {
         match &mut tab.content {
             TabContent::Graph(graph) => {
                 graph.ui(ui, self.current_file, self.content, self.vault);
+            }
+            TabContent::Excalidraw(exc) => {
+                exc.set_path(&tab.path);
+                exc.show(ui);
             }
             TabContent::Image(image_path) => {
                 egui::ScrollArea::vertical()
@@ -226,6 +236,10 @@ fn update_tab_content(tab: &mut Tabe, path: &String) {
         let mut income = income::IncomeGui::default();
         income.set_path(path);
         TabContent::Income(income)
+    } else if path.ends_with(".excalidraw") {
+        let mut exc = excalidraw::ExcalidrawGui::default();
+        exc.set_path(path);
+        TabContent::Excalidraw(exc)
     } else if path.ends_with(".graph") {
         let mut tasks = tasks::TasksGui::default();
         tasks.set_path(path);

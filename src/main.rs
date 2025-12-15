@@ -9,6 +9,7 @@ use std::path::Path;
 extern crate json;
 
 mod configuraciones;
+mod excalidraw;
 mod files;
 mod format;
 mod graph;
