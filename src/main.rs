@@ -234,7 +234,6 @@ impl eframe::App for Marmol {
                 )));
             });
         } else if self.current_window == screens::Screen::Configuracion {
-            //TODO fix this mess
             screens::configuracion(
                 ctx,
                 &mut self.prev_window,

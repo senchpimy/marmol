@@ -91,6 +91,7 @@ pub fn default(
     });
 }
 
+/// Configuration screen
 pub fn configuracion(
     ctx: &egui::Context,
     prev_window: &mut Screen,
@@ -107,137 +108,237 @@ pub fn configuracion(
     center_size: &mut f32,
     center_size_remain: &mut f32,
     sort_files: &mut bool,
-    window_size: &MShape,
+    _window_size: &MShape,
 ) {
     CentralPanel::default().show(ctx, |ui| {
-        let button_width = window_size.width * 0.5;
+        let button_width = ui.available_width() * 0.5;
         let button_height = 40.0;
         let button_size = [button_width, button_height];
 
+        ui.with_layout(egui::Layout::top_down(egui::Align::Center), |ui| {
+            // Title
+            ui.heading("Configuration");
+
+            // Vault Management
+            vault_management(
+                ui,
+                vaults,
+                vault,
+                nw_vault_str,
+                show,
+                folder,
+                error,
+                button,
+                vault_changed,
+                button_size,
+            );
+
+            // Appearance Settings
+            appearance_settings(
+                ui,
+                ctx,
+                font_size,
+                center_size,
+                center_size_remain,
+                sort_files,
+                button_size,
+            );
+
+            // Server Settings
+            server_settings(ui, current_window, button_size);
+
+            // Return Button
+            ui.add_space(30.0);
+            if ui
+                .add_sized(button_size, egui::Button::new("Return"))
+                .clicked()
+            {
+                *current_window = *prev_window;
+            };
+        });
+    });
+}
+
+/// Vault management section
+fn vault_management(
+    ui: &mut egui::Ui,
+    vaults: &mut Vec<String>,
+    vault: &mut String,
+    nw_vault_str: &mut String,
+    show: &mut bool,
+    folder: &mut String,
+    error: &mut String,
+    button: &mut bool,
+    vault_changed: &mut bool,
+    button_size: [f32; 2],
+) {
+    egui::CollapsingHeader::new(RichText::new("Vaults").strong()).show(ui, |ui| {
+        // Create a new vault
+        create_new_vault(
+            ui,
+            nw_vault_str,
+            show,
+            folder,
+            error,
+            button,
+            vaults,
+            button_size,
+        );
+
+        // Manage existing vaults
+        manage_existing_vaults(ui, vaults, vault, vault_changed, button_size);
+
+        // Add an existing vault
+        add_existing_vault(ui, vaults, vault, button_size);
+    });
+}
+
+fn create_new_vault(
+    ui: &mut egui::Ui,
+    nw_vault_str: &mut String,
+    show: &mut bool,
+    folder: &mut String,
+    error: &mut String,
+    button: &mut bool,
+    vaults: &mut Vec<String>,
+    button_size: [f32; 2],
+) {
+    if ui
+        .add_sized(button_size, egui::Button::new("Create a New Vault"))
+        .clicked()
+    {
+        let files = FileDialog::new().set_title("Select a Folder").pick_folder();
+        if let Some(x) = files {
+            *show = true;
+            *folder = String::from(x.to_str().unwrap());
+        } else {
+            *show = false;
+        }
+    }
+    if *show {
+        let edit = egui::TextEdit::singleline(nw_vault_str);
+        let response = ui.add(edit);
+        if response.changed() {
+            let full_path = format!("{}/{}", folder, nw_vault_str);
+            let new_vault = Path::new(&full_path);
+            if new_vault.exists() {
+                *error = String::from("Folder already Exists");
+                *button = false;
+            } else {
+                *error = String::new();
+                *button = true;
+            }
+        }
+    }
+    if *button {
+        if ui
+            .add_sized(button_size, egui::Button::new("Create!"))
+            .clicked()
+        {
+            let full_path = format!("{}/{}", folder, nw_vault_str);
+            if fs::create_dir(&full_path).is_ok() {
+                vaults.push(full_path.clone());
+                if fs::create_dir(format!("{}/.obsidian/", full_path)).is_err() {
+                    *error = "Failed to create .obsidian folder".to_string();
+                }
+            } else {
+                *error = "Failed to create vault folder".to_string();
+            }
+            *nw_vault_str = String::new();
+            *button = false;
+            *show = false;
+        }
+    }
+    ui.label(RichText::new(error.as_str()).color(Color32::RED));
+}
+
+fn manage_existing_vaults(
+    ui: &mut egui::Ui,
+    vaults: &mut Vec<String>,
+    vault: &mut String,
+    vault_changed: &mut bool,
+    button_size: [f32; 2],
+) {
+    egui::CollapsingHeader::new(RichText::new("Manage Vault").strong()).show(ui, |ui| {
+        let mut new_vaults = vaults.clone();
+        let mut changed = false;
+        egui::ScrollArea::vertical().show(ui, |ui| {
+            for i in &mut *vaults {
+                let stri = i.as_str();
+                if stri == vault {
+                    ui.label(stri);
+                } else {
+                    let btn = Button::new(stri);
+                    let menu =
+                        |ui: &mut egui::Ui| remove_vault(ui, stri, &mut new_vaults, &mut changed);
+                    let response = ui.add_sized(button_size, btn);
+                    if response.clicked() {
+                        *vault = String::from(stri);
+                        *vault_changed = true;
+                    }
+                    response.context_menu(menu);
+                }
+            }
+            if changed {
+                *vaults = new_vaults;
+            }
+        });
+    });
+}
+
+fn add_existing_vault(
+    ui: &mut egui::Ui,
+    vaults: &mut Vec<String>,
+    vault: &mut String,
+    button_size: [f32; 2],
+) {
+    if ui
+        .add_sized(button_size, egui::Button::new("Add a Existing Vault"))
+        .clicked()
+    {
+        if let Some(x) = FileDialog::new().set_title("Select a Folder").pick_folder() {
+            let selected_vault = x.to_str().unwrap().to_owned();
+            if !vaults.contains(&selected_vault) {
+                vaults.push(selected_vault.to_owned());
+                *vault = selected_vault;
+            };
+        }
+    }
+}
+
+/// Appearance settings section
+fn appearance_settings(
+    ui: &mut egui::Ui,
+    ctx: &egui::Context,
+    font_size: &mut f32,
+    center_size: &mut f32,
+    center_size_remain: &mut f32,
+    sort_files: &mut bool,
+    button_size: [f32; 2],
+) {
+    ui.add_space(10.0);
+    egui::CollapsingHeader::new(RichText::new("Appearance").strong()).show(ui, |ui| {
+        // Theme selection
         if ui
             .add_sized(button_size, egui::Button::new("Select theme"))
             .clicked()
         {}
-        if ui
-            .add_sized(button_size, egui::Button::new("Create a New Vault"))
-            .clicked()
-        {
-            let files = FileDialog::new().set_title("Select a Folder").pick_folder();
-            match files {
-                Some(x) => {
-                    *show = true;
-                    *folder = String::from(x.to_str().unwrap());
-                }
-                None => *show = false,
-            }
-        }
-        if *show {
-            let edit = egui::TextEdit::singleline(nw_vault_str);
-            let response = ui.add(edit);
-            if response.changed() {
-                let full_path = format!("{}/{}", folder, nw_vault_str);
-                let new_vault = Path::new(&full_path);
-                if new_vault.exists() {
-                    *error = String::from("Folder already Exists");
-                    *button = false;
-                } else {
-                    *error = String::new();
-                    *button = true;
-                }
-            }
-        }
-        if *button {
-            if ui
-                .add_sized(button_size, egui::Button::new("Create!"))
-                .clicked()
-            {
-                let full_path = format!("{}/{}", folder, nw_vault_str);
-                let create = fs::create_dir(&full_path);
-                vaults.push(full_path);
-                match create {
-                    Ok(_) => {}
-                    Err(x) => {
-                        *error = x.to_string();
-                        return;
-                    }
-                }
-                let create = fs::create_dir(format!("{}/{}/.obsidian/", folder, nw_vault_str));
-                match create {
-                    Ok(_) => {}
-                    Err(x) => {
-                        *error = x.to_string();
-                        return;
-                    }
-                }
-                *nw_vault_str = String::new();
-                *button = false;
-                *show = false;
-            }
-        }
-        ui.label(RichText::new(error.as_str()).color(Color32::RED));
-        egui::CollapsingHeader::new("Manage Vault").show(ui, |ui| {
-            let mut new_vaults = vaults.clone();
-            let mut changed = false;
-            egui::ScrollArea::vertical().show(ui, |ui| {
-                for i in &mut *vaults {
-                    let stri = i.as_str();
-                    if stri == vault {
-                        ui.label(stri);
-                    } else {
-                        let btn = Button::new(stri);
-                        let menu = |ui: &mut egui::Ui| {
-                            remove_vault(ui, stri, &mut new_vaults, &mut changed)
-                        };
-                        let response = ui.add_sized(button_size, btn);
-                        if response.clicked() {
-                            *vault = String::from(stri);
-                            *vault_changed = true;
-                        }
-                        response.context_menu(menu);
-                    }
-                }
-                if changed {
-                    *vaults = new_vaults;
-                }
-            });
-        });
-        if ui
-            .add_sized(button_size, egui::Button::new("Add a Existing Vault"))
-            .clicked()
-        {
-            let files = FileDialog::new().set_title("Select a Folder").pick_folder();
-            match files {
-                Some(x) => {
-                    let selected_vault = x.to_str().unwrap().to_owned();
-                    if !vaults.contains(&selected_vault) {
-                        vaults.push(selected_vault.to_owned());
-                        *vault = String::from(selected_vault);
-                    };
-                }
-                None => {}
-            }
-        }
-        ui.add_space(10.0);
-        //ui.add(toggle_switch::toggle_bool(sort_files));
-        ui.checkbox(sort_files, "Show files sorted");
-        //ui.label("Show files sorted");
-        ui.add_space(10.0);
-        if ui
-            .add_sized(button_size, egui::Button::new("Configure Backup Server"))
-            .clicked()
-        {
-            *current_window = Screen::Server;
-        };
         ui.add_space(10.0);
 
+        // File sorting
+        ui.checkbox(sort_files, "Show files sorted");
+        ui.add_space(10.0);
+
+        // Line length
         if ui
             .add(egui::Slider::new(center_size, 0.35..=0.9).text("Line lenght"))
             .changed()
         {
             *center_size_remain = (1.0 - *center_size) / 2.0;
         };
-
         ui.add_space(10.0);
+
+        // Font size
         if ui
             .add(egui::Slider::new(font_size, 10.0..=80.0).text("Font size"))
             .changed()
@@ -247,12 +348,19 @@ pub fn configuracion(
             style.override_font_id = Some(font_id);
             ctx.set_style(style);
         }
-        ui.add_space(30.0);
+    });
+}
+
+/// Server settings section
+fn server_settings(ui: &mut egui::Ui, current_window: &mut Screen, button_size: [f32; 2]) {
+    ui.add_space(10.0);
+    egui::CollapsingHeader::new(RichText::new("Server").strong()).show(ui, |ui| {
+        // Configure backup server
         if ui
-            .add_sized(button_size, egui::Button::new("return"))
+            .add_sized(button_size, egui::Button::new("Configure Backup Server"))
             .clicked()
         {
-            *current_window = *prev_window;
+            *current_window = Screen::Server;
         };
     });
 }
