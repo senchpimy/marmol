@@ -30,7 +30,14 @@ pub fn default(
         ui.with_layout(egui::Layout::top_down(egui::Align::Center), |ui| {
             let button_width = window_size.width * 0.5;
             let button_height = 50.0;
-            ui.add_space(100.0);
+            ui.add_space(50.0); // Reduced space to make room for the image
+
+            // Add the SVG image
+            let image = egui::Image::new(egui::include_image!("../logo/cubov2.svg"))
+                .fit_to_exact_size(egui::vec2(150.0, 150.0)); // Adjust size as needed
+            ui.add(image);
+            ui.add_space(20.0); // Space between image and title
+
             ui.label(text);
             ui.add_space(100.0);
             if ui
