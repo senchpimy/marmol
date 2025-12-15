@@ -28,6 +28,8 @@ pub enum TabContent {
     },
     Excalidraw {
         path: String,
+        #[serde(skip, default)]
+        gui: excalidraw::ExcalidrawGui,
     },
     Markdown {
         content: String,
@@ -53,7 +55,14 @@ impl Clone for TabContent {
             TabContent::Image(path) => TabContent::Image(path.clone()),
             TabContent::Income { path } => TabContent::Income { path: path.clone() },
             TabContent::Tasks { path } => TabContent::Tasks { path: path.clone() },
-            TabContent::Excalidraw { path } => TabContent::Excalidraw { path: path.clone() },
+            TabContent::Excalidraw { path, .. } => {
+                let mut new_gui = excalidraw::ExcalidrawGui::default();
+                new_gui.set_path(path);
+                TabContent::Excalidraw {
+                    path: path.clone(),
+                    gui: new_gui,
+                }
+            }
             TabContent::Markdown {
                 content,
                 buffer,
@@ -99,7 +108,12 @@ impl Tabe {
         } else if path.ends_with(".inc") {
             TabContent::Income { path: path.clone() }
         } else if path.ends_with(".excalidraw") {
-            TabContent::Excalidraw { path: path.clone() }
+            let mut gui = excalidraw::ExcalidrawGui::default();
+            gui.set_path(&path);
+            TabContent::Excalidraw {
+                path: path.clone(),
+                gui,
+            }
         } else if path.ends_with(".graph") {
             TabContent::Tasks { path: path.clone() }
         } else {
@@ -152,10 +166,9 @@ impl TabViewer for MTabViewer<'_> {
                 let mut graph = crate::graph::Graph::new(vault_path);
                 graph.ui(ui, self.current_file, self.content, vault_path);
             }
-            TabContent::Excalidraw { path } => {
-                let mut exc = excalidraw::ExcalidrawGui::default();
-                exc.set_path(path);
-                exc.show(ui);
+            TabContent::Excalidraw { path, gui } => {
+                gui.set_path(path);
+                gui.show(ui);
             }
             TabContent::Image(image_path) => {
                 egui::ScrollArea::vertical()
@@ -278,7 +291,12 @@ fn update_tab_content(tab: &mut Tabe, path: &String) {
     } else if path.ends_with(".inc") {
         TabContent::Income { path: path.clone() }
     } else if path.ends_with(".excalidraw") {
-        TabContent::Excalidraw { path: path.clone() }
+        let mut gui = excalidraw::ExcalidrawGui::default();
+        gui.set_path(path);
+        TabContent::Excalidraw {
+            path: path.clone(),
+            gui,
+        }
     } else if path.ends_with(".graph") {
         TabContent::Tasks { path: path.clone() }
     } else {
