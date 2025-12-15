@@ -21,6 +21,7 @@ mod server;
 mod switcher;
 mod tabs;
 mod tasks;
+mod theme;
 
 #[derive(PartialEq, Debug)]
 enum NewFileType {
@@ -93,19 +94,8 @@ struct Marmol {
 impl Marmol {
     fn new(cc: &eframe::CreationContext<'_>) -> Self {
         let font_size = configuraciones::load_context();
-        let ctx = &cc.egui_ctx;
-        ctx.style_mut(|style| {
-            let font_id = FontId::proportional(font_size);
-            style.override_font_id = Some(font_id);
-            style.visuals.widgets.noninteractive.corner_radius = egui::CornerRadius::same(4);
-            style.visuals.widgets.noninteractive.corner_radius = egui::CornerRadius::same(4);
-            style.visuals.widgets.inactive.corner_radius = egui::CornerRadius::same(4);
-            style.visuals.widgets.hovered.corner_radius = egui::CornerRadius::same(4);
-            style.visuals.widgets.active.corner_radius = egui::CornerRadius::same(4);
 
-            style.spacing.item_spacing = egui::vec2(8.0, 5.0);
-        });
-        ctx.set_visuals(configuraciones::load_colors());
+        crate::theme::load_and_apply_theme(&cc.egui_ctx);
 
         // Load the full program state
         let (
