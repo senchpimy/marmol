@@ -24,6 +24,7 @@ pub enum LeftTab {
     Files,
     Starred,
     Search,
+    LastModified,
 }
 
 #[derive(PartialEq, Serialize, Deserialize, Clone)]
@@ -138,6 +139,21 @@ impl LeftControls {
                 {
                     self.current_left_tab = LeftTab::Starred;
                 }
+                if ui
+                    .add_sized(
+                        btn_size.clone(),
+                        Button::image(
+                            egui::Image::new(egui::include_image!(
+                                "../resources/calendar-check.svg" // Using calendar-check.svg for now
+                            ))
+                            .fit_to_exact_size(btn_size.clone())
+                            .tint(color),
+                        ),
+                    )
+                    .clicked()
+                {
+                    self.current_left_tab = LeftTab::LastModified;
+                }
             });
         });
 
@@ -207,6 +223,11 @@ impl LeftControls {
                     }
                 }
             }
+        } else if self.current_left_tab == LeftTab::LastModified {
+            let scrolling_last_modified = ScrollArea::vertical();
+            scrolling_last_modified.show(ui, |ui| {
+                self.render_last_modified_files(ui, path, current_file, vault);
+            });
         }
     }
 
@@ -470,6 +491,49 @@ impl LeftControls {
         } else {
             File::create(&file_name).expect("Unable to create file");
             *current_file = file_name.to_string();
+        }
+    }
+
+    fn render_last_modified_files(
+        &mut self,
+        ui: &mut egui::Ui,
+        path: &str,
+        current_file: &mut String,
+        vault: &str,
+    ) {
+        let mut files_with_time: Vec<(std::path::PathBuf, std::time::SystemTime)> = Vec::new();
+
+        for entry in walkdir::WalkDir::new(path).into_iter().filter_map(|e| e.ok()) {
+            let path_buf = entry.path().to_path_buf();
+            if path_buf.is_file() {
+                if let Ok(metadata) = fs::metadata(&path_buf) {
+                    if let Ok(time) = metadata.modified() {
+                        files_with_time.push((path_buf, time));
+                    }
+                }
+            }
+        }
+
+        files_with_time.sort_by(|a, b| b.1.cmp(&a.1)); // Sort by modified time, newest first
+
+        for (file_path, _) in files_with_time {
+            let file_name = file_path
+                .file_name()
+                .unwrap_or_default()
+                .to_string_lossy()
+                .to_string();
+            let display_path = file_path
+                .strip_prefix(path)
+                .unwrap_or(&file_path)
+                .to_string_lossy()
+                .to_string();
+
+            let is_selected = &file_path.to_string_lossy().to_string() == current_file;
+            let btn = Button::selectable(is_selected, &format!("{} ({})", file_name, display_path));
+
+            if ui.add(btn).clicked() {
+                *current_file = file_path.to_string_lossy().to_string();
+            }
         }
     }
 }
