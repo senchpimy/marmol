@@ -1,9 +1,9 @@
 use crate::files;
+use crate::format;
 use crate::income;
 use crate::main_area;
 use crate::tasks;
 use egui::Image;
-use crate::format;
 use egui::{FontId, Frame, Sense, Ui, WidgetText};
 use egui_commonmark::*;
 use egui_dock::{DockArea, DockState, NodeIndex, Style, SurfaceIndex, TabViewer};
@@ -89,7 +89,6 @@ impl Tabe {
 
 struct MTabViewer<'a> {
     added_nodes: &'a mut Vec<(SurfaceIndex, NodeIndex)>,
-    //graph: &'a mut crate::graph::Graph,
     current_file: &'a mut String,
     content: &'a mut main_area::Content,
     vault: &'a str,
@@ -270,19 +269,17 @@ impl Tabs {
         vault: &str,
     ) {
         let mut added_nodes = Vec::new();
+        let tab_viewer = &mut MTabViewer {
+            added_nodes: &mut added_nodes,
+            //graph: marker,
+            current_file,
+            content,
+            vault,
+        };
         DockArea::new(&mut self.tree)
             .style(Style::from_egui(ui.style().as_ref()))
             .show_add_buttons(true)
-            .show_inside(
-                ui,
-                &mut MTabViewer {
-                    added_nodes: &mut added_nodes,
-                    //graph: marker,
-                    current_file,
-                    content,
-                    vault,
-                },
-            );
+            .show_inside(ui, tab_viewer);
         added_nodes.drain(..).for_each(|(surface, node)| {
             self.tree.set_focused_node_and_surface((surface, node));
             let last = self.tree.iter_all_tabs().last();
@@ -303,7 +300,6 @@ impl Tabs {
         if let Some((_, tab)) = self.tree.find_active_focused() {
             update_tab_content(tab, &path);
         } else {
-            // If no tab is focused, create a new tab to display the content.
             self.counter += 1;
             let new_tab = Tabe::new(self.counter, path);
             self.tree.push_to_first_leaf(new_tab);

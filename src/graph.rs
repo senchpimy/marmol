@@ -134,25 +134,21 @@ impl Graph {
         self.dragged_node_index = None;
     }
 
-    pub fn controls(&mut self, ctx: &Context) {
-        egui::Window::new("Configuration").show(ctx, |ui| {
-            ui.label("Física");
-            ui.add(
-                egui::Slider::new(&mut self.repel_force, 1.0..=100.0).text("Repulsión (Separar)"),
-            );
-            ui.add(egui::Slider::new(&mut self.link_force, 0.1..=3.0).text("Links (Cuerdas)"));
-            ui.add(egui::Slider::new(&mut self.group_force, 0.0..=5.0).text("Agrupación Tags"));
-            ui.add(egui::Slider::new(&mut self.center_force, 0.01..=1.0).text("Gravedad Centro"));
+    pub fn controls(&mut self, ui: &mut Ui) {
+        ui.label("Física");
+        ui.add(egui::Slider::new(&mut self.repel_force, 1.0..=100.0).text("Repulsión (Separar)"));
+        ui.add(egui::Slider::new(&mut self.link_force, 0.1..=3.0).text("Links (Cuerdas)"));
+        ui.add(egui::Slider::new(&mut self.group_force, 0.0..=5.0).text("Agrupación Tags"));
+        ui.add(egui::Slider::new(&mut self.center_force, 0.01..=1.0).text("Gravedad Centro"));
 
-            ui.separator();
-            ui.horizontal(|ui| {
-                color_picker::color_edit_button_srgba(
-                    ui,
-                    &mut self.orphan_color,
-                    egui::widgets::color_picker::Alpha::Opaque,
-                );
-                ui.label("Color Huérfanos");
-            });
+        ui.separator();
+        ui.horizontal(|ui| {
+            color_picker::color_edit_button_srgba(
+                ui,
+                &mut self.orphan_color,
+                egui::widgets::color_picker::Alpha::Opaque,
+            );
+            ui.label("Color Huérfanos");
         });
     }
 
@@ -267,10 +263,17 @@ impl Graph {
             if self.dragged_node_index == Some(i) {
                 continue;
             }
+            let min_speed_threshold = 1.0;
 
             self.velocities[i] *= damping;
-            if self.velocities[i].length() > max_speed {
+            let speed = self.velocities[i].length();
+
+            if !self.velocities[i].is_finite() {
+                self.velocities[i] = Vec2::ZERO;
+            } else if speed > max_speed {
                 self.velocities[i] = self.velocities[i].normalized() * max_speed;
+            } else if speed < min_speed_threshold {
+                self.velocities[i] = Vec2::ZERO;
             }
 
             self.points_coord[i].0 += self.velocities[i].x * dt;
@@ -294,7 +297,7 @@ impl Graph {
             .show_axes([false, false])
             .show_grid([false, false]);
 
-        markers_plot
+        let res = markers_plot
             .show(ui, |plot_ui| {
                 if self.points.is_empty() {
                     return;
@@ -380,7 +383,27 @@ impl Graph {
                     }
                 }
             })
-            .response
+            .response;
+
+        let plot_rect = res.rect;
+        let overlay_width = 250.0;
+        let margin = 10.0;
+        let overlay_rect = Rect::from_min_size(
+            plot_rect.min + Vec2::new(margin, margin),
+            Vec2::new(overlay_width, plot_rect.height() - (margin * 2.0)),
+        );
+        ui.scope_builder(egui::UiBuilder::new().max_rect(overlay_rect), |ui| {
+            egui::Frame::popup(ui.style())
+                .stroke(Stroke::new(1.0, Color32::from_gray(60)))
+                //.fill(Color32::from_black_alpha(200))
+                .show(ui, |ui| {
+                    ui.set_max_width(overlay_width - 20.0);
+                    ui.collapsing("Opciones del Grafo", |ui| {
+                        self.controls(ui);
+                    });
+                });
+        });
+        res
     }
 
     fn get_color_for_tags(&self, tags: &[String]) -> Color32 {
@@ -458,8 +481,11 @@ fn get_data(dir: &Path, marmol_vec: &mut Vec<MarmolPoint>, total_entries: &mut i
                 if let Some(ext) = path.extension() {
                     if ext == "md" {
                         *total_entries += 1;
-                        let filename = path.to_str().unwrap().replace(vault, "");
-                        let node_name = filename.clone();
+                        let node_name = path
+                            .file_stem()
+                            .and_then(|s| s.to_str())
+                            .unwrap_or("Unknown")
+                            .to_string();
 
                         let raw_content = files::read_file(path.to_str().unwrap());
 
@@ -522,4 +548,3 @@ fn get_coords(coords_vec: &mut Vec<(f32, f32)>, total_entries: i32) {
         coords_vec.push((x, y));
     }
 }
-
