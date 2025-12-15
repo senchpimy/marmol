@@ -1,6 +1,7 @@
 use eframe::egui;
 use std::fs;
-use std::path::Path;
+use std::io::Write;
+use std::path::{Path, PathBuf};
 
 pub struct QuickSwitcher {
     pub is_open: bool,
@@ -82,7 +83,7 @@ impl QuickSwitcher {
         }
     }
 
-    pub fn ui(&mut self, ctx: &egui::Context) -> Option<String> {
+    pub fn ui(&mut self, ctx: &egui::Context, vault_path: &str) -> Option<String> {
         let mut selected_file = None;
 
         if !self.is_open {
@@ -132,6 +133,36 @@ impl QuickSwitcher {
                 if !self.filtered_results.is_empty() {
                     selected_file = Some(self.filtered_results[self.selected_index].clone());
                     self.close();
+                } else {
+                    let input_filename = self.query.clone();
+                    if !input_filename.trim().is_empty() {
+                        let full_path = PathBuf::from(vault_path).join(&input_filename);
+                        let new_file_path = full_path.with_extension("md");
+
+                        if let Some(parent) = new_file_path.parent() {
+                            if !parent.exists() {
+                                if let Err(e) = fs::create_dir_all(parent) {
+                                    eprintln!("Failed to create directories for new file: {}", e);
+                                }
+                            }
+                        }
+
+                        match fs::File::create(&new_file_path) {
+                            Ok(mut file) => {
+                                let default_content = "";
+                                if let Err(e) = file.write_all(default_content.as_bytes()) {
+                                    eprintln!("Failed to write to new file: {}", e);
+                                } else {
+                                    selected_file =
+                                        Some(new_file_path.to_string_lossy().to_string());
+                                    self.close();
+                                }
+                            }
+                            Err(e) => {
+                                eprintln!("Failed to create new file: {}", e);
+                            }
+                        }
+                    }
                 }
             }
             if ui.input(|i| i.key_pressed(egui::Key::Escape)) {
@@ -162,7 +193,12 @@ impl QuickSwitcher {
                     }
 
                     if self.filtered_results.is_empty() {
-                        ui.weak("No matching files found.");
+                        if !self.query.trim().is_empty() {
+                            let new_file_name = format!("{}.md", self.query);
+                            ui.label(format!("Press Enter to create new file: {}", new_file_name));
+                        } else {
+                            ui.weak("No matching files found.");
+                        }
                     }
                     if salir {
                         self.close();

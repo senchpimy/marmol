@@ -258,7 +258,7 @@ impl eframe::App for Marmol {
                     return;
                 }
 
-                if let Some(file_to_open) = self.switcher.ui(ctx) {
+                if let Some(file_to_open) = self.switcher.ui(ctx, &self.vault) {
                     self.current_file = file_to_open;
                     self.content = crate::main_area::Content::View;
                 }
