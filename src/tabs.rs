@@ -268,6 +268,32 @@ impl Tabs {
         content: &mut main_area::Content,
         vault: &str,
     ) {
+        if ui.input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::W)) {
+            if let Some((focus_surf, focus_node)) = self.tree.focused_leaf() {
+                let mut to_remove = None;
+
+                for (s_idx, surface) in self.tree.iter_surfaces().enumerate() {
+                    if egui_dock::SurfaceIndex(s_idx) == focus_surf {
+                        for (n_idx, node) in surface.iter_nodes().enumerate() {
+                            if egui_dock::NodeIndex(n_idx) == focus_node {
+                                if let egui_dock::Node::Leaf(leaf) = node {
+                                    to_remove = Some((focus_surf, focus_node, leaf.active));
+                                }
+                                break;
+                            }
+                        }
+                    }
+                    if to_remove.is_some() {
+                        break;
+                    }
+                }
+
+                if let Some(target) = to_remove {
+                    self.tree.remove_tab(target);
+                }
+            }
+        }
+
         let mut added_nodes = Vec::new();
         let tab_viewer = &mut MTabViewer {
             added_nodes: &mut added_nodes,
