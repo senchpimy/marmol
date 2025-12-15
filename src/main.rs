@@ -106,27 +106,40 @@ impl Marmol {
             style.spacing.item_spacing = egui::vec2(8.0, 5.0);
         });
         ctx.set_visuals(configuraciones::load_colors());
-        Self {
-            font_size,
-            ..Default::default()
-        }
-    }
-}
 
-impl Default for Marmol {
-    fn default() -> Self {
+        // Load the full program state
         let (
-            vault_var,     //graph_json_config
-            vault_vec_var, //Vec de diferentes vaults
-            current,
-            config_path_var,
+            vault_var,
+            vault_vec_var,
+            current_file_opt,
+            config_dir_path,
             window,
             left_coll,
             center_size,
             sort_files,
-        ) = configuraciones::load_vault();
-        let current_path_str = current.clone().unwrap_or_default();
-        println!("Configuracion actual: {:?}", &current);
+            dock_state,
+        ) = configuraciones::load_program_state();
+
+        let initial_state = configuraciones::MarmolProgramState {
+            vault: vault_var,
+            vault_vec: vault_vec_var,
+            current_file: current_file_opt,
+            initial_screen: window,
+            collapsed_left: left_coll,
+            center_size,
+            sort_files,
+            dock_state,
+        };
+
+        let mut app = Self::from_program_state(initial_state);
+        app.font_size = font_size; // Set font_size after loading state
+        app.config_path = config_dir_path; // Set config_path after loading state
+
+        app
+    }
+
+    fn from_program_state(state: configuraciones::MarmolProgramState) -> Self {
+        let current_path_str = state.current_file.clone().unwrap_or_default();
         Self {
             tabs_counter: 0,
             window_size: MShape {
@@ -135,32 +148,71 @@ impl Default for Marmol {
                 btn_size: 20.,
             },
             switcher: switcher::QuickSwitcher::default(),
-            tabs: tabs::Tabs::new(current.clone()),
-            center_size,
-            center_size_remain: (1.0 - center_size) / 2.0,
-            font_size: 12.0,
-            marker: graph::Graph::new(&vault_var),
+            tabs: tabs::Tabs::new_from_dock_state(state.dock_state), // Initialize tabs from loaded state
+            center_size: state.center_size,
+            center_size_remain: (1.0 - state.center_size) / 2.0,
+            font_size: 12.0, // This is loaded separately
+            marker: graph::Graph::new(&state.vault),
             new_file_str: String::new(),
-            content: main_area::Content::View,
+            content: main_area::Content::View, // Start with View content for loaded files
             left_controls: main_area::LeftControls::default(),
             new_vault_folder: String::from(""),
             new_vault_folder_err: String::from(""),
             new_vault_str: String::from(""),
-            config_path: config_path_var.to_owned(),
+            config_path: String::new(), // Will be set in Marmol::new
             create_new_vault: false,
             show_create_button: false,
-            current_window: window,
-            prev_window: window,
+            current_window: state.initial_screen,
+            prev_window: state.initial_screen,
             prev_current_file: current_path_str.clone(),
             create_file_error: String::new(),
-            vault: vault_var,
-            vault_vec: vault_vec_var,
+            vault: state.vault,
+            vault_vec: state.vault_vec,
             current_file: current_path_str,
             new_file_type: NewFileType::Markdown,
 
-            left_collpased: left_coll,
+            left_collpased: state.collapsed_left,
             vault_changed: false,
-            sort_files, //right_collpased:true,
+            sort_files: state.sort_files,
+        }
+    }
+}
+
+impl Default for Marmol {
+    fn default() -> Self {
+        Self {
+            tabs_counter: 0,
+            window_size: MShape {
+                height: 0.,
+                width: 0.,
+                btn_size: 20.,
+            },
+            switcher: switcher::QuickSwitcher::default(),
+            tabs: tabs::Tabs::new_empty(),
+            center_size: 0.8,
+            center_size_remain: 0.1,
+            font_size: 12.0,
+            marker: graph::Graph::new(""), // Default empty vault
+            new_file_str: String::new(),
+            content: main_area::Content::Blank, // Default to blank content
+            left_controls: main_area::LeftControls::default(),
+            new_vault_folder: String::new(),
+            new_vault_folder_err: String::new(),
+            new_vault_str: String::new(),
+            config_path: "/home/plof/.config/marmol".to_string(), // Default config path
+            create_new_vault: false,
+            show_create_button: false,
+            current_window: screens::Screen::Default,
+            prev_window: screens::Screen::Default,
+            prev_current_file: String::new(),
+            create_file_error: String::new(),
+            vault: String::new(),
+            vault_vec: Vec::new(),
+            current_file: String::new(),
+            new_file_type: NewFileType::Markdown,
+            left_collpased: true,
+            vault_changed: false,
+            sort_files: false,
         }
     }
 }
@@ -280,46 +332,22 @@ impl eframe::App for Marmol {
             });
     }
 
-    //TODO replace with serde?
     fn on_exit(&mut self, _gl: Option<&eframe::glow::Context>) {
-        let vault_str = format!("vault: '{}'", &self.vault);
-        //let mut vec_str = String::new();
-        //for i in &self.vault_vec {
-        //    vec_str = vec_str.to_owned() + format!(" '{}' ,", &i).as_str();
-        //}
-        let vault_vec_str: String = self
-            .vault_vec
-            .iter()
-            .map(|item| format!("  - '{}'", item)) // Each item on a new line, indented
-            .collect::<Vec<String>>()
-            .join("\n");
-
-        let dir = Path::new(&self.config_path);
-        println!("{}", &self.config_path);
-        if !dir.exists() {
-            _ = fs::create_dir(&self.config_path);
-        }
-        let vault_vec_line = if vault_vec_str.is_empty() {
-            String::from("vault_vec: []")
-        } else {
-            format!("vault_vec:\n{}", vault_vec_str)
+        let state = configuraciones::MarmolProgramState {
+            vault: self.vault.clone(),
+            vault_vec: self.vault_vec.clone(),
+            current_file: Some(self.current_file.clone()),
+            initial_screen: self.current_window.clone(),
+            collapsed_left: self.left_collpased,
+            center_size: self.center_size,
+            sort_files: self.sort_files,
+            dock_state: self.tabs.dock_state().clone(),
         };
-        let file_path = String::from(&self.config_path) + "/ProgramState";
-        let current_file = format!("current: '{}'", &self.current_file); // Add quotes for consistency
-        let center_size = format!("center_size: {}", &self.center_size);
-        let left_menu = format!("left_menu: {}", &self.left_collpased);
-        let sort_files = format!("sort_files: {}", &self.sort_files);
-        let new_content = format!(
-            "{}\n{}\n{}\n{}\n{}\n{}",
-            &vault_vec_line, vault_str, current_file, left_menu, center_size, sort_files
-        );
-        let mut file = fs::File::create(file_path).unwrap();
-        file.write_all(new_content.as_bytes()).unwrap();
+        configuraciones::save_program_state(&state);
 
         let context_path = String::from(&self.config_path) + "/ContextState";
         let mut file2 = fs::File::create(context_path).unwrap();
         let font_size = format!("font_size: {}", &self.font_size);
-        //let context_contents=font_size;
         file2.write_all(font_size.as_str().as_bytes()).unwrap();
     }
 }

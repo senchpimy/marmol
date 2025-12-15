@@ -1,3 +1,4 @@
+use serde::{Deserialize, Serialize};
 use crate::screens;
 use crate::search;
 use crate::MShape;
@@ -18,14 +19,14 @@ use std::fs::File;
 use std::path::Path;
 use yaml_rust::{YamlEmitter, YamlLoader};
 
-#[derive(PartialEq)]
+#[derive(PartialEq, Serialize, Deserialize)]
 pub enum LeftTab {
     Files,
     Starred,
     Search,
 }
 
-#[derive(PartialEq)]
+#[derive(PartialEq, Serialize, Deserialize, Clone)]
 pub enum Content {
     Edit,
     View,

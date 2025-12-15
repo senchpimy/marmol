@@ -1,3 +1,4 @@
+use serde::{Deserialize, Serialize};
 use crate::main_area;
 //use crate::toggle_switch;
 use crate::MShape;
@@ -7,7 +8,7 @@ use rfd::FileDialog;
 use std::fs;
 use std::path::Path;
 
-#[derive(PartialEq, Copy, Clone)]
+#[derive(PartialEq, Copy, Clone, Serialize, Deserialize)]
 pub enum Screen {
     Main,
     Configuracion,

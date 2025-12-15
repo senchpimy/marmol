@@ -7,7 +7,7 @@ resolver = "2"
 
 [dependencies]
 egui = "0.33"
-egui_dock = "0.18"
+egui_dock = { version = "0.18", features = ["serde"] }
 eframe = "0.33"
 egui_plot = "0.34"
 #eframe = { git = "https://github.com/senchpimy/egui", rev="d99fac7"}
@@ -17,7 +17,7 @@ base64 = "0.21"
 #egui_demo_lib = "0.22.0"
 directories = "2.0"
 serde_json = "1.0"
-serde = { version = "1.0.126", features = ["derive"] }
+serde = { version = "1.0.228", features = ["derive"] }
 #egui_demo_lib = { git = "https://github.com/senchpimy/egui", rev="d99fac7" }
 
 
@@ -30,6 +30,7 @@ image = { version = "0.25", default-features = false, features = [
   "jpeg",
 ] }
 json = "0.12.4"
+serde_yaml = "0.9"
 yaml-rust = "0.4.5"
 egui_commonmark = {version="0.22",features = ["svg","fetch"]}
 #egui_commonmark = { version = "0.7.1", features = [

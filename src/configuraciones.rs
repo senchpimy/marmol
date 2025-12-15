@@ -1,17 +1,56 @@
 use crate::screens;
+use crate::tabs::Tabe;
 use directories::BaseDirs;
 use egui::{style, Color32, CornerRadius, Stroke};
 use json;
+use serde::{Deserialize, Serialize};
+use serde_yaml;
 use std::fs;
 use std::path::Path;
-use yaml_rust::{Yaml, YamlLoader};
+use yaml_rust::YamlLoader;
 
 #[allow(dead_code)]
 pub struct VaultConfig {
     graph_json_config: String,
 }
 
-pub fn load_vault() -> (
+#[derive(Serialize, Deserialize)]
+pub struct MarmolProgramState {
+    pub vault: String,
+    pub vault_vec: Vec<String>,
+    pub current_file: Option<String>,
+    pub initial_screen: screens::Screen,
+    pub collapsed_left: bool,
+    pub center_size: f32,
+    pub sort_files: bool,
+    pub dock_state: egui_dock::DockState<Tabe>,
+}
+
+impl Default for MarmolProgramState {
+    fn default() -> Self {
+        let default_vault = String::new();
+        let default_vault_vec = vec![];
+        let default_current = None;
+        let default_collpased_left = true;
+        let default_center_size = 0.8;
+        let default_sort_files = false;
+        let default_window = screens::Screen::Default;
+        let default_dock_state = egui_dock::DockState::new(vec![]);
+
+        Self {
+            vault: default_vault,
+            vault_vec: default_vault_vec,
+            current_file: default_current,
+            initial_screen: default_window,
+            collapsed_left: default_collpased_left,
+            center_size: default_center_size,
+            sort_files: default_sort_files,
+            dock_state: default_dock_state,
+        }
+    }
+}
+
+pub fn load_program_state() -> (
     String,
     Vec<String>,
     Option<String>,
@@ -20,6 +59,7 @@ pub fn load_vault() -> (
     bool,
     f32,
     bool,
+    egui_dock::DockState<Tabe>,
 ) {
     let binding = BaseDirs::new().unwrap();
     let home_dir = binding.home_dir().to_str().unwrap();
@@ -32,44 +72,22 @@ pub fn load_vault() -> (
 
         let data =
             fs::read_to_string(&config_file_path).expect("No se pudo leer el archivo de estado");
-        let docs = YamlLoader::load_from_str(&data).unwrap_or_default();
 
-        if docs.is_empty() {
-            println!("Advertencia: El fichero de configuración está vacío o corrupto. Creando uno nuevo.");
-            return create_default_vault(&config_dir_path);
-        }
-
-        let doc = &docs[0];
-
-        let vault_var = doc["vault"].as_str().unwrap_or("").trim_matches('\'').to_string();
-        if vault_var.is_empty() {
-            return create_default_vault(&config_dir_path);
-        }
-
-        let mut current = doc["current"].as_str().unwrap_or("").trim_matches('\'').to_string();
-        if current.is_empty() {
-            current = vault_var.clone();
-        }
-
-        let vault_vec_var: Vec<String> = doc["vault_vec"]
-            .as_vec()
-            .unwrap_or(&Vec::<Yaml>::new())
-            .iter()
-            .map(|x| x.as_str().unwrap_or("").to_owned())
-            .collect();
-        let collpased_left = doc["left_menu"].as_bool().unwrap_or(true);
-        let center_size = doc["center_size"].as_f64().unwrap_or(0.8) as f32;
-        let sort_files = doc["sort_files"].as_bool().unwrap_or(false);
+        let state: MarmolProgramState = serde_yaml::from_str(&data).unwrap_or_else(|e| {
+            eprintln!("Error deserializing ProgramState: {}. Creating default.", e);
+            MarmolProgramState::default()
+        });
 
         (
-            vault_var,
-            vault_vec_var,
-            Some(current),
+            state.vault,
+            state.vault_vec,
+            state.current_file,
             config_dir_path,
-            screens::Screen::Main,
-            collpased_left,
-            center_size,
-            sort_files,
+            state.initial_screen,
+            state.collapsed_left,
+            state.center_size,
+            state.sort_files,
+            state.dock_state,
         )
     } else {
         println!("Fichero de configuración no encontrado. Creando uno por defecto...");
@@ -88,25 +106,39 @@ fn create_default_vault(
     bool,
     f32,
     bool,
+    egui_dock::DockState<Tabe>,
 ) {
-    let default_vault = String::new();
-    let default_vault_vec = vec![];
-    let default_current = None;
-    let default_collpased_left = true;
-    let default_center_size = 0.8;
-    let default_sort_files = true;
-    let default_window = screens::Screen::Default;
+    let default_state = MarmolProgramState::default();
 
     (
-        default_vault,
-        default_vault_vec,
-        default_current,
+        default_state.vault,
+        default_state.vault_vec,
+        default_state.current_file,
         config_dir.to_string(),
-        default_window,
-        default_collpased_left,
-        default_center_size,
-        default_sort_files,
+        default_state.initial_screen,
+        default_state.collapsed_left,
+        default_state.center_size,
+        default_state.sort_files,
+        default_state.dock_state,
     )
+}
+
+pub fn save_program_state(state: &MarmolProgramState) {
+    let binding = BaseDirs::new().unwrap();
+    let home_dir = binding.home_dir().to_str().unwrap();
+    let config_dir_path = format!("{}/.config/marmol", home_dir);
+    let config_file_path = format!("{}/ProgramState", config_dir_path);
+
+    if !Path::new(&config_dir_path).exists() {
+        fs::create_dir_all(&config_dir_path).expect("Could not create config directory");
+    }
+
+    let serialized_state =
+        serde_yaml::to_string(state).expect("Could not serialize program state to YAML");
+
+    fs::write(&config_file_path, serialized_state).expect("Could not write program state to file");
+
+    println!("Program state saved to {}", config_file_path);
 }
 
 pub fn load_context() -> f32 {
@@ -138,11 +170,11 @@ pub fn load_colors() -> style::Visuals {
     if !themes.exists() {
         return style::Visuals::default();
     };
-    let data = match fs::read_to_string(themes){
+    let data = match fs::read_to_string(themes) {
         Ok(data) => data,
         Err(_) => return style::Visuals::default(),
     };
-    let vis = match json::parse(&data){
+    let vis = match json::parse(&data) {
         Ok(data) => data,
         Err(_) => return style::Visuals::default(),
     };

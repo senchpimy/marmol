@@ -9,28 +9,71 @@ use egui::{FontId, Frame, Sense, Ui, WidgetText};
 use egui_commonmark::*;
 use egui_dock::{DockArea, DockState, NodeIndex, Style, SurfaceIndex, TabViewer};
 use egui_extras::{Size, StripBuilder};
+use serde::{Deserialize, Serialize};
 use std::io::Write;
 use std::path::Path;
 
+#[derive(Serialize, Deserialize)]
 pub enum TabContent {
     Empty,
-    Graph(crate::graph::Graph),
+    Graph {
+        vault_path: String,
+    },
     Image(String),
-    Income(income::IncomeGui),
-    Tasks(tasks::TasksGui),
-    Excalidraw(excalidraw::ExcalidrawGui),
+    Income {
+        path: String,
+    },
+    Tasks {
+        path: String,
+    },
+    Excalidraw {
+        path: String,
+    },
     Markdown {
         content: String,
         buffer: String,
+        #[serde(skip)]
         cache: CommonMarkCache,
     },
 }
 
+impl Default for TabContent {
+    fn default() -> Self {
+        TabContent::Empty
+    }
+}
+
+impl Clone for TabContent {
+    fn clone(&self) -> Self {
+        match self {
+            TabContent::Empty => TabContent::Empty,
+            TabContent::Graph { vault_path } => TabContent::Graph {
+                vault_path: vault_path.clone(),
+            },
+            TabContent::Image(path) => TabContent::Image(path.clone()),
+            TabContent::Income { path } => TabContent::Income { path: path.clone() },
+            TabContent::Tasks { path } => TabContent::Tasks { path: path.clone() },
+            TabContent::Excalidraw { path } => TabContent::Excalidraw { path: path.clone() },
+            TabContent::Markdown {
+                content,
+                buffer,
+                cache: _,
+            } => TabContent::Markdown {
+                content: content.clone(),
+                buffer: buffer.clone(),
+                cache: CommonMarkCache::default(),
+            },
+        }
+    }
+}
+
 //type Tabe = String;
+#[derive(Serialize, Deserialize, Clone)]
 pub struct Tabe {
     pub id: usize,
     pub title: String,
     pub path: String,
+    #[serde(default)]
     pub content: TabContent,
     pub ctype: main_area::Content,
 }
@@ -54,17 +97,11 @@ impl Tabe {
         let content = if path.ends_with(".png") || path.ends_with("jpeg") || path.ends_with("jpg") {
             TabContent::Image(path.clone())
         } else if path.ends_with(".inc") {
-            let mut income = income::IncomeGui::default();
-            income.set_path(&path);
-            TabContent::Income(income)
+            TabContent::Income { path: path.clone() }
         } else if path.ends_with(".excalidraw") {
-            let mut exc = excalidraw::ExcalidrawGui::default();
-            exc.set_path(&path);
-            TabContent::Excalidraw(exc)
+            TabContent::Excalidraw { path: path.clone() }
         } else if path.ends_with(".graph") {
-            let mut tasks = tasks::TasksGui::default();
-            tasks.set_path(&path);
-            TabContent::Tasks(tasks)
+            TabContent::Tasks { path: path.clone() }
         } else {
             TabContent::Markdown {
                 content: loaded_content,
@@ -88,7 +125,9 @@ impl Tabe {
             ctype: main_area::Content::Graph,
             title: "Graph".to_string(),
             path: String::new(),
-            content: TabContent::Graph(crate::graph::Graph::new(vault)),
+            content: TabContent::Graph {
+                vault_path: vault.to_string(),
+            },
         }
     }
 }
@@ -109,11 +148,13 @@ impl TabViewer for MTabViewer<'_> {
 
     fn ui(&mut self, ui: &mut Ui, tab: &mut Self::Tab) {
         match &mut tab.content {
-            TabContent::Graph(graph) => {
-                graph.ui(ui, self.current_file, self.content, self.vault);
+            TabContent::Graph { vault_path } => {
+                let mut graph = crate::graph::Graph::new(vault_path);
+                graph.ui(ui, self.current_file, self.content, vault_path);
             }
-            TabContent::Excalidraw(exc) => {
-                exc.set_path(&tab.path);
+            TabContent::Excalidraw { path } => {
+                let mut exc = excalidraw::ExcalidrawGui::default();
+                exc.set_path(path);
                 exc.show(ui);
             }
             TabContent::Image(image_path) => {
@@ -124,12 +165,14 @@ impl TabViewer for MTabViewer<'_> {
                         ui.add(img);
                     });
             }
-            TabContent::Income(income) => {
-                income.set_path(&tab.path);
+            TabContent::Income { path } => {
+                let mut income = income::IncomeGui::default();
+                income.set_path(path);
                 income.show(ui);
             }
-            TabContent::Tasks(tasks) => {
-                tasks.set_path(&tab.path);
+            TabContent::Tasks { path } => {
+                let mut tasks = tasks::TasksGui::default();
+                tasks.set_path(path);
                 tasks.show(ui);
             }
             TabContent::Markdown {
@@ -233,17 +276,11 @@ fn update_tab_content(tab: &mut Tabe, path: &String) {
     tab.content = if path.ends_with(".png") || path.ends_with("jpeg") || path.ends_with("jpg") {
         TabContent::Image(path.clone())
     } else if path.ends_with(".inc") {
-        let mut income = income::IncomeGui::default();
-        income.set_path(path);
-        TabContent::Income(income)
+        TabContent::Income { path: path.clone() }
     } else if path.ends_with(".excalidraw") {
-        let mut exc = excalidraw::ExcalidrawGui::default();
-        exc.set_path(path);
-        TabContent::Excalidraw(exc)
+        TabContent::Excalidraw { path: path.clone() }
     } else if path.ends_with(".graph") {
-        let mut tasks = tasks::TasksGui::default();
-        tasks.set_path(path);
-        TabContent::Tasks(tasks)
+        TabContent::Tasks { path: path.clone() }
     } else {
         TabContent::Markdown {
             content: loaded_content.clone(),
@@ -264,14 +301,24 @@ pub struct Tabs {
 }
 
 impl Tabs {
-    pub fn new(path: Option<String>) -> Self {
-        dbg!(&path);
-        let mut tabs = Vec::new();
-        if let Some(path) = path {
-            tabs.push(Tabe::new(0, path));
+    pub fn new_from_dock_state(dock_state: DockState<Tabe>) -> Self {
+        let counter = dock_state
+            .iter_all_tabs()
+            .map(|(_, tab)| tab.id)
+            .max()
+            .unwrap_or(0)
+            + 1;
+        Self {
+            tree: dock_state,
+            counter,
         }
-        let tree = DockState::new(tabs);
-        Self { tree, counter: 0 }
+    }
+
+    pub fn new_empty() -> Self {
+        Self {
+            tree: DockState::new(vec![]),
+            counter: 0,
+        }
     }
 
     pub fn ui(
@@ -348,5 +395,9 @@ impl Tabs {
 
     pub fn add_tab(&mut self, tab: Tabe) {
         self.tree.push_to_focused_leaf(tab);
+    }
+
+    pub fn dock_state(&self) -> &DockState<Tabe> {
+        &self.tree
     }
 }
