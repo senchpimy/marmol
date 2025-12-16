@@ -89,6 +89,7 @@ pub struct Graph {
     pub new_group_type: MatchType,
     pub new_group_val: String,
     pub new_group_col: Color32,
+    pub hovered_node_index: Option<usize>,
 }
 
 impl MarmolPoint {
@@ -190,6 +191,7 @@ impl Graph {
             new_group_type: MatchType::Tag,
             new_group_val: String::new(),
             new_group_col: Color32::from_rgb(255, 0, 0),
+            hovered_node_index: None,
         };
 
         graph.update_vault(Path::new(vault));
