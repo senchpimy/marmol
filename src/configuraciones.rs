@@ -1,8 +1,7 @@
 use crate::screens;
 use crate::tabs::Tabe;
 use directories::BaseDirs;
-use egui::{style, Color32, CornerRadius, Stroke};
-use json;
+
 use serde::{Deserialize, Serialize};
 use serde_yaml;
 use std::fs;
@@ -159,69 +158,4 @@ pub fn load_context() -> f32 {
         }
     }
     return font_size;
-}
-
-pub fn load_colors() -> style::Visuals {
-    let binding = BaseDirs::new().unwrap();
-    let home_dir = binding.home_dir().to_str().unwrap();
-    let mut config_path_var = String::from(home_dir);
-    config_path_var = config_path_var + "/.config/marmol/themes.json";
-    let themes = Path::new(&config_path_var);
-    if !themes.exists() {
-        return style::Visuals::default();
-    };
-    let data = match fs::read_to_string(themes) {
-        Ok(data) => data,
-        Err(_) => return style::Visuals::default(),
-    };
-    let vis = match json::parse(&data) {
-        Ok(data) => data,
-        Err(_) => return style::Visuals::default(),
-    };
-    let binding = json::parse(&vis["visuals"].dump()).unwrap();
-    let vis = binding.entries();
-    for _theme in vis {}
-
-    //https://docs.rs/egui/0.21.0/egui/style/struct.Visuals.html
-    let widget_visuals_active = style::WidgetVisuals {
-        bg_fill: Color32::WHITE,
-        weak_bg_fill: Color32::BLUE,
-        bg_stroke: Stroke {
-            width: 5.0,
-            color: Color32::GREEN,
-        },
-        corner_radius: CornerRadius::default(),
-        fg_stroke: Stroke {
-            width: 5.0,
-            color: Color32::RED,
-        },
-        expansion: 10.0,
-    };
-
-    let widget_visuals_nonineractive = style::WidgetVisuals {
-        bg_fill: Color32::WHITE,
-        weak_bg_fill: Color32::BLUE,
-        bg_stroke: Stroke {
-            width: 5.0,
-            color: Color32::GREEN,
-        },
-        corner_radius: CornerRadius::default(),
-        fg_stroke: Stroke {
-            width: 5.0,
-            color: Color32::RED,
-        },
-        expansion: 10.0,
-    };
-
-    let widgets = style::Widgets {
-        noninteractive: widget_visuals_nonineractive,
-        hovered: widget_visuals_active,
-        ..Default::default()
-    };
-
-    style::Visuals {
-        widgets,
-        dark_mode: true,
-        ..Default::default()
-    }
 }

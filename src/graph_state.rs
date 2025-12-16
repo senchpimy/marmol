@@ -117,7 +117,7 @@ impl MarmolPoint {
 }
 
 impl Graph {
-    pub fn new(vault: &str) -> Self {
+    pub fn new(vault: &str, ctx: &egui::Context) -> Self {
         let mut tags_colors = HashMap::new();
         if let Ok(file_content) = fs::read_to_string("./test.json") {
             if let Ok(parsed) = json::parse(&file_content) {
@@ -140,15 +140,15 @@ impl Graph {
         }
 
         let palette = vec![
-            Color32::from_rgb(235, 64, 52),
-            Color32::from_rgb(60, 100, 220),
-            Color32::from_rgb(140, 40, 160),
-            Color32::from_rgb(255, 140, 0),
-            Color32::from_rgb(46, 204, 113),
-            Color32::from_rgb(52, 152, 219),
-            Color32::from_rgb(241, 196, 15),
-            Color32::from_rgb(231, 76, 60),
-            Color32::from_rgb(52, 73, 94),
+            ctx.style().visuals.error_fg_color,
+            ctx.style().visuals.selection.stroke.color,
+            ctx.style().visuals.widgets.hovered.fg_stroke.color,
+            ctx.style().visuals.warn_fg_color,
+            Color32::LIGHT_GREEN,
+            Color32::LIGHT_BLUE,
+            Color32::YELLOW,
+            Color32::LIGHT_RED,
+            ctx.style().visuals.widgets.noninteractive.fg_stroke.color,
         ];
 
         let mut graph = Self {
@@ -181,16 +181,16 @@ impl Graph {
             line_thickness: 2.0,
 
             dragged_node_index: None,
-            orphan_color: Color32::from_rgb(100, 110, 120),
-            ghost_color: Color32::from_rgb(60, 60, 60),
-            attachment_color: Color32::from_rgb(100, 200, 100),
+            orphan_color: ctx.style().visuals.widgets.inactive.fg_stroke.color.linear_multiply(0.7),
+            ghost_color: ctx.style().visuals.widgets.noninteractive.bg_stroke.color.linear_multiply(0.2),
+            attachment_color: ctx.style().visuals.selection.stroke.color,
             palette,
             tags_colors,
 
             custom_groups: vec![],
             new_group_type: MatchType::Tag,
             new_group_val: String::new(),
-            new_group_col: Color32::from_rgb(255, 0, 0),
+            new_group_col: ctx.style().visuals.error_fg_color,
             hovered_node_index: None,
         };
 

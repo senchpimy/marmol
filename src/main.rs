@@ -122,14 +122,13 @@ impl Marmol {
             dock_state,
         };
 
-        let mut app = Self::from_program_state(initial_state);
-        app.font_size = font_size; // Set font_size after loading state
+                    let mut app = Self::from_program_state(initial_state, &cc.egui_ctx);        app.font_size = font_size; // Set font_size after loading state
         app.config_path = config_dir_path; // Set config_path after loading state
 
         app
     }
 
-    fn from_program_state(state: configuraciones::MarmolProgramState) -> Self {
+    fn from_program_state(state: configuraciones::MarmolProgramState, ctx: &egui::Context) -> Self {
         let current_path_str = state.current_file.clone().unwrap_or_default();
         Self {
             tabs_counter: 0,
@@ -143,7 +142,7 @@ impl Marmol {
             center_size: state.center_size,
             center_size_remain: (1.0 - state.center_size) / 2.0,
             font_size: 12.0,
-            marker: Graph::new(&state.vault),
+            marker: Graph::new(&state.vault, ctx),
             new_file_str: String::new(),
             content: main_area::content_enum::Content::View,
             left_controls: main_area::left_controls::LeftControls::default(),
@@ -183,7 +182,7 @@ impl Default for Marmol {
             center_size: 0.8,
             center_size_remain: 0.1,
             font_size: 12.0,
-            marker: Graph::new(""), // Default empty vault
+            marker: Graph::new("", &egui::Context::default()), // Default empty vault
             new_file_str: String::new(),
             content: main_area::content_enum::Content::Blank, // Default to blank content
             left_controls: main_area::left_controls::LeftControls::default(),
@@ -370,7 +369,7 @@ impl Marmol {
         } else {
             Path::new(&path)
         };
-        ui.label(RichText::new(&self.create_file_error).color(Color32::RED));
+        ui.label(RichText::new(&self.create_file_error).color(ui.ctx().style().visuals.error_fg_color));
         if new_file.exists() {
             self.create_file_error = String::from("File already exist");
         } else {

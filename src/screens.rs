@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use crate::main_area::content_enum::Content;
 //use crate::toggle_switch;
 use crate::MShape;
-use eframe::egui::{Button, CentralPanel, Color32, FontId, RichText};
+use eframe::egui::{Button, CentralPanel, FontId, RichText};
 
 use rfd::FileDialog;
 use std::fs;
@@ -68,11 +68,13 @@ pub fn default(
                 let mut open_text = RichText::new("");
                 if !path.exists() {
                     if path.is_dir() {
-                        open_text = RichText::new("Good!").color(Color32::GREEN);
+                        open_text = RichText::new("Good!")
+                            .color(ui.ctx().style().visuals.selection.stroke.color);
                         nuevo_bool = true;
                     }
                 } else {
-                    open_text = RichText::new("Path already exists").color(Color32::RED);
+                    open_text = RichText::new("Path already exists")
+                        .color(ui.ctx().style().visuals.error_fg_color);
                 }
                 ui.label(open_text);
             }
@@ -258,7 +260,7 @@ fn create_new_vault(
             *show = false;
         }
     }
-    ui.label(RichText::new(error.as_str()).color(Color32::RED));
+    ui.label(RichText::new(error.as_str()).color(ui.ctx().style().visuals.error_fg_color));
 }
 
 fn manage_existing_vaults(

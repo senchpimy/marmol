@@ -97,7 +97,7 @@ impl Default for ExcalidrawElement {
             width: 0.0,
             height: 0.0,
             angle: 0.0,
-            stroke_color: "#000000".to_string(),
+            stroke_color: "#BBBBBB".to_string(),
             background_color: "transparent".to_string(),
             fill_style: "solid".to_string(),
             stroke_width: 1.0,
@@ -279,7 +279,7 @@ impl ExcalidrawGui {
 
     pub fn show(&mut self, ui: &mut Ui) {
         if let Some(e) = &self.error_msg {
-            ui.colored_label(Color32::RED, e);
+            ui.colored_label(ui.ctx().style().visuals.error_fg_color, e);
             return;
         }
         if self.scene.is_none() {
@@ -338,7 +338,7 @@ impl ExcalidrawGui {
         });
 
         let (response, painter) = ui.allocate_painter(ui.available_size(), Sense::click_and_drag());
-        painter.rect_filled(response.rect, 0.0, Color32::WHITE);
+        painter.rect_filled(response.rect, 0.0, ui.ctx().style().visuals.extreme_bg_color);
 
         let panel_width = 220.0;
         let panel_rect = Rect::from_min_size(
@@ -525,7 +525,7 @@ impl ExcalidrawGui {
                 };
                 draw_element(&painter, el, tex, &to_screen, cs);
                 if self.selected_element_idx == Some(i) {
-                    draw_selection_border(&painter, el, &to_screen, cs);
+                    draw_selection_border(&painter, el, &to_screen, cs, ui);
                 }
             }
             if let Some(el) = &self.drawing_element {
@@ -540,8 +540,8 @@ impl ExcalidrawGui {
 
             ui.scope_builder(UiBuilder::new().max_rect(panel_rect), |ui| {
                 egui::Frame::NONE
-                    .fill(Color32::from_rgba_premultiplied(30, 30, 30, 240))
-                    .stroke(Stroke::new(1.0, Color32::from_gray(60)))
+                    .fill(ui.ctx().style().visuals.panel_fill.linear_multiply(240.0 / 255.0))
+                    .stroke(Stroke::new(1.0, ui.ctx().style().visuals.window_stroke.color))
                     .corner_radius(12.0)
                     .inner_margin(16.0)
                     .show(ui, |ui| {
@@ -798,7 +798,7 @@ fn is_point_inside(el: &ExcalidrawElement, p: Pos2) -> bool {
         .contains(p)
 }
 
-fn draw_selection_border<F>(painter: &egui::Painter, el: &ExcalidrawElement, to_screen: &F, _s: f32)
+fn draw_selection_border<F>(painter: &egui::Painter, el: &ExcalidrawElement, to_screen: &F, _s: f32, ui: &egui::Ui)
 where
     F: Fn(Pos2) -> Pos2,
 {
@@ -816,7 +816,7 @@ where
     .collect();
     painter.add(Shape::closed_line(
         pts,
-        Stroke::new(1.0, Color32::from_rgb(100, 100, 255)),
+        Stroke::new(1.0, ui.ctx().style().visuals.selection.stroke.color),
     ));
 }
 fn draw_stroke(painter: &egui::Painter, pts: Vec<Pos2>, s: Stroke, st: &str, sc: f32, cl: bool) {

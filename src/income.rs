@@ -351,7 +351,7 @@ impl IncomeGui {
                                             ui.horizontal(|ui| {
                                                 ui.label(
                                                     RichText::new(format!("-{}", elemento.monto))
-                                                        .color(Color32::RED),
+                                                        .color(ui.ctx().style().visuals.error_fg_color),
                                                 );
                                                 ui.label(&elemento.description);
                                                 if ui.button("X").clicked() {
@@ -404,7 +404,7 @@ impl IncomeGui {
                                     ui.horizontal(|ui| {
                                         ui.label(
                                             RichText::new(format!("+{}", elemento.monto))
-                                                .color(Color32::GREEN),
+                                                .color(ui.ctx().style().visuals.selection.stroke.color),
                                         );
                                         ui.label(&elemento.description);
                                         if ui.button("X").clicked() {
@@ -435,9 +435,9 @@ impl IncomeGui {
         ui.horizontal(|ui| {
             ui.label("Total:");
             if tot > 0.0 {
-                ui.label(RichText::new(format!("{}", tot)).color(Color32::GREEN));
+                ui.label(RichText::new(format!("{}", tot)).color(ui.ctx().style().visuals.selection.stroke.color));
             } else {
-                ui.label(RichText::new(format!("{}", tot)).color(Color32::RED));
+                ui.label(RichText::new(format!("{}", tot)).color(ui.ctx().style().visuals.error_fg_color));
             }
         });
     }
@@ -454,7 +454,7 @@ impl IncomeGui {
             ui.add_sized([ui.available_width() * 0.7, 10.0], |ui: &mut egui::Ui| {
                 ui.separator()
             });
-            ui.label(RichText::new(&self.error).color(Color32::RED));
+            ui.label(RichText::new(&self.error).color(ui.ctx().style().visuals.error_fg_color));
             ui.horizontal(|ui| {
                 egui::CollapsingHeader::new("Editar Fecha").show(ui, |ui| {
                     ui.add(egui::TextEdit::singleline(&mut self.fecha));
@@ -524,7 +524,7 @@ impl IncomeGui {
 
     fn canvas(&mut self, ui: &mut egui::Ui) {
         let f = Frame::NONE
-            .fill(Color32::BLACK)
+            .fill(ui.ctx().style().visuals.extreme_bg_color)
             .corner_radius(CornerRadius::same(3));
         f.show(ui, |ui| {
             let available_height =
@@ -655,7 +655,7 @@ impl IncomeGui {
             }
             ui.label(
                 RichText::from(&self.mov_sort[self.ver_gra_i])
-                    .color(Color32::WHITE)
+                    .color(ui.ctx().style().visuals.override_text_color.unwrap_or(Color32::WHITE))
                     .size(30.),
             );
             ui.add_space(20.);
@@ -679,13 +679,13 @@ impl IncomeGui {
                                     if j.tipo == TipoMovimiento::Gasto {
                                         ui.heading(
                                             RichText::from(format!("-{}", &j.monto))
-                                                .color(Color32::RED),
+                                                .color(ui.ctx().style().visuals.error_fg_color),
                                         );
                                         total -= j.monto;
                                     } else {
                                         ui.heading(
                                             RichText::from(format!("{}", &j.monto))
-                                                .color(Color32::GREEN),
+                                                .color(ui.ctx().style().visuals.selection.stroke.color),
                                         );
                                         total += j.monto;
                                     }
@@ -717,7 +717,7 @@ fn edit_valor(
         match g.parse::<f32>() {
             Ok(result) => mov.monto = result,
             Err(_) => {
-                ui.colored_label(Color32::RED, "Valor no valido");
+                ui.colored_label(ui.ctx().style().visuals.error_fg_color, "Valor no valido");
             }
         }
         *p = true;

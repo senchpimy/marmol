@@ -1,9 +1,9 @@
 use std::fs;
+use std::fs::File;
 use std::io::Write;
 use std::path::Path;
-use std::fs::File;
 
-use eframe::egui::{Button, Color32, RichText};
+use eframe::egui::{Button, RichText};
 use json::{object, JsonValue};
 
 pub fn file_options(
@@ -17,7 +17,7 @@ pub fn file_options(
 ) {
     let stared_path = format!("{}/.obsidian/starred.json", vault);
 
-    ui.label(RichText::new(&*error).color(Color32::RED));
+    ui.label(RichText::new(&*error).color(ui.ctx().style().visuals.error_fg_color));
     let copy = egui::Button::new("Copy file").frame(false);
     let star = egui::Button::new("Star this file").frame(false);
     let path_s = Path::new(s).file_name().unwrap();
@@ -89,7 +89,11 @@ pub fn file_options(
 
     if ui.data(|d| d.get_temp(id).unwrap_or(false)) {
         ui.vertical_centered(|ui| {
-            ui.label(RichText::new("Are you sure?").strong().color(Color32::RED));
+            ui.label(
+                RichText::new("Are you sure?")
+                    .strong()
+                    .color(ui.ctx().style().visuals.error_fg_color),
+            );
             ui.label(RichText::new(path_s.to_str().unwrap()).italics().weak());
             ui.add_space(5.);
 
@@ -98,8 +102,11 @@ pub fn file_options(
                     ui.data_mut(|d| d.insert_temp(id, false));
                 }
 
-                let btn_yes = egui::Button::new(RichText::new("Yes, Delete").color(Color32::WHITE))
-                    .fill(Color32::RED);
+                let btn_yes = egui::Button::new(
+                    RichText::new("Yes, Delete")
+                        .color(ui.ctx().style().visuals.widgets.active.fg_stroke.color),
+                )
+                .fill(ui.ctx().style().visuals.error_fg_color);
 
                 if ui.add(btn_yes).clicked() {
                     let delete = fs::remove_file(s);
@@ -117,12 +124,13 @@ pub fn file_options(
             });
         });
     } else {
-        let btn_delete =
-            Button::selectable(false, RichText::new("Delete file").color(Color32::RED));
+        let btn_delete = Button::selectable(
+            false,
+            RichText::new("Delete file").color(ui.ctx().style().visuals.error_fg_color),
+        );
 
         if ui.add(btn_delete).clicked() {
             ui.data_mut(|d| d.insert_temp(id, true));
         }
     }
 }
-

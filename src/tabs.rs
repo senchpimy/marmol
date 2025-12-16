@@ -170,7 +170,10 @@ impl TabViewer for MTabViewer<'_> {
         match &mut tab.content {
             TabContent::Graph { vault_path, state } => {
                 if state.is_none() {
-                    *state = Some(Box::new(crate::graph_state::Graph::new(vault_path)));
+                    *state = Some(Box::new(crate::graph_state::Graph::new(
+                        vault_path,
+                        ui.ctx(),
+                    )));
                 }
 
                 if let Some(graph) = state {
@@ -214,8 +217,8 @@ impl TabViewer for MTabViewer<'_> {
             } => {
                 if tab.ctype == Content::View {
                     let cont = StripBuilder::new(ui)
-                        .size(Size::relative(0.25))
-                        .size(Size::relative(0.5));
+                        .size(Size::relative(0.15))
+                        .size(Size::relative(0.65));
                     cont.horizontal(|mut strip| {
                         strip.cell(|_| {});
                         strip.cell(|ui| {

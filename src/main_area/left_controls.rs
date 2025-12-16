@@ -4,21 +4,22 @@ use crate::screens;
 use crate::search;
 use crate::MShape;
 
-use std::time::SystemTime;
+use chrono::prelude::*;
 use eframe::egui::{
     Align, Button, Context, Frame, Layout, RichText, ScrollArea, SidePanel, Style, TopBottomPanel,
 };
 use egui::Vec2;
+use egui::{text::LayoutJob, TextFormat, Widget};
+
 use egui::{Id, Popup, PopupCloseBehavior};
-use chrono::prelude::*;
-use egui::{text::LayoutJob, Color32, TextFormat, Widget}; // `Widget` is not used directly
 use std::fs;
 use std::fs::File;
 use std::path::Path;
+use std::time::SystemTime;
 
+use self::enums::{LeftTab, SortOrder};
 use crate::main_area::content_enum::Content;
 use crate::main_area::file_options::file_options;
-use self::enums::{LeftTab, SortOrder};
 
 pub struct LeftControls {
     pub current_left_tab: LeftTab,
@@ -81,7 +82,14 @@ impl LeftControls {
         TopBottomPanel::top("Left Menu").show_inside(ui, |ui| {
             ui.horizontal(|ui| {
                 let btn_size = Vec2::new(window_size.btn_size, window_size.btn_size);
-                let color = Color32::BLACK;
+                let color = ui
+                    .ctx()
+                    .style()
+                    .visuals
+                    .widgets
+                    .noninteractive
+                    .fg_stroke
+                    .color;
 
                 if ui
                     .add_sized(
@@ -113,11 +121,9 @@ impl LeftControls {
                     .add_sized(
                         btn_size.clone(),
                         Button::image(
-                            egui::Image::new(egui::include_image!(
-                                "../../resources/square-check-big.svg"
-                            ))
-                            .fit_to_exact_size(btn_size.clone())
-                            .tint(color),
+                            egui::Image::new(egui::include_image!("../../resources/star.svg"))
+                                .fit_to_exact_size(btn_size.clone())
+                                .tint(color),
                         ),
                     )
                     .clicked()
@@ -278,7 +284,7 @@ impl LeftControls {
                             &i.path.strip_prefix(&path).unwrap(),
                             0.0,
                             TextFormat {
-                                color: Color32::RED,
+                                color: ui.ctx().style().visuals.selection.stroke.color,
                                 ..Default::default()
                             },
                         );
@@ -385,7 +391,7 @@ impl LeftControls {
 
             if Path::new(&file_location).is_dir() {
                 let count = fs::read_dir(&file_location).map(|i| i.count()).unwrap_or(0);
-                let folder_label = format!("{}  [{}]", file_name, count);
+                let folder_label = format!("{}   [{}]", file_name, count);
 
                 let header =
                     egui::containers::collapsing_header::CollapsingHeader::new(folder_label);
@@ -400,7 +406,7 @@ impl LeftControls {
                     ui.painter().rect_stroke(
                         header_response.rect,
                         2.0,
-                        egui::Stroke::new(2.0, Color32::from_rgb(255, 165, 0)),
+                        egui::Stroke::new(2.0, ui.ctx().style().visuals.selection.stroke.color),
                         egui::StrokeKind::Middle,
                     );
                 }
@@ -509,16 +515,18 @@ impl LeftControls {
             .default_width(1.);
         let space = window_size.height / 55.;
         let btn_size = Vec2::new(window_size.btn_size, window_size.btn_size);
-        let color = Color32::BLACK;
+        let color = ctx.style().visuals.widgets.noninteractive.fg_stroke.color;
         left_panel.show(ctx, |ui| {
             ui.add_space(5.);
             ui.set_max_width(window_size.btn_size);
             ui.vertical(|ui| {
                 if ui
                     .add(Button::image(
-                        egui::Image::new(egui::include_image!("../../resources/fold-horizontal.svg"))
-                            .fit_to_exact_size(btn_size.clone())
-                            .tint(color),
+                        egui::Image::new(egui::include_image!(
+                            "../../resources/fold-horizontal.svg"
+                        ))
+                        .fit_to_exact_size(btn_size.clone())
+                        .tint(color),
                     ))
                     .clicked()
                 {
@@ -564,9 +572,11 @@ impl LeftControls {
                 ui.add_space(space);
                 if ui
                     .add(egui::Button::image(
-                        egui::Image::new(egui::include_image!("../../resources/calendar-check.svg"))
-                            .fit_to_exact_size(btn_size.clone())
-                            .tint(color),
+                        egui::Image::new(egui::include_image!(
+                            "../../resources/calendar-check.svg"
+                        ))
+                        .fit_to_exact_size(btn_size.clone())
+                        .tint(color),
                     ))
                     .on_hover_text("Daily note")
                     .clicked()
@@ -600,9 +610,11 @@ impl LeftControls {
                 ui.add_space(space);
                 if ui
                     .add(egui::Button::image(
-                        egui::Image::new(egui::include_image!("../../resources/tasks.png"))
-                            .fit_to_exact_size(btn_size.clone())
-                            .tint(color),
+                        egui::Image::new(egui::include_image!(
+                            "../../resources/square-check-big.svg"
+                        ))
+                        .fit_to_exact_size(btn_size.clone())
+                        .tint(color),
                     ))
                     .on_hover_text("New Task")
                     .clicked()

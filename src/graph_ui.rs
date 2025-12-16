@@ -61,7 +61,7 @@ pub fn draw_ui(
             }
             let is_hovering = graph.hovered_node_index.is_some();
 
-            let base_line_color = Color32::from_rgba_unmultiplied(100, 100, 100, 100);
+            let base_line_color = plot_ui.ctx().style().visuals.window_stroke.color.linear_multiply(100.0 / 255.0);
 
             if graph.show_arrows {
                 let mut origins = vec![];
@@ -104,8 +104,7 @@ pub fn draw_ui(
                                 if idx_a == graph.hovered_node_index.unwrap()
                                     || idx_b == graph.hovered_node_index.unwrap()
                                 {
-                                    line_color =
-                                        Color32::from_rgba_unmultiplied(150, 150, 150, 180);
+                                                                        line_color = plot_ui.ctx().style().visuals.widgets.hovered.bg_stroke.color.linear_multiply(180.0 / 255.0);
                                 }
                             } else {
                                 line_color = line_color.linear_multiply(0.1);
@@ -181,11 +180,11 @@ pub fn draw_ui(
                 let diff = bounds.max()[1] - bounds.min()[1];
 
                 if diff < graph.text_zoom_threshold {
-                    let mut text_color = Color32::GRAY;
+                    let mut text_color = plot_ui.ctx().style().visuals.widgets.inactive.fg_stroke.color;
 
                     if is_hovering {
                         if connected_indices.contains(&index) {
-                            text_color = Color32::WHITE;
+                            text_color = plot_ui.ctx().style().visuals.override_text_color.unwrap_or(Color32::WHITE);
                         } else {
                             text_color = text_color.linear_multiply(0.2); // Ocultar casi todo el resto
                         }

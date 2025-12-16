@@ -8,7 +8,7 @@ pub fn create_metadata(metadata: String, ui: &mut egui::Ui) {
             .fill(ui.visuals().faint_bg_color)
             .corner_radius(5.0)
             .inner_margin(10.0)
-            .stroke(egui::Stroke::new(1.0, Color32::RED))
+            .stroke(egui::Stroke::new(1.0, ui.visuals().error_fg_color))
             .show(ui, |ui| {
                 ui.set_width(ui.available_width());
                 ui.label("Bad Formatting! :(");
@@ -28,7 +28,7 @@ pub fn create_metadata(metadata: String, ui: &mut egui::Ui) {
                 &(s.to_owned() + "\n"),
                 0.0,
                 TextFormat {
-                    color: Color32::GRAY,
+                    color: ui.ctx().style().visuals.widgets.inactive.fg_stroke.color,
                     ..Default::default()
                 },
             )
@@ -37,7 +37,7 @@ pub fn create_metadata(metadata: String, ui: &mut egui::Ui) {
                 &(s.to_owned() + "\n"),
                 0.0,
                 TextFormat {
-                    color: Color32::WHITE,
+                    color: ui.ctx().style().visuals.override_text_color.unwrap_or(Color32::WHITE),
                     ..Default::default()
                 },
             )
@@ -53,7 +53,7 @@ pub fn create_metadata(metadata: String, ui: &mut egui::Ui) {
                 content,
                 0.0,
                 TextFormat {
-                    color: Color32::GRAY,
+                    color: ui.ctx().style().visuals.widgets.inactive.fg_stroke.color,
                     ..Default::default()
                 },
             );
@@ -66,7 +66,7 @@ pub fn create_metadata(metadata: String, ui: &mut egui::Ui) {
                 &format!("{}\n", content),
                 0.0,
                 TextFormat {
-                    color: Color32::WHITE,
+                    color: ui.ctx().style().visuals.override_text_color.unwrap_or(Color32::WHITE),
                     ..Default::default()
                 },
             );
