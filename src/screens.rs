@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
-use crate::main_area;
+
+use crate::main_area::content_enum::Content;
 //use crate::toggle_switch;
 use crate::MShape;
 use eframe::egui::{Button, CentralPanel, Color32, FontId, RichText};
@@ -22,7 +23,7 @@ pub fn default(
     nuevo: &mut String,
     vaults_vec: &mut Vec<String>,
     vault: &mut String,
-    content: &mut main_area::Content,
+    content: &mut Content,
     window_size: &MShape,
 ) {
     let mut nuevo_bool = false;
@@ -55,7 +56,7 @@ pub fn default(
                         vaults_vec.push(selected_vault.to_owned());
                         *vault = String::from(selected_vault);
                         *current_window = Screen::Main;
-                        *content = main_area::Content::Blank;
+                        *content = Content::Blank;
                     }
                     None => {}
                 }

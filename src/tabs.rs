@@ -2,7 +2,9 @@ use crate::excalidraw;
 use crate::files;
 use crate::format;
 use crate::income;
-use crate::main_area;
+
+use crate::main_area::content_enum::Content;
+use crate::main_area::metadata_renderer::create_metadata;
 use crate::tasks;
 use egui::Image;
 use egui::{FontId, Frame, Sense, Ui, WidgetText};
@@ -87,7 +89,7 @@ pub struct Tabe {
     pub path: String,
     #[serde(default)]
     pub content: TabContent,
-    pub ctype: main_area::Content,
+    pub ctype: Content,
 }
 
 impl Tabe {
@@ -101,9 +103,9 @@ impl Tabe {
         let loaded_content = files::read_file(&path);
 
         let (initial_ctype, initial_buffer) = if loaded_content.trim().is_empty() {
-            (main_area::Content::Edit, loaded_content.clone())
+            (Content::Edit, loaded_content.clone())
         } else {
-            (main_area::Content::View, String::new())
+            (Content::View, String::new())
         };
 
         let content = if path.ends_with(".png") || path.ends_with("jpeg") || path.ends_with("jpg") {
@@ -139,7 +141,7 @@ impl Tabe {
     pub fn new_graph(n: usize, vault: &str) -> Self {
         Self {
             id: n,
-            ctype: main_area::Content::Graph,
+            ctype: Content::Graph,
             title: "Graph".to_string(),
             path: String::new(),
             content: TabContent::Graph {
@@ -153,7 +155,7 @@ impl Tabe {
 struct MTabViewer<'a> {
     added_nodes: &'a mut Vec<(SurfaceIndex, NodeIndex)>,
     current_file: &'a mut String,
-    content: &'a mut main_area::Content,
+    content: &'a mut Content,
     vault: &'a str,
 }
 
@@ -202,7 +204,7 @@ impl TabViewer for MTabViewer<'_> {
                 buffer,
                 cache,
             } => {
-                if tab.ctype == main_area::Content::View {
+                if tab.ctype == Content::View {
                     let cont = StripBuilder::new(ui)
                         .size(Size::relative(0.25))
                         .size(Size::relative(0.5));
@@ -217,7 +219,7 @@ impl TabViewer for MTabViewer<'_> {
                                     let (markdown_content, metadata) = files::contents(content);
                                     ui.heading(&tab.title);
                                     if !metadata.is_empty() {
-                                        main_area::create_metadata(metadata, ui);
+                                        create_metadata(metadata, ui);
                                     }
                                     CommonMarkViewer::new().show(ui, cache, &markdown_content);
                                     ui.allocate_space(ui.available_size());
@@ -230,13 +232,13 @@ impl TabViewer for MTabViewer<'_> {
                                 );
 
                                 if interact_response.double_clicked() {
-                                    tab.ctype = main_area::Content::Edit;
+                                    tab.ctype = Content::Edit;
                                     *buffer = content.clone();
                                 }
                             });
                         });
                     });
-                } else if tab.ctype == main_area::Content::Edit {
+                } else if tab.ctype == Content::Edit {
                     let cont = StripBuilder::new(ui)
                         .size(Size::relative(0.25))
                         .size(Size::relative(0.5));
@@ -261,7 +263,7 @@ impl TabViewer for MTabViewer<'_> {
                                     f.flush().unwrap();
                                 }
                                 if ui.input(|i| i.key_pressed(egui::Key::Escape)) {
-                                    tab.ctype = main_area::Content::View;
+                                    tab.ctype = Content::View;
                                 }
                             });
                         });
@@ -290,9 +292,9 @@ fn update_tab_content(tab: &mut Tabe, path: &String) {
     tab.title = new_title;
     let loaded_content = files::read_file(path);
     if loaded_content.trim().is_empty() {
-        tab.ctype = main_area::Content::Edit;
+        tab.ctype = Content::Edit;
     } else {
-        tab.ctype = main_area::Content::View;
+        tab.ctype = Content::View;
     }
 
     tab.content = if path.ends_with(".png") || path.ends_with("jpeg") || path.ends_with("jpg") {
@@ -311,7 +313,7 @@ fn update_tab_content(tab: &mut Tabe, path: &String) {
     } else {
         TabContent::Markdown {
             content: loaded_content.clone(),
-            buffer: if tab.ctype == main_area::Content::Edit {
+            buffer: if tab.ctype == Content::Edit {
                 loaded_content
             } else {
                 String::new()
@@ -353,7 +355,7 @@ impl Tabs {
         ui: &mut Ui,
         _marker: &mut crate::graph::Graph,
         current_file: &mut String,
-        content: &mut main_area::Content,
+        content: &mut Content,
         vault: &str,
     ) {
         if ui.input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::W)) {

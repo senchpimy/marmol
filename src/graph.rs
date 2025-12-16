@@ -1,5 +1,6 @@
 use crate::files;
-use crate::main_area;
+
+use crate::main_area::content_enum::Content;
 use std::collections::hash_map::DefaultHasher;
 use std::collections::HashMap;
 use std::collections::HashSet;
@@ -737,7 +738,7 @@ impl Graph {
         &mut self,
         ui: &mut Ui,
         current_file: &mut String,
-        content: &mut main_area::Content,
+        content: &mut Content,
         vault: &str,
     ) -> Response {
         self.simulate_physics();
@@ -871,7 +872,7 @@ impl Graph {
                             if is_double_click && self.dragged_node_index.is_none() {
                                 if point.exists && !point.is_attachment && !point.is_tag {
                                     *current_file = point.abs_path.clone();
-                                    *content = main_area::Content::View;
+                                    *content = Content::View;
                                 }
                             }
                             if is_drag_started {

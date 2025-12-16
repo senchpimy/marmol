@@ -5,7 +5,6 @@ use std::fs::File;
 use std::io::Write;
 use std::path::Path;
 
-#[macro_use]
 extern crate json;
 
 mod configuraciones;
@@ -61,12 +60,12 @@ struct Marmol {
     switcher: switcher::QuickSwitcher,
     prev_current_file: String,
     new_vault_str: String,
-    content: main_area::Content,
+    content: main_area::content_enum::Content,
 
     current_window: screens::Screen,
     prev_window: screens::Screen,
     config_path: String,
-    left_controls: main_area::LeftControls,
+    left_controls: main_area::left_controls::LeftControls,
     new_file_str: String,
 
     left_collpased: bool,
@@ -144,8 +143,8 @@ impl Marmol {
             font_size: 12.0, // This is loaded separately
             marker: graph::Graph::new(&state.vault),
             new_file_str: String::new(),
-            content: main_area::Content::View, // Start with View content for loaded files
-            left_controls: main_area::LeftControls::default(),
+            content: main_area::content_enum::Content::View, // Start with View content for loaded files
+            left_controls: main_area::left_controls::LeftControls::default(),
             new_vault_folder: String::from(""),
             new_vault_folder_err: String::from(""),
             new_vault_str: String::from(""),
@@ -184,8 +183,8 @@ impl Default for Marmol {
             font_size: 12.0,
             marker: graph::Graph::new(""), // Default empty vault
             new_file_str: String::new(),
-            content: main_area::Content::Blank, // Default to blank content
-            left_controls: main_area::LeftControls::default(),
+            content: main_area::content_enum::Content::Blank, // Default to blank content
+            left_controls: main_area::left_controls::LeftControls::default(),
             new_vault_folder: String::new(),
             new_vault_folder_err: String::new(),
             new_vault_str: String::new(),
@@ -246,13 +245,13 @@ impl eframe::App for Marmol {
             );
             CentralPanel::default().show(ctx, |ui| {
                 if self.prev_current_file != self.current_file {
-                    self.content = main_area::Content::View;
+                    self.content = main_area::content_enum::Content::View;
                     self.prev_current_file = self.current_file.clone();
                     self.tabs.file_changed(self.current_file.clone());
                 }
 
-                if self.content == main_area::Content::NewFile
-                    || self.content == main_area::Content::NewTask
+                if self.content == main_area::content_enum::Content::NewFile
+                    || self.content == main_area::content_enum::Content::NewTask
                 {
                     self.new_file(ui, ctx.input(|i| i.key_pressed(Key::Enter)));
                     return;
@@ -260,7 +259,7 @@ impl eframe::App for Marmol {
 
                 if let Some(file_to_open) = self.switcher.ui(ctx, &self.vault) {
                     self.current_file = file_to_open;
-                    self.content = crate::main_area::Content::View;
+                    self.content = crate::main_area::content_enum::Content::View;
                 }
 
                 self.tabs.ui(
@@ -344,7 +343,7 @@ impl eframe::App for Marmol {
 
 impl Marmol {
     fn new_file(&mut self, ui: &mut Ui, enter_clicked: bool) {
-        if self.content == main_area::Content::NewTask {
+        if self.content == main_area::content_enum::Content::NewTask {
             self.new_file_type = NewFileType::Tasks
         }
         ui.label("Create New File");
@@ -374,7 +373,7 @@ impl Marmol {
             self.create_file_error = String::from("File already exist");
         } else {
             if ui.button("Create").clicked() || enter_clicked {
-                self.content = main_area::Content::View;
+                self.content = main_area::content_enum::Content::View;
                 let res = File::create(new_file);
                 match res {
                     Ok(mut re) => {
@@ -397,7 +396,7 @@ impl Marmol {
             self.create_file_error = String::new();
         }
         if ui.button("Cancel").clicked() {
-            self.content = main_area::Content::View;
+            self.content = main_area::content_enum::Content::View;
             self.new_file_str = String::new();
         }
     }
