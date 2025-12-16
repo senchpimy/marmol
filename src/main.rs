@@ -312,14 +312,7 @@ impl eframe::App for Marmol {
             height: rect.height(),
             btn_size,
         };
-        egui::Area::new("window_size_display".into())
-            .anchor(egui::Align2::RIGHT_BOTTOM, egui::vec2(-10.0, -10.0))
-            .show(ctx, |ui| {
-                ui.label(format!(
-                    "w: {:.0}, h: {:.0}",
-                    self.window_size.width, self.window_size.height
-                ));
-            });
+
     }
 
     fn on_exit(&mut self, _gl: Option<&eframe::glow::Context>) {

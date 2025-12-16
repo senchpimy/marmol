@@ -26,9 +26,13 @@ pub enum TabContent {
     Image(String),
     Income {
         path: String,
+        #[serde(skip, default)]
+        gui: income::IncomeGui,
     },
     Tasks {
         path: String,
+        #[serde(skip, default)]
+        gui: tasks::TasksGui,
     },
     Excalidraw {
         path: String,
@@ -58,8 +62,22 @@ impl Clone for TabContent {
                 state: None,
             },
             TabContent::Image(path) => TabContent::Image(path.clone()),
-            TabContent::Income { path } => TabContent::Income { path: path.clone() },
-            TabContent::Tasks { path } => TabContent::Tasks { path: path.clone() },
+            TabContent::Income { path, .. } => {
+                let mut gui = income::IncomeGui::default();
+                gui.set_path(path);
+                TabContent::Income {
+                    path: path.clone(),
+                    gui,
+                }
+            }
+            TabContent::Tasks { path, .. } => {
+                let mut gui = tasks::TasksGui::default();
+                gui.set_path(path);
+                TabContent::Tasks {
+                    path: path.clone(),
+                    gui,
+                }
+            }
             TabContent::Excalidraw { path, .. } => {
                 let mut new_gui = excalidraw::ExcalidrawGui::default();
                 new_gui.set_path(path);
@@ -111,7 +129,12 @@ impl Tabe {
         let content = if path.ends_with(".png") || path.ends_with("jpeg") || path.ends_with("jpg") {
             TabContent::Image(path.clone())
         } else if path.ends_with(".inc") {
-            TabContent::Income { path: path.clone() }
+            let mut gui = income::IncomeGui::default();
+            gui.set_path(&path);
+            TabContent::Income {
+                path: path.clone(),
+                gui,
+            }
         } else if path.ends_with(".excalidraw") {
             let mut gui = excalidraw::ExcalidrawGui::default();
             gui.set_path(&path);
@@ -120,7 +143,12 @@ impl Tabe {
                 gui,
             }
         } else if path.ends_with(".graph") {
-            TabContent::Tasks { path: path.clone() }
+            let mut gui = tasks::TasksGui::default();
+            gui.set_path(&path);
+            TabContent::Tasks {
+                path: path.clone(),
+                gui,
+            }
         } else {
             TabContent::Markdown {
                 content: loaded_content,
@@ -200,15 +228,13 @@ impl TabViewer for MTabViewer<'_> {
                         ui.add(img);
                     });
             }
-            TabContent::Income { path } => {
-                let mut income = income::IncomeGui::default();
-                income.set_path(path);
-                income.show(ui);
+            TabContent::Income { path, gui } => {
+                gui.set_path(path);
+                gui.show(ui);
             }
-            TabContent::Tasks { path } => {
-                let mut tasks = tasks::TasksGui::default();
-                tasks.set_path(path);
-                tasks.show(ui);
+            TabContent::Tasks { path, gui } => {
+                gui.set_path(path);
+                gui.show(ui);
             }
             TabContent::Markdown {
                 content,
@@ -311,7 +337,12 @@ fn update_tab_content(tab: &mut Tabe, path: &String) {
     tab.content = if path.ends_with(".png") || path.ends_with("jpeg") || path.ends_with("jpg") {
         TabContent::Image(path.clone())
     } else if path.ends_with(".inc") {
-        TabContent::Income { path: path.clone() }
+        let mut gui = income::IncomeGui::default();
+        gui.set_path(path);
+        TabContent::Income {
+            path: path.clone(),
+            gui,
+        }
     } else if path.ends_with(".excalidraw") {
         let mut gui = excalidraw::ExcalidrawGui::default();
         gui.set_path(path);
@@ -320,7 +351,12 @@ fn update_tab_content(tab: &mut Tabe, path: &String) {
             gui,
         }
     } else if path.ends_with(".graph") {
-        TabContent::Tasks { path: path.clone() }
+        let mut gui = tasks::TasksGui::default();
+        gui.set_path(path);
+        TabContent::Tasks {
+            path: path.clone(),
+            gui,
+        }
     } else {
         TabContent::Markdown {
             content: loaded_content.clone(),
