@@ -1,7 +1,5 @@
 use chrono::Local;
 use core::ops::RangeInclusive;
-use egui::epaint::PathStroke;
-
 use egui::*;
 use egui_plot::{GridMark, Line, MarkerShape, PlotPoints, Points};
 use serde::{Deserialize, Serialize};
@@ -53,23 +51,25 @@ impl Movimiento {
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Transacciones {
-    //Json content
     transacciones: Vec<Movimiento>,
     categorias: Vec<String>,
     colores: Vec<[f32; 3]>,
 }
 
-//impl Transacciones{
-//    fn sort(&self)->Vec<Movimiento>{
-//        let mut g = self.transacciones.clone();
-//        g.sort_by(|x,y| x.fecha.cmp(&y.fecha));
-//        g
-//    }
-//}
-
 pub fn load_data(path: &str) -> Transacciones {
+    if !Path::new(path).exists() {
+        return Transacciones {
+            transacciones: vec![],
+            categorias: vec!["General".to_string()],
+            colores: vec![[0.5, 0.5, 0.5]],
+        };
+    }
     let data = fs::read_to_string(Path::new(path)).expect("Unable to read file");
-    let data: Transacciones = serde_json::from_str(&data).unwrap();
+    let data: Transacciones = serde_json::from_str(&data).unwrap_or(Transacciones {
+        transacciones: vec![],
+        categorias: vec!["General".to_string()],
+        colores: vec![[0.5, 0.5, 0.5]],
+    });
     data
 }
 
@@ -82,7 +82,7 @@ enum GraficaVer {
 pub struct IncomeGui {
     json_content: Transacciones,
     path: String,
-    categorias: HashMap<usize, i32>, //Primero el indice, luego la cantidad
+    categorias: HashMap<usize, i32>,
     valor: usize,
     description: String,
     amount: String,
@@ -93,7 +93,7 @@ pub struct IncomeGui {
     mov_sort: Vec<String>,
     points: Vec<[f64; 2]>,
     lines: Vec<[f64; 2]>,
-    ingresos: HashMap<String, f64>, //Primero el indice, luego la cantidad
+    ingresos: HashMap<String, f64>,
     cambiar: bool,
     editar_index: i32,
     categorias_string: String,
@@ -191,9 +191,18 @@ impl IncomeGui {
 
     fn update_categorias(&mut self) {
         if !self.json_content.transacciones.is_empty() {
-            self.valor = self.json_content.transacciones[0].categoria;
+            if self.json_content.transacciones[0].categoria < self.json_content.categorias.len() {
+                self.valor = self.json_content.transacciones[0].categoria;
+            } else {
+                self.valor = 0;
+            }
         }
         self.categorias = HashMap::new();
+        self.ingresos_cat = HashMap::new();
+        self.gastos_cat = HashMap::new();
+        self.ingresos_cat_tot = 0.0;
+        self.gastos_cat_tot = 0.0;
+
         for elemento in &self.json_content.transacciones {
             self.categorias
                 .entry(elemento.categoria)
@@ -217,290 +226,344 @@ impl IncomeGui {
 
     pub fn set_path(&mut self, path: &str) {
         if path != self.path {
-            println!("Datos actualizados");
             self.path = String::from(path);
             self.set_data(load_data(&self.path));
         }
     }
 
     pub fn show(&mut self, ui: &mut egui::Ui) {
-        let scroll = ScrollArea::vertical().max_height(ui.available_height() * 0.6);
-        let scroll2 = ScrollArea::vertical().id_salt("second");
-        self.escojer(ui);
-        if self.ventana == Ventana::Normal {
-            scroll.show(ui, |ui| {
-                self.vista_separada(ui);
-            });
-            ui.add_space(ui.available_height() * 0.01);
-            scroll2.show(ui, |ui| {
+        self.header_nav(ui);
+
+        egui::CentralPanel::default().show_inside(ui, |ui| match self.ventana {
+            Ventana::Normal => {
+                if ui.available_width() > 800.0 {
+                    ui.columns(2, |cols| {
+                        cols[0].vertical(|ui| self.vista_separada(ui));
+
+                        cols[1].vertical(|ui| {
+                            self.add_record(ui);
+                            ui.separator();
+                            self.categorias(ui);
+                        });
+                    });
+                } else {
+                    let available_height = ui.available_height();
+
+                    egui::TopBottomPanel::bottom("controls_bottom")
+                        .resizable(true)
+                        .default_height(available_height * 0.5)
+                        .show_inside(ui, |ui| {
+                            egui::ScrollArea::vertical().show(ui, |ui| {
+                                self.add_record(ui);
+                                ui.add_space(20.0);
+                                ui.separator();
+                                self.categorias(ui);
+                            });
+                        });
+
+                    egui::CentralPanel::default().show_inside(ui, |ui| {
+                        self.vista_separada(ui);
+                    });
+                }
+            }
+            Ventana::Graficos => self.grafica(ui),
+            Ventana::Categorias => self.canvas(ui),
+        });
+
+        self.save();
+    }
+    fn header_nav(&mut self, ui: &mut egui::Ui) {
+        egui::TopBottomPanel::top("nav_panel")
+            .frame(
+                Frame::default()
+                    .fill(ui.visuals().window_fill())
+                    .inner_margin(8.0),
+            )
+            .show_inside(ui, |ui| {
                 ui.horizontal(|ui| {
-                    ui.vertical(|ui| {
-                        self.add_record(ui);
-                    });
-                    ui.vertical(|ui| {
-                        self.categorias(ui);
-                    });
+                    ui.selectable_value(&mut self.ventana, Ventana::Normal, "📋 Transacciones");
+                    ui.selectable_value(&mut self.ventana, Ventana::Graficos, "📈 Evolución");
+                    ui.selectable_value(&mut self.ventana, Ventana::Categorias, "🍩 Distribución");
                 });
             });
-        } else if self.ventana == Ventana::Graficos {
-            self.grafica(ui);
-        } else {
-            self.canvas(ui);
-        }
-        self.save()
     }
 
     fn categorias(&mut self, ui: &mut egui::Ui) {
-        ui.group(|ui| {
+        ui.heading("Gestión de Categorías");
+        egui::Frame::group(ui.style()).show(ui, |ui| {
+            ui.horizontal(|ui| {
+                ui.label("Editar:");
+                egui::ComboBox::from_id_salt("cat_edit_combo")
+                    .selected_text(
+                        self.json_content
+                            .categorias
+                            .get(self.valor)
+                            .unwrap_or(&"?".to_string()),
+                    )
+                    .show_ui(ui, |ui| {
+                        for (val, key) in self.json_content.categorias.iter().enumerate() {
+                            ui.horizontal(|ui| {
+                                ui.selectable_value(&mut self.valor, val, key);
+                                if ui.small_button("🗑").on_hover_text("Eliminar").clicked() {
+                                    self.editar_index = val as i32;
+                                }
+                            });
+                        }
+                    });
+            });
+
+            ui.horizontal(|ui| {
+                egui::widgets::color_picker::color_edit_button_rgb(
+                    ui,
+                    &mut self.json_content.colores[self.valor],
+                );
+                ui.add(egui::TextEdit::singleline(
+                    &mut self.json_content.categorias[self.valor],
+                ));
+            });
+
             ui.separator();
-            egui::ComboBox::from_label("Editar categoria")
-                .selected_text(&self.json_content.categorias[self.valor])
-                .show_ui(ui, |ui| {
-                    for (val, key) in self.json_content.categorias.iter().enumerate() {
-                        ui.horizontal(|ui| {
-                            ui.selectable_value(&mut self.valor, val, key);
-                            if ui
-                                .add(Button::new("❌").frame(false))
-                                .on_hover_text("Delete")
-                                .clicked()
-                            {
-                                self.editar_index = val as i32;
-                            }
-                        });
-                    }
-                });
-            egui::widgets::color_picker::color_edit_button_rgb(
-                ui,
-                &mut self.json_content.colores[self.valor],
+
+            ui.add(
+                egui::TextEdit::singleline(&mut self.categorias_string)
+                    .hint_text("Nombre nueva cat."),
             );
-            ui.text_edit_singleline(&mut self.json_content.categorias[self.valor]);
-            egui::CollapsingHeader::new("Añadir Categoria").show(ui, |ui| {
-                ui.text_edit_singleline(&mut self.categorias_string);
-                if ui.button("Añadir categoria").clicked() {
+
+            if ui.button("Crear").clicked() {
+                if !self.categorias_string.is_empty() {
                     self.json_content
                         .categorias
                         .push(self.categorias_string.clone());
-                    self.json_content.colores.push([0., 0., 0.]);
+                    self.json_content.colores.push([0.5, 0.5, 0.5]);
+
                     self.categorias_string = String::new();
+
+                    self.valor = self.json_content.categorias.len() - 1;
                 }
-            });
+            }
+
             if self.editar_index != -1 {
-                if self.json_content.categorias.len() - 1 == 0 {
-                    return;
-                }
-                self.json_content
-                    .categorias
-                    .remove(self.editar_index as usize);
-                for g in &mut self.json_content.transacciones {
-                    if g.categoria == self.editar_index as usize {
-                        g.categoria = 0;
+                if self.json_content.categorias.len() > 1 {
+                    self.json_content
+                        .categorias
+                        .remove(self.editar_index as usize);
+                    self.json_content.colores.remove(self.editar_index as usize);
+
+                    for g in &mut self.json_content.transacciones {
+                        if g.categoria == self.editar_index as usize {
+                            g.categoria = 0;
+                        } else if g.categoria > self.editar_index as usize {
+                            g.categoria -= 1;
+                        }
                     }
+                    self.valor = 0;
                 }
                 self.editar_index = -1;
             }
         });
     }
 
-    fn escojer(&mut self, ui: &mut egui::Ui) {
-        egui::TopBottomPanel::top("my_panel").show_inside(ui, |ui| {
-            ui.horizontal(|ui| {
-                ui.selectable_value(&mut self.ventana, Ventana::Normal, "Normal");
-                ui.selectable_value(&mut self.ventana, Ventana::Graficos, "Graph");
-                ui.selectable_value(&mut self.ventana, Ventana::Categorias, "Categorias");
-            });
-        });
-    }
-
     pub fn vista_separada(&mut self, ui: &mut egui::Ui) {
         let mut tot = 0.0;
         let mut remove: i32 = -1;
-        ui.add_space(10.);
-        ui.horizontal(|ui| {
-            ui.vertical(|ui| {
-                ui.add_sized(
-                    [ui.available_width() * 0.5, ui.available_height()],
-                    |ui: &mut egui::Ui| {
-                        ui.vertical(|ui| {
-                            ui.group(|ui| {
-                                for (this, elemento) in
-                                    self.json_content.transacciones.iter_mut().enumerate()
-                                {
-                                    let vals = array_to_color(
-                                        self.json_content.colores[elemento.categoria],
+
+        let Transacciones {
+            transacciones,
+            categorias,
+            colores,
+        } = &mut self.json_content;
+        let edit_state = &mut self.edit;
+        let cambiar_ref = &mut self.cambiar;
+
+        ui.columns(2, |cols| {
+            cols[0].vertical(|ui| {
+                ui.heading(RichText::new("📉 Gastos").color(Color32::from_rgb(230, 80, 80)));
+                egui::ScrollArea::vertical()
+                    .id_salt("gastos_scroll")
+                    .max_height(ui.available_height() - 30.0)
+                    .show(ui, |ui| {
+                        for (this, elemento) in transacciones.iter_mut().enumerate() {
+                            if elemento.tipo == TipoMovimiento::Gasto {
+                                tot -= elemento.monto;
+                                if *edit_state == (this as i32, TipoMovimiento::Gasto) {
+                                    draw_edit_card(
+                                        ui,
+                                        elemento,
+                                        edit_state,
+                                        cambiar_ref,
+                                        categorias,
                                     );
-                                    let f = Frame::NONE
-                                        .fill(faded(vals, ui))
-                                        .corner_radius(CornerRadius::same(2));
-                                    if self.edit == (this as i32, TipoMovimiento::Gasto) {
-                                        edit_valor(
-                                            ui,
-                                            elemento,
-                                            &mut self.edit,
-                                            &mut self.cambiar,
-                                            &self.json_content.categorias,
-                                        );
-                                        continue;
-                                    }
-                                    if elemento.tipo == TipoMovimiento::Gasto {
-                                        tot -= elemento.monto;
-                                        f.show(ui, |ui: &mut egui::Ui| {
-                                            ui.label(
-                                                RichText::new(&elemento.fecha)
-                                                    .color(ui.visuals().strong_text_color()),
-                                            );
-                                            ui.horizontal(|ui| {
-                                                ui.label(
-                                                    RichText::new(format!("-{}", elemento.monto))
-                                                        .color(ui.ctx().style().visuals.error_fg_color),
-                                                );
-                                                ui.label(&elemento.description);
-                                                if ui.button("X").clicked() {
-                                                    remove = this as i32;
-                                                }
-                                                if ui.button("a").clicked() {
-                                                    self.edit =
-                                                        (this as i32, TipoMovimiento::Gasto);
-                                                }
-                                            });
-                                            ui.separator();
-                                        });
-                                    }
+                                } else {
+                                    draw_transaction_card(
+                                        ui,
+                                        elemento,
+                                        &mut remove,
+                                        this as i32,
+                                        false,
+                                        edit_state,
+                                        colores,
+                                    );
                                 }
-                                ui.separator();
-                            });
-                        });
-                        ui.separator()
-                    },
-                );
-            });
-            ui.vertical(|ui| {
-                ui.add(|ui: &mut egui::Ui| {
-                    ui.group(|ui| {
-                        for (this, elemento) in
-                            self.json_content.transacciones.iter_mut().enumerate()
-                        {
-                            let vals =
-                                array_to_color(self.json_content.colores[elemento.categoria]);
-                            let f = Frame::NONE
-                                .fill(faded(vals, ui))
-                                .corner_radius(CornerRadius::same(2));
-                            if self.edit == (this as i32, TipoMovimiento::Ingreso) {
-                                edit_valor(
-                                    ui,
-                                    elemento,
-                                    &mut self.edit,
-                                    &mut self.cambiar,
-                                    &self.json_content.categorias,
-                                );
-                                continue;
-                            }
-                            if elemento.tipo == TipoMovimiento::Ingreso {
-                                tot += elemento.monto;
-                                f.show(ui, |ui: &mut egui::Ui| {
-                                    ui.label(
-                                        RichText::new(&elemento.fecha)
-                                            .color(ui.visuals().strong_text_color()),
-                                    );
-                                    ui.horizontal(|ui| {
-                                        ui.label(
-                                            RichText::new(format!("+{}", elemento.monto))
-                                                .color(ui.ctx().style().visuals.selection.stroke.color),
-                                        );
-                                        ui.label(&elemento.description);
-                                        if ui.button("X").clicked() {
-                                            remove = this as i32;
-                                        }
-                                        if ui.button("a").clicked() {
-                                            self.edit = (this as i32, TipoMovimiento::Ingreso);
-                                        }
-                                    });
-                                    ui.separator();
-                                });
                             }
                         }
-                        ui.separator()
                     });
-                    ui.separator()
-                });
+            });
+
+            // Columna Ingresos
+            cols[1].vertical(|ui| {
+                ui.heading(RichText::new("📈 Ingresos").color(Color32::from_rgb(80, 200, 80)));
+                egui::ScrollArea::vertical()
+                    .id_salt("ingresos_scroll")
+                    .max_height(ui.available_height() - 30.0)
+                    .show(ui, |ui| {
+                        for (this, elemento) in transacciones.iter_mut().enumerate() {
+                            if elemento.tipo == TipoMovimiento::Ingreso {
+                                tot += elemento.monto;
+                                if *edit_state == (this as i32, TipoMovimiento::Ingreso) {
+                                    draw_edit_card(
+                                        ui,
+                                        elemento,
+                                        edit_state,
+                                        cambiar_ref,
+                                        categorias,
+                                    );
+                                } else {
+                                    draw_transaction_card(
+                                        ui,
+                                        elemento,
+                                        &mut remove,
+                                        this as i32,
+                                        true,
+                                        edit_state,
+                                        colores,
+                                    );
+                                }
+                            }
+                        }
+                    });
             });
         });
+
         if remove != -1 {
             self.json_content.transacciones.remove(remove as usize);
             self.update_categorias();
+            self.cambiar = true;
         }
         if self.cambiar {
             self.get_points();
+            self.update_categorias();
             self.cambiar = false;
         }
+
+        ui.separator();
         ui.horizontal(|ui| {
-            ui.label("Total:");
-            if tot > 0.0 {
-                ui.label(RichText::new(format!("{}", tot)).color(ui.ctx().style().visuals.selection.stroke.color));
+            ui.label(RichText::new("Balance Total:").size(16.0).strong());
+            let color = if tot >= 0.0 {
+                Color32::from_rgb(100, 220, 100)
             } else {
-                ui.label(RichText::new(format!("{}", tot)).color(ui.ctx().style().visuals.error_fg_color));
-            }
+                Color32::from_rgb(220, 80, 80)
+            };
+            ui.label(
+                RichText::new(format!("{:.2}", tot))
+                    .size(16.0)
+                    .strong()
+                    .color(color),
+            );
         });
     }
 
     pub fn save(&self) {
+        if self.path.is_empty() {
+            return;
+        }
         let file = String::from(&self.path);
-        let mut file2 = fs::File::create(file).unwrap();
-        let conts = serde_json::to_string(&self.json_content).unwrap();
-        file2.write_all(conts.as_bytes()).unwrap();
+        if let Ok(mut file2) = fs::File::create(file) {
+            if let Ok(conts) = serde_json::to_string_pretty(&self.json_content) {
+                let _ = file2.write_all(conts.as_bytes());
+            }
+        }
     }
 
     pub fn add_record(&mut self, ui: &mut egui::Ui) {
-        ui.group(|ui| {
-            ui.add_sized([ui.available_width() * 0.7, 10.0], |ui: &mut egui::Ui| {
-                ui.separator()
-            });
-            ui.label(RichText::new(&self.error).color(ui.ctx().style().visuals.error_fg_color));
-            ui.horizontal(|ui| {
-                egui::CollapsingHeader::new("Editar Fecha").show(ui, |ui| {
-                    ui.add(egui::TextEdit::singleline(&mut self.fecha));
-                });
-            });
+        ui.heading("Nuevo Registro");
 
-            ui.add_space(10.0);
-
-            ui.horizontal(|ui| {
-                ui.vertical(|ui| {
-                    ui.label("Amount");
-                    ui.add(egui::TextEdit::singleline(&mut self.amount));
-                });
-            });
-
-            ui.add_space(10.0);
-
-            egui::ComboBox::from_label("Seleccionar categoria")
-                .selected_text(&self.json_content.categorias[self.valor])
-                .show_ui(ui, |ui| {
-                    for (val, key) in self.json_content.categorias.iter().enumerate() {
-                        ui.selectable_value(&mut self.valor, val, key);
-                    }
-                });
-
-            ui.add_space(10.0);
-
+        Frame::group(ui.style()).inner_margin(8.0).show(ui, |ui| {
             ui.vertical(|ui| {
-                ui.label("Description");
-                ui.add(egui::TextEdit::multiline(&mut self.description));
+                if !self.error.is_empty() {
+                    ui.label(
+                        RichText::new(format!("⚠ {}", self.error))
+                            .color(ui.visuals().error_fg_color)
+                            .small(),
+                    );
+                    ui.add_space(4.0);
+                }
+
+                ui.horizontal(|ui| {
+                    ui.label("📅");
+                    ui.add(egui::TextEdit::singleline(&mut self.fecha).desired_width(90.0));
+
+                    ui.add_space(10.0);
+
+                    ui.label("💲");
+                    ui.add(
+                        egui::TextEdit::singleline(&mut self.amount)
+                            .desired_width(80.0)
+                            .hint_text("0.00"),
+                    );
+                });
+
+                ui.add_space(4.0);
+
+                egui::Grid::new("input_grid_compact")
+                    .num_columns(2)
+                    .spacing([8.0, 6.0])
+                    .show(ui, |ui| {
+                        ui.label("Categoría:");
+                        egui::ComboBox::from_id_salt("cat_select_new")
+                            .selected_text(
+                                self.json_content
+                                    .categorias
+                                    .get(self.valor)
+                                    .unwrap_or(&"?".to_string()),
+                            )
+                            .width(180.0)
+                            .show_ui(ui, |ui| {
+                                for (val, key) in self.json_content.categorias.iter().enumerate() {
+                                    ui.selectable_value(&mut self.valor, val, key);
+                                }
+                            });
+                        ui.end_row();
+
+                        ui.label("Nota:");
+                        ui.add(
+                            egui::TextEdit::singleline(&mut self.description)
+                                .hint_text("Opcional")
+                                .desired_width(180.0),
+                        );
+                        ui.end_row();
+                    });
+
+                ui.add_space(8.0);
+
+                ui.horizontal(|ui| {
+                    ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                        if ui.button(RichText::new("💾 Guardar").strong()).clicked() {
+                            self.process_new_record();
+                        }
+                    });
+                });
             });
-            if ui.button("Añadir registro").clicked() {
-                if self.fecha.is_empty() {
-                    self.error = String::from("Fecha Incompleta");
-                    return;
-                }
-                let mut val: f32;
-                match self.amount.parse::<f32>() {
-                    Ok(result) => val = result,
-                    Err(_) => {
-                        self.error = String::from("Valor no valido");
-                        return;
-                    }
-                }
+        });
+    }
+
+    fn process_new_record(&mut self) {
+        if self.fecha.is_empty() {
+            self.error = String::from("Falta la fecha");
+            return;
+        }
+        match self.amount.parse::<f32>() {
+            Ok(val) => {
                 let tipo = if val < 0.0 {
-                    val *= -1.0;
                     TipoMovimiento::Gasto
                 } else {
                     TipoMovimiento::Ingreso
@@ -510,196 +573,308 @@ impl IncomeGui {
                     tipo,
                     self.description.clone(),
                     self.valor,
-                    val,
+                    val.abs(),
                 ));
-                self.fecha = Local::now().format("%Y-%m-%d").to_string();
                 self.description = String::new();
                 self.amount = String::new();
                 self.error = String::new();
                 self.update_categorias();
                 self.get_points();
             }
-        });
+            Err(_) => self.error = String::from("El monto debe ser numérico"),
+        }
     }
 
     fn canvas(&mut self, ui: &mut egui::Ui) {
-        let f = Frame::NONE
-            .fill(ui.ctx().style().visuals.extreme_bg_color)
-            .corner_radius(CornerRadius::same(3));
-        f.show(ui, |ui| {
-            let available_height =
-                ((ui.available_height() - (ui.available_height() * 0.2)) * 1.1) / 2.;
-            let available_width = (ui.available_width() * 1.05) / 2.; //y==400
-            let radio = available_height / 2.;
-            let (_, painter) = ui.allocate_painter(
-                Vec2::new(
-                    ui.available_width(),
-                    ui.available_height() - (ui.available_height() * 0.3),
-                ),
-                Sense::click(),
-            );
-            let mut ulti = 0;
-            let diferencia = (available_width) * 0.6;
-            for i in self.ingresos_cat.keys() {
-                let color = array_to_color(self.json_content.colores[*i]);
-                let max =
-                    ((self.ingresos_cat.get(i).unwrap() * 360.) / self.ingresos_cat_tot) as i32;
-                let result =
-                    dibujar_arco(ulti, max + ulti, available_width, available_height, radio);
-                let arco = epaint::PathShape {
-                    points: result,
-                    stroke: PathStroke::new(2., color),
-                    closed: false,
-                    fill: color,
-                };
-                painter.add(arco);
-                ulti += max;
-            }
-            let mut ulti = 0;
-            for i in self.gastos_cat.keys() {
-                let color = array_to_color(self.json_content.colores[*i]);
-                let max = ((self.gastos_cat.get(i).unwrap() * 360.) / self.gastos_cat_tot) as i32;
-                let result = dibujar_arco(
-                    ulti,
-                    max + ulti,
-                    available_width + diferencia,
-                    available_height,
-                    radio,
-                );
-                let arco = epaint::PathShape {
-                    points: result,
-                    stroke: PathStroke::new(2., color),
-                    closed: false,
-                    fill: color,
-                };
-                painter.add(arco);
-                ulti += max;
-            }
-        });
-        let r = ScrollArea::vertical();
-        r.show(ui, |ui| {
-            ui.horizontal(|ui| {
-                ui.add_sized(
-                    [ui.available_width() * 0.5, ui.available_height()],
-                    |ui: &mut egui::Ui| {
-                        ui.vertical(|ui| {
-                            ui.heading("Ingresos");
-                            for i in self.ingresos_cat.keys() {
-                                let max = ((self.ingresos_cat.get(i).unwrap() * 100.)
-                                    / self.ingresos_cat_tot)
-                                    as i32;
-                                ui.label(format!("{}: {}%", self.json_content.categorias[*i], max));
+        ui.heading("Distribución por Categorías");
+
+        let available_size = ui.available_size();
+        let height = available_size.y * 0.6;
+        let width = available_size.x / 2.0; // Dividimos el ancho en 2
+
+        ui.horizontal(|ui| {
+            ui.allocate_ui(Vec2::new(width, available_size.y), |ui| {
+                ui.vertical(|ui| {
+                    ui.label(RichText::new("Ingresos").strong().color(Color32::GREEN));
+                    let (_, painter) =
+                        ui.allocate_painter(Vec2::new(width * 0.9, height), Sense::hover());
+                    let rect = painter.clip_rect();
+                    let center = rect.center();
+                    let radius = rect.height().min(rect.width()) / 2.5;
+
+                    draw_donut(
+                        &painter,
+                        center,
+                        radius,
+                        &self.ingresos_cat,
+                        self.ingresos_cat_tot,
+                        &self.json_content.colores,
+                    );
+
+                    ui.add_space(10.0);
+
+                    egui::ScrollArea::vertical()
+                        .id_salt("ingresos_scroll")
+                        .max_height(200.0)
+                        .show(ui, |ui| {
+                            for (cat_idx, monto) in &self.ingresos_cat {
+                                let pct = if self.ingresos_cat_tot > 0.0 {
+                                    (monto * 100.0) / self.ingresos_cat_tot
+                                } else {
+                                    0.0
+                                };
+                                ui.label(format!(
+                                    "{}: {:.1}% (${})",
+                                    self.json_content.categorias[*cat_idx], pct, monto
+                                ));
                             }
                         });
-                        ui.separator()
-                    },
-                );
-                ui.add_sized(
-                    [ui.available_width(), ui.available_height()],
-                    |ui: &mut egui::Ui| {
-                        ui.vertical(|ui| {
-                            ui.heading("Gastos");
-                            for i in self.gastos_cat.keys() {
-                                let max = ((self.gastos_cat.get(i).unwrap() * 100.)
-                                    / self.gastos_cat_tot)
-                                    as i32;
-                                ui.label(format!("{}: {}%", self.json_content.categorias[*i], max));
+                });
+            });
+
+            ui.allocate_ui(Vec2::new(width, available_size.y), |ui| {
+                ui.vertical(|ui| {
+                    ui.label(RichText::new("Gastos").strong().color(Color32::RED));
+                    let (_, painter) =
+                        ui.allocate_painter(Vec2::new(width * 0.9, height), Sense::hover());
+                    let rect = painter.clip_rect();
+                    let center = rect.center();
+                    let radius = rect.height().min(rect.width()) / 2.5;
+
+                    draw_donut(
+                        &painter,
+                        center,
+                        radius,
+                        &self.gastos_cat,
+                        self.gastos_cat_tot,
+                        &self.json_content.colores,
+                    );
+
+                    ui.add_space(10.0);
+
+                    egui::ScrollArea::vertical()
+                        .id_salt("gastos_scroll")
+                        .max_height(200.0)
+                        .show(ui, |ui| {
+                            for (cat_idx, monto) in &self.gastos_cat {
+                                let pct = if self.gastos_cat_tot > 0.0 {
+                                    (monto * 100.0) / self.gastos_cat_tot
+                                } else {
+                                    0.0
+                                };
+                                ui.label(format!(
+                                    "{}: {:.1}% (${})",
+                                    self.json_content.categorias[*cat_idx], pct, monto
+                                ));
                             }
                         });
-                        ui.separator()
-                    },
-                );
+                });
             });
         });
     }
 
     fn grafica(&mut self, ui: &mut egui::Ui) {
         if self.ver_gra == GraficaVer::Grafica {
+            ui.horizontal(|ui| {
+                ui.heading("Evolución del Balance");
+                ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                    ui.label(RichText::new(format!("Máximo Flujo: {:.2}", self.max)).small());
+                });
+            });
+
             let mov_sort = self.mov_sort.clone();
-            let g = move |x: GridMark, _: &RangeInclusive<f64>| -> String {
-                mov_sort[x.value as usize].clone()
+            let formatter = move |x: GridMark, _: &RangeInclusive<f64>| -> String {
+                if x.value >= 0.0 && (x.value as usize) < mov_sort.len() {
+                    mov_sort[x.value as usize].clone()
+                } else {
+                    String::new()
+                }
             };
-            let plot = egui_plot::Plot::new("items_demo")
+
+            let plot = egui_plot::Plot::new("financial_plot")
                 .show_x(false)
-                .show_y(false)
+                .show_y(true)
                 .clamp_grid(true)
-                .auto_bounds(true)
-                .x_axis_formatter(g);
+                .auto_bounds(egui::Vec2b::TRUE)
+                .x_axis_formatter(formatter)
+                .legend(egui_plot::Legend::default());
+
             let p = PlotPoints::new(self.points.clone());
             let l = PlotPoints::new(self.lines.clone());
-            let p2 = Points::new("", p).shape(MarkerShape::Circle).radius(5.);
-            let line = Line::new("", l).fill(0.);
+
             plot.show(ui, |plot_ui| {
-                plot_ui.line(line);
-                plot_ui.points(p2);
-                let pp = plot_ui.pointer_coordinate();
-                for (j, i) in self.points.iter().enumerate() {
-                    //match pp{
+                plot_ui.line(Line::new("Balance", l).width(2.0));
+                plot_ui.points(
+                    Points::new("Puntos", p)
+                        .shape(MarkerShape::Circle)
+                        .radius(5.0),
+                );
+
+                if plot_ui.response().clicked() {
+                    let pp = plot_ui.pointer_coordinate();
                     if let Some(p) = pp {
-                        if plot_ui.response().clicked() {
-                            let x = i[0].max(p.x) - i[0].min(p.x);
-                            let y = i[1].max(p.y) - i[1].min(p.y);
-                            if x < 0.1 && y < (self.max * 0.05) {
+                        let idx = p.x.round() as usize;
+                        if idx < self.points.len() {
+                            let val = self.points[idx][1];
+                            if (p.y - val).abs() < (self.max * 0.1).max(1.0) {
                                 self.ver_gra = GraficaVer::Elemento;
-                                self.ver_gra_i = j;
+                                self.ver_gra_i = idx;
                             }
                         }
                     }
-                    //}
                 }
             });
+            ui.label(
+                RichText::new("Haz clic en un punto para ver detalles del día.")
+                    .weak()
+                    .small(),
+            );
         } else {
-            let mut total = 0.0;
-            if ui.button("Regresar").clicked() {
+            if ui.button("⬅ Regresar a la Gráfica").clicked() {
                 self.ver_gra = GraficaVer::Grafica;
             }
-            ui.label(
-                RichText::from(&self.mov_sort[self.ver_gra_i])
-                    .color(ui.ctx().style().visuals.override_text_color.unwrap_or(Color32::WHITE))
-                    .size(30.),
-            );
-            ui.add_space(20.);
-            let scroll = ScrollArea::vertical().max_height(ui.available_height() * 0.8);
-            scroll.show(ui, |ui| {
-                for j in &self.json_content.transacciones {
-                    let vals = array_to_color(self.json_content.colores[j.categoria]);
-                    let f = Frame::NONE
-                        .fill(faded(vals, ui))
-                        .corner_radius(CornerRadius::same(2));
-                    if j.fecha == self.mov_sort[self.ver_gra_i] {
-                        f.show(ui, |ui: &mut Ui| {
-                            ui.horizontal(|ui| {
-                                ui.vertical(|ui| {
-                                    ui.heading(&self.json_content.categorias[j.categoria]);
-                                    ui.label(&j.description);
-                                });
-                                ui.add_space(30.);
-                                ui.vertical(|ui| {
-                                    ui.add_space(ui.available_height() * 0.4);
-                                    if j.tipo == TipoMovimiento::Gasto {
-                                        ui.heading(
-                                            RichText::from(format!("-{}", &j.monto))
-                                                .color(ui.ctx().style().visuals.error_fg_color),
-                                        );
-                                        total -= j.monto;
-                                    } else {
-                                        ui.heading(
-                                            RichText::from(format!("{}", &j.monto))
-                                                .color(ui.ctx().style().visuals.selection.stroke.color),
-                                        );
-                                        total += j.monto;
-                                    }
-                                });
-                            });
-                            ui.separator();
-                        });
-                    };
-                }
-            });
             ui.separator();
-            ui.label(RichText::from(format!("Total: {}", total)));
+
+            if self.ver_gra_i < self.mov_sort.len() {
+                let fecha_actual = &self.mov_sort[self.ver_gra_i];
+                ui.heading(format!("Detalles: {}", fecha_actual));
+
+                let mut daily_balance = 0.0;
+
+                egui::ScrollArea::vertical().show(ui, |ui| {
+                    for j in &self.json_content.transacciones {
+                        if &j.fecha == fecha_actual {
+                            let is_income = j.tipo == TipoMovimiento::Ingreso;
+                            let color = if is_income {
+                                Color32::GREEN
+                            } else {
+                                Color32::RED
+                            };
+                            let sign = if is_income { "+" } else { "-" };
+
+                            if is_income {
+                                daily_balance += j.monto;
+                            } else {
+                                daily_balance -= j.monto;
+                            }
+
+                            Frame::group(ui.style()).show(ui, |ui| {
+                                ui.horizontal(|ui| {
+                                    ui.label(
+                                        RichText::new(&self.json_content.categorias[j.categoria])
+                                            .strong(),
+                                    );
+                                    ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                                        ui.label(
+                                            RichText::new(format!("{}{}", sign, j.monto))
+                                                .color(color)
+                                                .strong()
+                                                .size(16.0),
+                                        );
+                                    });
+                                });
+                                ui.label(&j.description);
+                            });
+                            ui.add_space(5.0);
+                        }
+                    }
+                });
+                ui.separator();
+                ui.label(
+                    RichText::new(format!("Balance del día: {:.2}", daily_balance))
+                        .strong()
+                        .size(18.0),
+                );
+            }
         }
     }
+}
+
+fn draw_transaction_card(
+    ui: &mut Ui,
+    mov: &Movimiento,
+    remove: &mut i32,
+    idx: i32,
+    is_income: bool,
+    edit_state: &mut (i32, TipoMovimiento),
+    colores: &[[f32; 3]],
+) {
+    let cat_color = array_to_color(
+        colores
+            .get(mov.categoria)
+            .copied()
+            .unwrap_or([0.5, 0.5, 0.5]),
+    );
+    let bg_color = faded(cat_color, ui);
+
+    Frame::NONE
+        .fill(bg_color)
+        .corner_radius(6.0)
+        .stroke(Stroke::new(1.0, cat_color.linear_multiply(0.3)))
+        .inner_margin(6.0)
+        .show(ui, |ui| {
+            ui.horizontal(|ui| {
+                ui.label(RichText::new(&mov.fecha).size(10.0).weak());
+                ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                    let amount_color = if is_income {
+                        ui.visuals().selection.stroke.color
+                    } else {
+                        ui.visuals().error_fg_color
+                    };
+                    ui.label(
+                        RichText::new(format!(
+                            "{}{:.2}",
+                            if is_income { "+" } else { "-" },
+                            mov.monto
+                        ))
+                        .color(amount_color)
+                        .strong(),
+                    );
+                });
+            });
+
+            ui.horizontal(|ui| {
+                let (rect, _) = ui.allocate_exact_size(Vec2::new(8.0, 8.0), Sense::hover());
+                ui.painter().circle_filled(rect.center(), 4.0, cat_color);
+
+                ui.label(RichText::new(&mov.description).size(13.0));
+
+                ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                    if ui.small_button("🗑").on_hover_text("Eliminar").clicked() {
+                        *remove = idx;
+                    }
+                    if ui.small_button("✏").on_hover_text("Editar").clicked() {
+                        *edit_state = (
+                            idx,
+                            if is_income {
+                                TipoMovimiento::Ingreso
+                            } else {
+                                TipoMovimiento::Gasto
+                            },
+                        );
+                    }
+                });
+            });
+        });
+    ui.add_space(4.0);
+}
+
+fn draw_edit_card(
+    ui: &mut Ui,
+    mov: &mut Movimiento,
+    edit_state: &mut (i32, TipoMovimiento),
+    cambiar: &mut bool,
+    categorias: &[String],
+) {
+    Frame::group(ui.style()).show(ui, |ui| {
+        ui.label(RichText::new("Editando...").weak().small());
+        let mut edit_flag = false;
+        edit_valor(ui, mov, edit_state, &mut edit_flag, categorias);
+        if edit_flag {
+            *cambiar = true;
+        }
+    });
+    ui.add_space(4.0);
 }
 
 fn edit_valor(
@@ -709,74 +884,116 @@ fn edit_valor(
     p: &mut bool,
     categorias_i: &[String],
 ) {
-    let mut g = format!("{}", mov.monto);
-    if ui.text_edit_singleline(&mut mov.description).changed()
-        || ui.text_edit_singleline(&mut mov.fecha).changed()
-        || ui.text_edit_singleline(&mut g).changed()
-    {
-        match g.parse::<f32>() {
-            Ok(result) => mov.monto = result,
-            Err(_) => {
-                ui.colored_label(ui.ctx().style().visuals.error_fg_color, "Valor no valido");
+    ui.horizontal(|ui| {
+        ui.label("📅");
+        if ui
+            .add(egui::TextEdit::singleline(&mut mov.fecha).desired_width(90.0))
+            .changed()
+        {
+            *p = true;
+        }
+
+        ui.add_space(10.0);
+
+        ui.label("💲");
+        let mut g = format!("{}", mov.monto);
+        if ui
+            .add(egui::TextEdit::singleline(&mut g).desired_width(70.0))
+            .changed()
+        {
+            if let Ok(result) = g.parse::<f32>() {
+                mov.monto = result;
+                *p = true;
             }
         }
-        *p = true;
-    }
-    egui::ComboBox::from_label("Seleccionar categoria")
-        .selected_text(&categorias_i[mov.categoria])
-        .show_ui(ui, |ui| {
-            for (val, key) in categorias_i.iter().enumerate() {
-                ui.selectable_value(&mut mov.categoria, val, key);
+    });
+
+    ui.horizontal(|ui| {
+        egui::ComboBox::from_id_salt("edit_combo")
+            .selected_text(categorias_i.get(mov.categoria).unwrap_or(&"?".to_string()))
+            .width(100.0)
+            .show_ui(ui, |ui| {
+                for (val, key) in categorias_i.iter().enumerate() {
+                    if ui.selectable_value(&mut mov.categoria, val, key).changed() {
+                        *p = true;
+                    }
+                }
+            });
+
+        if ui
+            .add(
+                egui::TextEdit::singleline(&mut mov.description)
+                    .hint_text("Desc")
+                    .desired_width(100.0),
+            )
+            .changed()
+        {
+            *p = true;
+        }
+
+        ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+            if ui.button("✅").on_hover_text("Guardar cambios").clicked() {
+                *edit = (-1, TipoMovimiento::Null);
+                *p = true;
             }
         });
-    if ui.button("Ok").clicked() {
-        *edit = (-1, TipoMovimiento::Null);
-        *p = true;
-    }
+    });
 }
 
-//fn porcion(ang1:i32,ang2:i32,cx:f32,cy:f32,radio:f32)->Vec<Pos2>{
-//    //Pos2::new(available_width/2.,available_height/2.) Centro
-//    let mut v = Vec::new();
-//    let var = (std::f32::consts::PI *2.0)/360.;
-//    let mut a = var* ang1 as f32;
-//    let x:f32= radio * a.cos()+cx;
-//    let y:f32= radio * a.sin()+cy;
-//
-//    a = var* ang2 as f32;
-//    let x2:f32= radio * a.cos()+cx;
-//    let y2:f32= radio * a.sin()+cy;
-//    v.push(Pos2::new(x,y));
-//    v.push(Pos2::new(cx,cy));
-//    v.push(Pos2::new(x2,y2));
-//    v
-//}
-
-fn dibujar_arco(ang1: i32, ang2: i32, cx: f32, cy: f32, radio: f32) -> Vec<Pos2> {
-    let mut vect = Vec::new();
-    let var = (std::f32::consts::PI * 2.0) / 360.;
-    vect.push(Pos2::new(cx, cy));
-    for i in (ang1 - 1)..=ang2 {
-        let a = var * i as f32;
-        let x: f32 = radio * a.cos() + cx;
-        let y: f32 = radio * a.sin() + cy;
-        vect.push(Pos2::new(x, y));
+fn draw_donut(
+    painter: &Painter,
+    center: Pos2,
+    radius: f32,
+    data: &HashMap<usize, f32>,
+    total: f32,
+    colors: &[[f32; 3]],
+) {
+    if total == 0.0 {
+        painter.circle_stroke(center, radius, Stroke::new(2.0, Color32::GRAY));
+        painter.text(
+            center,
+            Align2::CENTER_CENTER,
+            "Sin datos",
+            FontId::default(),
+            Color32::GRAY,
+        );
+        return;
     }
-    vect.push(Pos2::new(cx, cy));
-    vect
+
+    let thickness = radius * 0.4;
+    let mut start_angle = 0.0f32;
+
+    for (cat_idx, value) in data {
+        let fraction = value / total;
+        let sweep_angle = fraction * std::f32::consts::TAU;
+        let color = array_to_color(colors.get(*cat_idx).copied().unwrap_or([0.5, 0.5, 0.5]));
+
+        let stroke = Stroke::new(thickness, color);
+        let steps = (sweep_angle.abs() * 20.0).max(4.0) as usize;
+        let mut points = Vec::with_capacity(steps);
+        for i in 0..=steps {
+            let angle = start_angle + (sweep_angle * i as f32 / steps as f32);
+            points.push(center + Vec2::new(angle.cos(), angle.sin()) * (radius - thickness / 2.0));
+        }
+
+        painter.add(epaint::PathShape::line(points, stroke));
+        start_angle += sweep_angle;
+    }
 }
 
 fn array_to_color(arr: [f32; 3]) -> Color32 {
     let r = (255. * arr[0]) as u8;
     let g = (255. * arr[1]) as u8;
     let b = (255. * arr[2]) as u8;
-
     Color32::from_rgb(r, g, b)
 }
 
 fn faded(color: Color32, ui: &egui::Ui) -> Color32 {
     let dark_mode = ui.visuals().dark_mode;
-    let faded_color = ui.visuals().window_fill();
-    let t = if dark_mode { 0.95 } else { 0.8 };
-    egui::lerp(Rgba::from(color)..=Rgba::from(faded_color), t).into()
+    let bg = ui.visuals().window_fill();
+    let t = if dark_mode { 0.15 } else { 0.2 };
+    let r = (color.r() as f32 * t + bg.r() as f32 * (1.0 - t)) as u8;
+    let g = (color.g() as f32 * t + bg.g() as f32 * (1.0 - t)) as u8;
+    let b = (color.b() as f32 * t + bg.b() as f32 * (1.0 - t)) as u8;
+    Color32::from_rgb(r, g, b)
 }
