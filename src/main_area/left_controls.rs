@@ -3,24 +3,18 @@ pub mod enums;
 use crate::screens;
 use crate::search;
 use crate::MShape;
-use crate::tabs;
-use serde::{Deserialize, Serialize};
-use std::io::Write;
-use std::time::SystemTime;
 
+use std::time::SystemTime;
 use eframe::egui::{
     Align, Button, Context, Frame, Layout, RichText, ScrollArea, SidePanel, Style, TopBottomPanel,
 };
 use egui::Vec2;
 use egui::{Id, Popup, PopupCloseBehavior};
-use json::JsonValue;
-
 use chrono::prelude::*;
-use egui::{text::LayoutJob, Color32, TextFormat, Widget};
+use egui::{text::LayoutJob, Color32, TextFormat, Widget}; // `Widget` is not used directly
 use std::fs;
 use std::fs::File;
 use std::path::Path;
-use yaml_rust::{YamlEmitter, YamlLoader};
 
 use crate::main_area::content_enum::Content;
 use crate::main_area::file_options::file_options;
@@ -235,7 +229,7 @@ impl LeftControls {
                     available_size.y
                 };
 
-                let (_, dropped_payload) = ui.dnd_drop_zone::<String, ()>(Frame::none(), |ui| {
+                let (_, dropped_payload) = ui.dnd_drop_zone::<String, ()>(Frame::NONE, |ui| {
                     ui.set_min_size(Vec2::new(ui.available_width(), min_height));
                 });
 
@@ -463,7 +457,7 @@ impl LeftControls {
                     let payload = file_location.clone();
 
                     let dnd_response = ui.dnd_drag_source(item_id, payload, |ui| {
-                        let label = egui::SelectableLabel::new(is_selected, file_name)
+                        let label = egui::Button::selectable(is_selected, file_name)
                             .sense(egui::Sense::hover());
                         ui.add(label)
                     });

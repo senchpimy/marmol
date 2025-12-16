@@ -1,3 +1,4 @@
+use crate::graph_state::Graph;
 use egui::*;
 use std::fmt;
 use std::fs;
@@ -11,7 +12,8 @@ mod configuraciones;
 mod excalidraw;
 mod files;
 mod format;
-mod graph;
+mod graph_state;
+mod graph_ui;
 mod income;
 mod main_area;
 mod screens;
@@ -87,7 +89,7 @@ struct Marmol {
     tabs: tabs::Tabs,
 
     new_file_type: NewFileType,
-    marker: graph::Graph,
+    marker: Graph,
 }
 
 impl Marmol {
@@ -137,13 +139,13 @@ impl Marmol {
                 btn_size: 20.,
             },
             switcher: switcher::QuickSwitcher::default(),
-            tabs: tabs::Tabs::new_from_dock_state(state.dock_state), // Initialize tabs from loaded state
+            tabs: tabs::Tabs::new_from_dock_state(state.dock_state),
             center_size: state.center_size,
             center_size_remain: (1.0 - state.center_size) / 2.0,
-            font_size: 12.0, // This is loaded separately
-            marker: graph::Graph::new(&state.vault),
+            font_size: 12.0,
+            marker: Graph::new(&state.vault),
             new_file_str: String::new(),
-            content: main_area::content_enum::Content::View, // Start with View content for loaded files
+            content: main_area::content_enum::Content::View,
             left_controls: main_area::left_controls::LeftControls::default(),
             new_vault_folder: String::from(""),
             new_vault_folder_err: String::from(""),
@@ -181,7 +183,7 @@ impl Default for Marmol {
             center_size: 0.8,
             center_size_remain: 0.1,
             font_size: 12.0,
-            marker: graph::Graph::new(""), // Default empty vault
+            marker: Graph::new(""), // Default empty vault
             new_file_str: String::new(),
             content: main_area::content_enum::Content::Blank, // Default to blank content
             left_controls: main_area::left_controls::LeftControls::default(),

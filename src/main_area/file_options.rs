@@ -3,8 +3,7 @@ use std::io::Write;
 use std::path::Path;
 use std::fs::File;
 
-use eframe::egui::{Button, Color32, Popup, PopupCloseBehavior, RichText};
-use egui::Id;
+use eframe::egui::{Button, Color32, RichText};
 use json::{object, JsonValue};
 
 pub fn file_options(

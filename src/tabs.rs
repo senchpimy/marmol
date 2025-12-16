@@ -21,7 +21,7 @@ pub enum TabContent {
     Graph {
         vault_path: String,
         #[serde(skip)]
-        state: Option<Box<crate::graph::Graph>>,
+        state: Option<Box<crate::graph_state::Graph>>,
     },
     Image(String),
     Income {
@@ -170,11 +170,19 @@ impl TabViewer for MTabViewer<'_> {
         match &mut tab.content {
             TabContent::Graph { vault_path, state } => {
                 if state.is_none() {
-                    *state = Some(Box::new(crate::graph::Graph::new(vault_path)));
+                    *state = Some(Box::new(crate::graph_state::Graph::new(vault_path)));
                 }
 
                 if let Some(graph) = state {
-                    graph.ui(ui, self.current_file, self.content, vault_path);
+                    //graph.ui(ui, self.current_file, self.content, vault_path);
+
+                    crate::graph_ui::draw_ui(
+                        graph,
+                        ui,
+                        self.current_file,
+                        self.content,
+                        vault_path,
+                    );
                 }
             }
             TabContent::Excalidraw { path, gui } => {
@@ -353,7 +361,7 @@ impl Tabs {
     pub fn ui(
         &mut self,
         ui: &mut Ui,
-        _marker: &mut crate::graph::Graph,
+        _marker: &mut crate::graph_state::Graph,
         current_file: &mut String,
         content: &mut Content,
         vault: &str,
