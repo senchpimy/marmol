@@ -1,4 +1,5 @@
 use crate::graph_state::Graph;
+use crate::iconize::IconSelector;
 use egui::*;
 use std::fmt;
 use std::fs;
@@ -9,11 +10,13 @@ use std::path::Path;
 extern crate json;
 
 mod configuraciones;
+mod emojis;
 mod excalidraw;
 mod files;
 mod format;
 mod graph_state;
 mod graph_ui;
+mod iconize;
 mod income;
 mod main_area;
 mod screens;
@@ -90,6 +93,8 @@ struct Marmol {
 
     new_file_type: NewFileType,
     marker: Graph,
+    enable_icon_folder: bool,
+    icon_selector: IconSelector,
 }
 
 impl Marmol {
@@ -99,30 +104,10 @@ impl Marmol {
         crate::theme::load_and_apply_theme(&cc.egui_ctx);
 
         // Load the full program state
-        let (
-            vault_var,
-            vault_vec_var,
-            current_file_opt,
-            config_dir_path,
-            window,
-            left_coll,
-            center_size,
-            sort_files,
-            dock_state,
-        ) = configuraciones::load_program_state();
+        let (initial_state, config_dir_path) = configuraciones::load_program_state();
 
-        let initial_state = configuraciones::MarmolProgramState {
-            vault: vault_var,
-            vault_vec: vault_vec_var,
-            current_file: current_file_opt,
-            initial_screen: window,
-            collapsed_left: left_coll,
-            center_size,
-            sort_files,
-            dock_state,
-        };
-
-                    let mut app = Self::from_program_state(initial_state, &cc.egui_ctx);        app.font_size = font_size; // Set font_size after loading state
+        let mut app = Self::from_program_state(initial_state, &cc.egui_ctx);
+        app.font_size = font_size; // Set font_size after loading state
         app.config_path = config_dir_path; // Set config_path after loading state
 
         app
@@ -164,6 +149,8 @@ impl Marmol {
             left_collpased: state.collapsed_left,
             vault_changed: false,
             sort_files: state.sort_files,
+            enable_icon_folder: state.enable_icon_folder,
+            icon_selector: IconSelector::default(),
         }
     }
 }
@@ -203,6 +190,8 @@ impl Default for Marmol {
             left_collpased: true,
             vault_changed: false,
             sort_files: false,
+            enable_icon_folder: false,
+            icon_selector: IconSelector::default(),
         }
     }
 }
@@ -224,6 +213,9 @@ impl eframe::App for Marmol {
             if ctx.input(|i| i.modifiers.command && i.key_pressed(egui::Key::O)) {
                 self.switcher.open(&self.vault);
             }
+
+            self.icon_selector
+                .ui(ctx, &self.vault, &mut self.left_controls.icon_manager);
             //Main screen
             self.left_controls.left_side_settings(
                 ctx,
@@ -243,6 +235,8 @@ impl eframe::App for Marmol {
                 &mut self.current_file,
                 &self.sort_files,
                 &self.window_size,
+                self.enable_icon_folder,
+                &mut self.icon_selector,
             );
             CentralPanel::default().show(ctx, |ui| {
                 if self.prev_current_file != self.current_file {
@@ -292,6 +286,8 @@ impl eframe::App for Marmol {
                 &mut self.center_size,
                 &mut self.center_size_remain,
                 &mut self.sort_files,
+                &mut self.enable_icon_folder,
+                &mut self.left_controls.icon_manager,
                 &self.window_size,
             );
             if self.vault_changed {
@@ -312,7 +308,6 @@ impl eframe::App for Marmol {
             height: rect.height(),
             btn_size,
         };
-
     }
 
     fn on_exit(&mut self, _gl: Option<&eframe::glow::Context>) {
@@ -325,6 +320,7 @@ impl eframe::App for Marmol {
             center_size: self.center_size,
             sort_files: self.sort_files,
             dock_state: self.tabs.dock_state().clone(),
+            enable_icon_folder: self.enable_icon_folder,
         };
         configuraciones::save_program_state(&state);
 
@@ -362,7 +358,9 @@ impl Marmol {
         } else {
             Path::new(&path)
         };
-        ui.label(RichText::new(&self.create_file_error).color(ui.ctx().style().visuals.error_fg_color));
+        ui.label(
+            RichText::new(&self.create_file_error).color(ui.ctx().style().visuals.error_fg_color),
+        );
         if new_file.exists() {
             self.create_file_error = String::from("File already exist");
         } else {

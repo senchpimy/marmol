@@ -1,7 +1,7 @@
+use crate::iconize::IconManager;
 use serde::{Deserialize, Serialize};
 
 use crate::main_area::content_enum::Content;
-//use crate::toggle_switch;
 use crate::MShape;
 use eframe::egui::{Button, CentralPanel, FontId, RichText};
 
@@ -32,13 +32,12 @@ pub fn default(
         ui.with_layout(egui::Layout::top_down(egui::Align::Center), |ui| {
             let button_width = window_size.width * 0.5;
             let button_height = 50.0;
-            ui.add_space(50.0); // Reduced space to make room for the image
+            ui.add_space(50.0);
 
-            // Add the SVG image
             let image = egui::Image::new(egui::include_image!("../logo/cubov2.svg"))
-                .fit_to_exact_size(egui::vec2(150.0, 150.0)); // Adjust size as needed
+                .fit_to_exact_size(egui::vec2(150.0, 150.0));
             ui.add(image);
-            ui.add_space(20.0); // Space between image and title
+            ui.add_space(20.0);
 
             ui.label(text);
             ui.add_space(100.0);
@@ -92,7 +91,7 @@ pub fn default(
             if ui
                 .add_sized(
                     [button_width, button_height],
-                    egui::Button::new("configuration"),
+                    egui::Button::new("Configuration"),
                 )
                 .clicked()
             {
@@ -102,7 +101,6 @@ pub fn default(
     });
 }
 
-/// Configuration screen
 pub fn configuracion(
     ctx: &egui::Context,
     prev_window: &mut Screen,
@@ -119,6 +117,8 @@ pub fn configuracion(
     center_size: &mut f32,
     center_size_remain: &mut f32,
     sort_files: &mut bool,
+    enable_icon_folder: &mut bool,  // Este parámetro se usa ahora
+    icon_manager: &mut IconManager, // AGREGAR ESTO en los argumentos de la función
     _window_size: &MShape,
 ) {
     CentralPanel::default().show(ctx, |ui| {
@@ -127,10 +127,8 @@ pub fn configuracion(
         let button_size = [button_width, button_height];
 
         ui.with_layout(egui::Layout::top_down(egui::Align::Center), |ui| {
-            // Title
             ui.heading("Configuration");
 
-            // Vault Management
             vault_management(
                 ui,
                 vaults,
@@ -144,7 +142,6 @@ pub fn configuracion(
                 button_size,
             );
 
-            // Appearance Settings
             appearance_settings(
                 ui,
                 ctx,
@@ -152,13 +149,13 @@ pub fn configuracion(
                 center_size,
                 center_size_remain,
                 sort_files,
+                enable_icon_folder, // Pasamos el booleano aquí
+                icon_manager,       // Pasar manager
                 button_size,
             );
 
-            // Server Settings
             server_settings(ui, current_window, button_size);
 
-            // Return Button
             ui.add_space(30.0);
             if ui
                 .add_sized(button_size, egui::Button::new("Return"))
@@ -170,7 +167,6 @@ pub fn configuracion(
     });
 }
 
-/// Vault management section
 fn vault_management(
     ui: &mut egui::Ui,
     vaults: &mut Vec<String>,
@@ -184,7 +180,6 @@ fn vault_management(
     button_size: [f32; 2],
 ) {
     egui::CollapsingHeader::new(RichText::new("Vaults").strong()).show(ui, |ui| {
-        // Create a new vault
         create_new_vault(
             ui,
             nw_vault_str,
@@ -195,11 +190,7 @@ fn vault_management(
             vaults,
             button_size,
         );
-
-        // Manage existing vaults
         manage_existing_vaults(ui, vaults, vault, vault_changed, button_size);
-
-        // Add an existing vault
         add_existing_vault(ui, vaults, vault, button_size);
     });
 }
@@ -317,7 +308,6 @@ fn add_existing_vault(
     }
 }
 
-/// Appearance settings section
 fn appearance_settings(
     ui: &mut egui::Ui,
     ctx: &egui::Context,
@@ -325,31 +315,89 @@ fn appearance_settings(
     center_size: &mut f32,
     center_size_remain: &mut f32,
     sort_files: &mut bool,
-    button_size: [f32; 2],
+    enable_icon_folder: &mut bool,
+    icon_manager: &mut IconManager,
+    _button_size: [f32; 2],
 ) {
     ui.add_space(10.0);
     egui::CollapsingHeader::new(RichText::new("Appearance").strong()).show(ui, |ui| {
-        // Theme selection
-        if ui
-            .add_sized(button_size, egui::Button::new("Select theme"))
-            .clicked()
-        {}
-        ui.add_space(10.0);
-
-        // File sorting
         ui.checkbox(sort_files, "Show files sorted");
-        ui.add_space(10.0);
+        ui.add_space(5.0);
 
-        // Line length
+        ui.separator();
+        ui.checkbox(enable_icon_folder, "Enable Obsidian Icon Folder");
+
+        if *enable_icon_folder {
+            ui.indent("icons_settings", |ui| {
+                let s = &mut icon_manager.settings;
+
+                ui.label(RichText::new("Icon Folder Settings").strong());
+
+                ui.horizontal(|ui| {
+                    ui.label("Icon Packs Path:");
+                    ui.text_edit_singleline(&mut s.icon_packs_path);
+                });
+                ui.add(egui::Slider::new(&mut s.font_size, 8.0..=32.0).text("Icon Font Size"));
+
+                ui.collapsing("Visibility & Position", |ui| {
+                    ui.checkbox(&mut s.icon_in_tabs_enabled, "Icon in Tabs");
+                    ui.checkbox(&mut s.icon_in_title_enabled, "Icon in Title");
+                    if s.icon_in_title_enabled {
+                        egui::ComboBox::from_label("Position")
+                            .selected_text(&s.icon_in_title_position)
+                            .show_ui(ui, |ui| {
+                                ui.selectable_value(
+                                    &mut s.icon_in_title_position,
+                                    "above".to_string(),
+                                    "Above",
+                                );
+                                ui.selectable_value(
+                                    &mut s.icon_in_title_position,
+                                    "inline".to_string(),
+                                    "Inline",
+                                );
+                            });
+                    }
+                    ui.checkbox(&mut s.icons_in_notes_enabled, "Icons in Notes");
+                    ui.checkbox(&mut s.icons_in_links_enabled, "Icons in Links");
+                });
+
+                ui.collapsing("Margins", |ui| {
+                    ui.horizontal(|ui| {
+                        ui.label("Top:");
+                        ui.add(egui::DragValue::new(&mut s.extra_margin.top));
+                        ui.label("Right:");
+                        ui.add(egui::DragValue::new(&mut s.extra_margin.right));
+                    });
+                    ui.horizontal(|ui| {
+                        ui.label("Bottom:");
+                        ui.add(egui::DragValue::new(&mut s.extra_margin.bottom));
+                        ui.label("Left:");
+                        ui.add(egui::DragValue::new(&mut s.extra_margin.left));
+                    });
+                });
+
+                ui.collapsing("Frontmatter", |ui| {
+                    ui.checkbox(&mut s.icon_in_frontmatter_enabled, "Use Frontmatter");
+                    if s.icon_in_frontmatter_enabled {
+                        ui.text_edit_singleline(&mut s.icon_in_frontmatter_field_name)
+                            .on_hover_text("Field Name");
+                    }
+                });
+
+                ui.checkbox(&mut s.debug_mode, "Debug Mode");
+            });
+            ui.separator();
+        }
+
         if ui
-            .add(egui::Slider::new(center_size, 0.35..=0.9).text("Line lenght"))
+            .add(egui::Slider::new(center_size, 0.35..=0.9).text("Line length"))
             .changed()
         {
             *center_size_remain = (1.0 - *center_size) / 2.0;
         };
         ui.add_space(10.0);
 
-        // Font size
         if ui
             .add(egui::Slider::new(font_size, 10.0..=80.0).text("Font size"))
             .changed()
@@ -362,11 +410,9 @@ fn appearance_settings(
     });
 }
 
-/// Server settings section
 fn server_settings(ui: &mut egui::Ui, current_window: &mut Screen, button_size: [f32; 2]) {
     ui.add_space(10.0);
     egui::CollapsingHeader::new(RichText::new("Server").strong()).show(ui, |ui| {
-        // Configure backup server
         if ui
             .add_sized(button_size, egui::Button::new("Configure Backup Server"))
             .clicked()

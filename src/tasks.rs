@@ -9,6 +9,8 @@ use egui::*;
 use egui_plot::{GridMark, Line, Plot, Points};
 use std::ops::RangeInclusive;
 
+// --- Estructuras de Datos ---
+
 #[derive(Debug)]
 struct EditDay {
     index: i32,
@@ -87,31 +89,35 @@ pub fn load_tasks(path: &str) -> TasksFile {
         Ok(x) => x,
         Err(_) => String::from("{\"tasks\":[],\"days\":[],\"top_id\":0}"),
     };
-    let data: TasksFile = match serde_json::from_str(&data) {
+    match serde_json::from_str(&data) {
         Ok(t) => t,
         Err(_) => TasksFile::default(),
-    };
-    data
+    }
 }
+
+// --- GUI Struct y Lógica ---
 
 pub struct TasksGui {
     json_content: TasksFile,
     path: String,
+
+    // Datos para la gráfica
     numeros_grafica: Vec<u16>,
+    labels_grafica: Vec<String>, // Para mostrar fechas en eje X
+    prom: f32,
+
+    // Estados de UI
     add_task: bool,
     new_task: String,
     new_task_desc: String,
-
     edit: String,
     edit_task: EditDay,
-
     new_task_update: bool,
     add_entry: bool,
     new_entry_tittle: String,
     tasks_hash: HashMap<u32, String>,
     update_graph: bool,
     save_file: bool,
-    prom: f32,
 }
 
 impl Default for TasksGui {
@@ -120,21 +126,16 @@ impl Default for TasksGui {
             save_file: false,
             add_entry: false,
             update_graph: false,
-            json_content: TasksFile {
-                tasks: vec![],
-                days: vec![],
-                top_id: 0,
-            },
+            json_content: TasksFile::default(),
             path: String::new(),
             numeros_grafica: vec![],
+            labels_grafica: vec![],
             add_task: false,
-
             new_task: String::new(),
             edit_task: EditDay {
                 index: -1,
                 edit: Edit::Null,
             },
-
             edit: String::new(),
             new_entry_tittle: String::new(),
             new_task_desc: String::new(),
@@ -148,6 +149,11 @@ impl Default for TasksGui {
 impl TasksGui {
     pub fn set_tasks(&mut self, json_content: TasksFile) {
         self.json_content = json_content;
+        self.rebuild_hashmap();
+    }
+
+    fn rebuild_hashmap(&mut self) {
+        self.tasks_hash.clear();
         for element in &self.json_content.tasks {
             self.tasks_hash.insert(element.id, element.name.clone());
         }
@@ -156,35 +162,66 @@ impl TasksGui {
     pub fn set_path(&mut self, path: &str) {
         if path != &self.path {
             self.path = String::from(path);
-            let mut prom: u16 = 0;
-            let mut tot_num = 0.0;
             self.set_tasks(load_tasks(&self.path));
-            for element in &self.json_content.days {
-                let mut tot: u16 = 0;
-                element
-                    .tasks
-                    .iter()
-                    .for_each(|val| tot += val.completed as u16);
-                prom += tot;
-                self.numeros_grafica.push(tot);
-                tot_num += 1.0;
-            }
+            self.calculate_stats();
+        }
+    }
+
+    // Lógica separada para recalcular la gráfica y stats
+    fn calculate_stats(&mut self) {
+        let mut prom: u16 = 0;
+        let mut tot_num = 0.0;
+
+        self.numeros_grafica.clear();
+        self.labels_grafica.clear();
+
+        for element in &self.json_content.days {
+            let mut tot: u16 = 0;
+            element
+                .tasks
+                .iter()
+                .for_each(|val| tot += val.completed as u16);
+            prom += tot;
+
+            self.numeros_grafica.push(tot);
+            self.labels_grafica.push(element.date.clone());
+            tot_num += 1.0;
+        }
+
+        // Invertimos porque 'days' suele tener lo más reciente al inicio (index 0),
+        // pero la gráfica se dibuja de izquierda (viejo) a derecha (nuevo).
+        self.numeros_grafica.reverse();
+        self.labels_grafica.reverse();
+
+        if tot_num > 0.0 {
             self.prom = prom as f32 / tot_num;
-            self.numeros_grafica.reverse();
-            self.update_graph();
+        } else {
+            self.prom = 0.0;
         }
     }
 
     pub fn show(&mut self, ui: &mut egui::Ui) {
-        let x_fmt = |x: GridMark, _range: &RangeInclusive<f64>| format!("Day {}", x.value);
+        // --- 1. Gráfica ---
+        let labels = self.labels_grafica.clone();
+
+        let x_fmt = move |x: GridMark, _range: &RangeInclusive<f64>| {
+            let i = x.value as usize;
+            if i < labels.len() {
+                labels[i].clone()
+            } else {
+                String::new()
+            }
+        };
+
+        ui.label(RichText::new(format!("Average: {:.1} tasks/day", self.prom)).strong());
 
         let markers_plot = Plot::new("Graph")
             .height(200.0)
             .x_axis_formatter(x_fmt)
-            .data_aspect(0.70)
+            .data_aspect(0.5)
             .auto_bounds(true)
             .clamp_grid(true);
-        ui.label(&format!("{} completed tasks a day done", self.prom));
+
         markers_plot.show(ui, |plot_ui| {
             let mut num = 0.0;
             let mut line_points = vec![];
@@ -192,232 +229,242 @@ impl TasksGui {
                 line_points.push([num, *val as f64]);
                 num += 1.0;
             });
-            let lines = Line::new("", line_points.clone()).width(5.0).fill(0.0);
-            let points = Points::new("", line_points).radius(4.0);
+
+            // CORREGIDO: primer argumento es el nombre (vacío), segundo los datos
+            let lines = Line::new("", line_points.clone())
+                .width(2.0)
+                .color(Color32::LIGHT_BLUE);
+            let points = Points::new("", line_points)
+                .radius(4.0)
+                .color(Color32::WHITE);
+
             plot_ui.line(lines);
             plot_ui.points(points);
         });
 
-        ui.add_space(10.0);
+        ui.add_space(20.0);
+
         egui::ScrollArea::vertical().show(ui, |ui| {
-            ui.group(|ui| {
-                ui.label(
-                    RichText::new("Tasks")
-                        .color(ui.visuals().strong_text_color())
-                        .size(20.0),
-                );
-                let mut del = 0;
-                let mut del_bool = false;
-                let mut id = 0;
-                for (rem_indx, element) in self.json_content.tasks.iter().enumerate() {
-                    ui.horizontal_top(|ui| {
-                        ui.heading(RichText::new(&element.name));
-                        ui.with_layout(egui::Layout::right_to_left(egui::Align::TOP), |ui| {
-                            if ui.button("X").clicked() {
-                                del = rem_indx;
-                                del_bool = true;
-                                id = element.id;
-                                self.save_file = true;
-                                self.update_graph = true;
+            // --- 2. Lista de Tareas Globales ---
+            ui.push_id("global_tasks", |ui| {
+                ui.group(|ui| {
+                    ui.horizontal(|ui| {
+                        ui.label(RichText::new("📋 Active Tasks").heading());
+                        ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                            if ui
+                                .button(if self.add_task {
+                                    "❌ Cancel"
+                                } else {
+                                    "➕ New Task"
+                                })
+                                .clicked()
+                            {
+                                self.add_task = !self.add_task;
                             }
                         });
                     });
-                    match &element.description {
-                        Some(expr) => {
-                            ui.label(expr);
-                        }
-                        None => {}
-                    };
+
                     ui.separator();
-                }
-                if del_bool {
-                    self.json_content.tasks.remove(del);
-                    for i in &mut self.json_content.days {
-                        for (ind, j) in i.tasks.iter_mut().enumerate() {
-                            if j.id == id {
-                                i.tasks.remove(ind);
-                                break;
+
+                    if self.add_task {
+                        ui.group(|ui| {
+                            ui.label("Title:");
+                            ui.add(egui::TextEdit::singleline(&mut self.new_task));
+                            ui.label("Description:");
+                            ui.add(egui::TextEdit::multiline(&mut self.new_task_desc));
+                            ui.checkbox(&mut self.new_task_update, "Add to existing past days");
+
+                            if ui.button("Save Task").clicked() && !self.new_task.is_empty() {
+                                self.perform_add_task();
                             }
-                        }
+                        });
+                        ui.add_space(10.0);
                     }
-                }
-                if self.add_task {
-                    ui.label("Title:");
-                    ui.add(egui::TextEdit::singleline(&mut self.new_task));
-                    ui.label("Description:");
-                    ui.add(egui::TextEdit::multiline(&mut self.new_task_desc));
-                    ui.checkbox(&mut self.new_task_update, "Add to previous tasks");
-                    ui.horizontal(|ui| {
-                        if ui.button("Cancel").clicked() {
-                            self.new_task = String::new();
-                            self.new_task_desc = String::new();
-                            self.add_task = false;
-                        }
-                        if ui.button("Add").clicked() {
-                            self.update_graph = true;
-                            let new_id = self.json_content.top_id + 1;
-                            let desc: Option<String> = if self.new_task_desc.is_empty() {
-                                None
-                            } else {
-                                Some(self.new_task_desc.clone())
-                            };
-                            self.json_content.tasks.push(TaskToDo {
-                                name: self.new_task.clone(),
-                                description: desc,
-                                id: new_id,
-                            });
-                            self.tasks_hash.insert(new_id, self.new_task.clone());
-                            if self.new_task_update {
-                                for val in &mut self.json_content.days {
-                                    val.tasks.push(TaskCompleted {
-                                        completed: false,
-                                        id: new_id,
-                                    });
-                                }
+
+                    let mut del = None;
+                    let mut id_to_del = 0;
+
+                    for (rem_indx, element) in self.json_content.tasks.iter().enumerate() {
+                        ui.horizontal(|ui| {
+                            ui.strong(&element.name);
+                            if let Some(desc) = &element.description {
+                                ui.label(RichText::new(format!("({})", desc)).weak().small());
                             }
-                            self.new_task = String::new();
-                            self.new_task_update = false;
-                            self.new_task_desc = String::new();
-                            self.add_task = false;
-                            self.json_content.top_id += 1;
-                            self.save_file = true;
-                        }
-                    });
-                } else if ui.button("Add Task").clicked() {
-                    self.add_task = true;
-                }
+
+                            ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                                ui.menu_button("🗑", |ui| {
+                                    ui.label("Irreversible!");
+                                    if ui
+                                        .button(RichText::new("Confirm Delete").color(Color32::RED))
+                                        .clicked()
+                                    {
+                                        del = Some(rem_indx);
+                                        id_to_del = element.id;
+                                        ui.close(); // CORREGIDO
+                                    }
+                                });
+                            });
+                        });
+                    }
+
+                    if let Some(index) = del {
+                        self.remove_task_global(index, id_to_del);
+                    }
+                });
             });
 
-            ui.add_space(10.0);
+            ui.add_space(20.0);
+
+            // --- 3. Botón Añadir Entrada ---
             if self.add_entry {
                 ui.group(|ui| {
-                    ui.label("Tittle");
+                    ui.label("Date (YYYY-MM-DD):");
                     ui.add(egui::TextEdit::singleline(&mut self.new_entry_tittle));
                     ui.horizontal(|ui| {
                         if ui.button("Cancel").clicked() {
                             self.add_entry = false;
                         }
-                        if ui.button("Add").clicked() {
-                            self.save_file = true;
-                            self.update_graph = true;
-                            let mut tasks = vec![];
-                            for i in &self.json_content.tasks {
-                                tasks.push(TaskCompleted::new(i.id));
-                            }
-                            self.json_content
-                                .days
-                                .insert(0, Day::new(&self.new_entry_tittle, tasks));
-                            self.add_entry = false;
+                        if ui.button("Save Day").clicked() {
+                            self.perform_add_entry();
                         }
                     });
                 });
-            } else if ui.button("Add Entry").clicked() {
-                self.add_entry = true;
-                let date = Local::now().format("%Y-%m-%d").to_string();
-                self.new_entry_tittle = date;
-                self.save_file = true;
+            } else {
+                if ui.button("📅 Add New Day Entry").clicked() {
+                    self.add_entry = true;
+                    self.new_entry_tittle = Local::now().format("%Y-%m-%d").to_string();
+                }
             }
-            let mut del_ind = 0;
-            let mut del_ind_bool = false;
+
+            ui.add_space(10.0);
+
+            // --- 4. Lista de Días ---
+            let mut del_day_index = None;
+
             for (ind, element) in self.json_content.days.iter_mut().enumerate() {
-                let btn = egui::Button::new(&element.date).frame(false);
-                ui.group(|ui| {
-                    ui.horizontal_top(|ui| {
-                        if self.edit_task.index == ind as i32 && self.edit_task.edit == Edit::Tittle
-                        {
-                            if ui
-                                .add(egui::TextEdit::singleline(&mut self.edit))
-                                .lost_focus()
+                ui.push_id(ind, |ui| {
+                    ui.group(|ui| {
+                        ui.horizontal(|ui| {
+                            if self.edit_task.index == ind as i32
+                                && self.edit_task.edit == Edit::Tittle
                             {
-                                self.edit_task = EditDay {
-                                    index: -1,
-                                    edit: Edit::Null,
-                                };
-                                element.date = String::from(&self.edit);
-                                self.edit = String::new();
+                                let resp = ui.add(egui::TextEdit::singleline(&mut self.edit));
+                                if resp.lost_focus() || ui.input(|i| i.key_pressed(Key::Enter)) {
+                                    element.date = self.edit.clone();
+                                    self.edit.clear();
+                                    self.edit_task = EditDay {
+                                        index: -1,
+                                        edit: Edit::Null,
+                                    };
+                                    self.save_file = true;
+                                    self.update_graph = true;
+                                }
+                            } else {
+                                if ui.button(RichText::new(&element.date).heading()).clicked() {
+                                    self.edit_task = EditDay {
+                                        index: ind as i32,
+                                        edit: Edit::Tittle,
+                                    };
+                                    self.edit = element.date.clone();
+                                }
                             }
-                        } else if ui.add(btn).clicked() {
-                            self.edit_task = EditDay {
-                                index: ind as i32,
-                                edit: Edit::Tittle,
-                            };
-                            self.edit = element.date.clone();
+
+                            ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                                ui.menu_button(
+                                    RichText::new("🗑").color(ui.visuals().error_fg_color),
+                                    |ui| {
+                                        if ui.button("Confirm Delete Day").clicked() {
+                                            del_day_index = Some(ind);
+                                            ui.close(); // CORREGIDO
+                                        }
+                                    },
+                                );
+                            });
+                        });
+
+                        ui.separator();
+
+                        for task in &mut element.tasks {
+                            let name = self.tasks_hash.get(&task.id);
+                            match name {
+                                Some(t) => {
+                                    if ui.checkbox(&mut task.completed, t).changed() {
+                                        self.update_graph = true;
+                                        self.save_file = true;
+                                    }
+                                }
+                                None => {
+                                    ui.horizontal(|ui| {
+                                        if ui.checkbox(&mut task.completed, "").changed() {
+                                            self.update_graph = true;
+                                            self.save_file = true;
+                                        }
+                                        ui.label(
+                                            RichText::new(format!(
+                                                "Unknown Task (ID: {})",
+                                                task.id
+                                            ))
+                                            .italics()
+                                            .weak(),
+                                        );
+                                    });
+                                }
+                            }
                         }
-                        ui.with_layout(egui::Layout::right_to_left(egui::Align::TOP), |ui| {
-                            if ui.button("X").clicked() {
-                                del_ind_bool = true;
-                                del_ind = ind;
-                                self.update_graph = true;
-                                self.save_file = true;
+
+                        ui.add_space(5.0);
+                        ui.separator();
+
+                        ui.horizontal(|ui| {
+                            if self.edit_task.index == ind as i32
+                                && self.edit_task.edit == Edit::Description
+                            {
+                                let resp = ui.add(egui::TextEdit::multiline(&mut self.edit));
+                                if resp.lost_focus()
+                                    || (ui.input(|i| i.pointer.any_click()) && !resp.hovered())
+                                {
+                                    if !self.edit.trim().is_empty() {
+                                        element.notes = Some(self.edit.clone());
+                                    } else {
+                                        element.notes = None;
+                                    }
+                                    self.edit.clear();
+                                    self.edit_task = EditDay {
+                                        index: -1,
+                                        edit: Edit::Null,
+                                    };
+                                    self.save_file = true;
+                                }
+                            } else {
+                                if let Some(notes) = &element.notes {
+                                    ui.label(RichText::new(notes).italics());
+                                } else {
+                                    ui.label(RichText::new("No notes...").weak().small());
+                                }
+
+                                if ui.small_button("📝 Edit Notes").clicked() {
+                                    self.edit_task = EditDay {
+                                        index: ind as i32,
+                                        edit: Edit::Description,
+                                    };
+                                    self.edit = element.notes.clone().unwrap_or_default();
+                                }
                             }
                         });
                     });
-                    ui.separator();
-                    for task in &mut element.tasks {
-                        let name = self.tasks_hash.get(&task.id);
-                        match name {
-                            Some(t) => {
-                                if ui
-                                    .add(egui::Checkbox::new(&mut task.completed, t))
-                                    .changed()
-                                {
-                                    self.update_graph = true;
-                                    self.save_file = true;
-                                }
-                            }
-                            None => {
-                                if ui
-                                    .add(egui::Checkbox::new(&mut task.completed, "Task Not Found"))
-                                    .changed()
-                                {
-                                    self.update_graph = true;
-                                    self.save_file = true;
-                                }
-                            }
-                        }
-                    }
-                    ui.add_space(10.0);
-                    if self.edit_task.index == ind as i32
-                        && self.edit_task.edit == Edit::Description
-                    {
-                        let resp = ui.add(egui::TextEdit::multiline(&mut self.edit));
-                        if resp.lost_focus() || resp.clicked_elsewhere() {
-                            self.edit_task = EditDay {
-                                index: -1,
-                                edit: Edit::Null,
-                            };
-                            if !self.edit.is_empty() {
-                                element.notes = Some(String::from(&self.edit));
-                                self.edit = String::new();
-                            } else {
-                                element.notes = None;
-                            }
-                            self.save_file = true;
-                        }
-                    } else if self.edit_task.edit != Edit::Description {
-                        match &element.notes {
-                            Some(expr) => {
-                                ui.label(expr);
-                            }
-                            None => {}
-                        };
-                        if ui.button("Edit desc").clicked() {
-                            self.edit_task = EditDay {
-                                index: ind as i32,
-                                edit: Edit::Description,
-                            };
-                            self.edit = element.notes.clone().unwrap_or_default();
-                        }
-                    }
                 });
                 ui.add_space(10.0);
             }
-            if del_ind_bool {
-                self.json_content.days.remove(del_ind);
+
+            if let Some(i) = del_day_index {
+                self.json_content.days.remove(i);
+                self.update_graph = true;
+                self.save_file = true;
             }
         });
+
         if self.update_graph {
-            self.update_graph();
+            self.calculate_stats();
             self.update_graph = false;
         }
         if self.save_file {
@@ -426,29 +473,74 @@ impl TasksGui {
         }
     }
 
-    fn update_graph(&mut self) {
-        let mut prom: u16 = 0;
-        let mut tot_num = 0.0;
-        let mut tmp = vec![];
-        for element in &self.json_content.days {
-            let mut tot: u16 = 0;
-            element
-                .tasks
-                .iter()
-                .for_each(|val| tot += val.completed as u16);
-            prom += tot;
-            tot_num += 1.0;
-            tmp.push(tot);
+    fn perform_add_task(&mut self) {
+        self.update_graph = true;
+        let new_id = self.json_content.top_id + 1;
+        let desc = if self.new_task_desc.trim().is_empty() {
+            None
+        } else {
+            Some(self.new_task_desc.clone())
+        };
+
+        self.json_content.tasks.push(TaskToDo {
+            name: self.new_task.clone(),
+            description: desc,
+            id: new_id,
+        });
+
+        self.tasks_hash.insert(new_id, self.new_task.clone());
+
+        if self.new_task_update {
+            for val in &mut self.json_content.days {
+                val.tasks.push(TaskCompleted::new(new_id));
+            }
         }
-        tmp.reverse();
-        self.numeros_grafica = tmp;
-        self.prom = prom as f32 / tot_num;
+
+        self.new_task.clear();
+        self.new_task_desc.clear();
+        self.new_task_update = false;
+        self.add_task = false;
+
+        self.json_content.top_id += 1;
+        self.save_file = true;
+    }
+
+    fn remove_task_global(&mut self, index: usize, id: u32) {
+        self.json_content.tasks.remove(index);
+        self.rebuild_hashmap();
+
+        for day in &mut self.json_content.days {
+            if let Some(pos) = day.tasks.iter().position(|t| t.id == id) {
+                day.tasks.remove(pos);
+            }
+        }
+
+        self.save_file = true;
+        self.update_graph = true;
+    }
+
+    fn perform_add_entry(&mut self) {
+        self.save_file = true;
+        self.update_graph = true;
+
+        let tasks: Vec<TaskCompleted> = self
+            .json_content
+            .tasks
+            .iter()
+            .map(|t| TaskCompleted::new(t.id))
+            .collect();
+
+        self.json_content
+            .days
+            .insert(0, Day::new(&self.new_entry_tittle, tasks));
+        self.add_entry = false;
     }
 
     pub fn save_tasks(&self) {
-        let file = String::from(&self.path);
-        let mut file2 = fs::File::create(file).unwrap();
-        let conts = serde_json::to_string(&self.json_content).unwrap();
-        file2.write_all(conts.as_bytes()).unwrap();
+        if let Ok(mut file) = fs::File::create(&self.path) {
+            if let Ok(conts) = serde_json::to_string_pretty(&self.json_content) {
+                let _ = file.write_all(conts.as_bytes());
+            }
+        }
     }
 }

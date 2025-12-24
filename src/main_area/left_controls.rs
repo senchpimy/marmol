@@ -1,5 +1,6 @@
 pub mod enums;
 
+use crate::iconize::{IconManager, IconSelector};
 use crate::screens;
 use crate::search;
 use crate::MShape;
@@ -11,7 +12,7 @@ use eframe::egui::{
 use egui::Vec2;
 use egui::{text::LayoutJob, TextFormat, Widget};
 
-use egui::{Id, Popup, PopupCloseBehavior};
+use egui::{Id, Popup, PopupCloseBehavior, Sense};
 use std::fs;
 use std::fs::File;
 use std::path::Path;
@@ -20,6 +21,7 @@ use std::time::SystemTime;
 use self::enums::{LeftTab, SortOrder};
 use crate::main_area::content_enum::Content;
 use crate::main_area::file_options::file_options;
+use crate::main_area::file_tree::FileTree;
 
 pub struct LeftControls {
     pub current_left_tab: LeftTab,
@@ -28,25 +30,24 @@ pub struct LeftControls {
     pub search_results: Vec<search::MenuItem>,
     pub regex_search: bool,
 
-    pub sort_order: SortOrder,
+    pub file_tree: FileTree,
 
-    pub rename: String,
-    pub renaming_path: Option<String>,
-    pub menu_error: String,
+    // Gestión de iconos
+    pub icon_manager: IconManager,
+    pub last_vault_path: String,
 }
 
 impl Default for LeftControls {
     fn default() -> Self {
         Self {
             current_left_tab: LeftTab::Files,
-            rename: "".to_owned(),
-            renaming_path: None,
-            menu_error: "".to_owned(),
             search_string_menu: "".to_owned(),
             prev_search_string_menu: "".to_owned(),
             search_results: vec![],
             regex_search: false,
-            sort_order: SortOrder::NameAZ,
+            file_tree: FileTree::default(),
+            icon_manager: IconManager::new(),
+            last_vault_path: String::new(),
         }
     }
 }
@@ -60,16 +61,33 @@ impl LeftControls {
         current_file: &mut String,
         sort_entrys: &bool,
         window_size: &MShape,
+        enable_icons: bool,
+        icon_selector: &mut IconSelector,
     ) {
+        // Carga perezosa de iconos si cambia el vault o está vacío
+        if enable_icons && (self.last_vault_path != path || self.icon_manager.icons.is_empty()) {
+            self.icon_manager.load_icons(path);
+            self.last_vault_path = path.to_string();
+        }
+
         let left_panel = SidePanel::left("buttons left menu")
             .default_width(100.)
             .min_width(100.)
             .max_width(300.);
         left_panel.show_animated(ctx, *colapse, |ui| {
-            self.top_panel_menu_left(ui, path, current_file, sort_entrys, window_size);
+            self.top_panel_menu_left(
+                ui,
+                path,
+                current_file,
+                sort_entrys,
+                window_size,
+                enable_icons,
+                icon_selector,
+            );
         });
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn top_panel_menu_left(
         &mut self,
         ui: &mut egui::Ui,
@@ -77,6 +95,8 @@ impl LeftControls {
         current_file: &mut String,
         sort_entrys: &bool,
         window_size: &MShape,
+        enable_icons: bool,
+        icon_selector: &mut IconSelector,
     ) {
         let vault = path;
         TopBottomPanel::top("Left Menu").show_inside(ui, |ui| {
@@ -154,22 +174,22 @@ impl LeftControls {
 
                             if ui
                                 .selectable_label(
-                                    self.sort_order == SortOrder::NameAZ,
+                                    self.file_tree.sort_order == SortOrder::NameAZ,
                                     "File name (A to Z)",
                                 )
                                 .clicked()
                             {
-                                self.sort_order = SortOrder::NameAZ;
+                                self.file_tree.sort_order = SortOrder::NameAZ;
                                 ui.close();
                             }
                             if ui
                                 .selectable_label(
-                                    self.sort_order == SortOrder::NameZA,
+                                    self.file_tree.sort_order == SortOrder::NameZA,
                                     "File name (Z to A)",
                                 )
                                 .clicked()
                             {
-                                self.sort_order = SortOrder::NameZA;
+                                self.file_tree.sort_order = SortOrder::NameZA;
                                 ui.close();
                             }
 
@@ -177,22 +197,22 @@ impl LeftControls {
 
                             if ui
                                 .selectable_label(
-                                    self.sort_order == SortOrder::ModifiedNewOld,
+                                    self.file_tree.sort_order == SortOrder::ModifiedNewOld,
                                     "Modified time (new to old)",
                                 )
                                 .clicked()
                             {
-                                self.sort_order = SortOrder::ModifiedNewOld;
+                                self.file_tree.sort_order = SortOrder::ModifiedNewOld;
                                 ui.close();
                             }
                             if ui
                                 .selectable_label(
-                                    self.sort_order == SortOrder::ModifiedOldNew,
+                                    self.file_tree.sort_order == SortOrder::ModifiedOldNew,
                                     "Modified time (old to new)",
                                 )
                                 .clicked()
                             {
-                                self.sort_order = SortOrder::ModifiedOldNew;
+                                self.file_tree.sort_order = SortOrder::ModifiedOldNew;
                                 ui.close();
                             }
 
@@ -200,22 +220,22 @@ impl LeftControls {
 
                             if ui
                                 .selectable_label(
-                                    self.sort_order == SortOrder::CreatedNewOld,
+                                    self.file_tree.sort_order == SortOrder::CreatedNewOld,
                                     "Created time (new to old)",
                                 )
                                 .clicked()
                             {
-                                self.sort_order = SortOrder::CreatedNewOld;
+                                self.file_tree.sort_order = SortOrder::CreatedNewOld;
                                 ui.close();
                             }
                             if ui
                                 .selectable_label(
-                                    self.sort_order == SortOrder::CreatedOldNew,
+                                    self.file_tree.sort_order == SortOrder::CreatedOldNew,
                                     "Created time (old to new)",
                                 )
                                 .clicked()
                             {
-                                self.sort_order = SortOrder::CreatedOldNew;
+                                self.file_tree.sort_order = SortOrder::CreatedOldNew;
                                 ui.close();
                             }
                         });
@@ -226,7 +246,16 @@ impl LeftControls {
         if self.current_left_tab == LeftTab::Files {
             let scrolling_files = ScrollArea::vertical();
             scrolling_files.show(ui, |ui| {
-                self.render_files(ui, path, current_file, vault, sort_entrys);
+                self.file_tree.render(
+                    ui,
+                    path,
+                    current_file,
+                    vault,
+                    sort_entrys,
+                    enable_icons,
+                    &mut self.icon_manager,
+                    icon_selector,
+                );
 
                 let available_size = ui.available_size();
                 let min_height = if available_size.y < 50.0 {
@@ -248,7 +277,7 @@ impl LeftControls {
 
                         if target_path != Path::new(source_str) {
                             if let Err(e) = fs::rename(source_str, &target_path) {
-                                self.menu_error = format!("Move error: {}", e);
+                                self.file_tree.menu_error = format!("Move error: {}", e);
                             } else {
                                 if *current_file == source_str {
                                     *current_file = target_path.to_str().unwrap().to_string();
@@ -319,182 +348,6 @@ impl LeftControls {
                     }
                 }
             }
-        }
-    }
-
-    fn render_files(
-        &mut self,
-        ui: &mut egui::Ui,
-        path: &str,
-        current_file: &mut String,
-        vault: &str,
-        sort_entrys: &bool,
-    ) {
-        let read_d = fs::read_dir(path);
-        let entrys: fs::ReadDir;
-        match read_d {
-            Ok(t) => entrys = t,
-            Err(r) => {
-                ui.label("Nothing to see here");
-                ui.label(egui::RichText::new(r.to_string()).strong());
-                return;
-            }
-        }
-        let mut entrys_vec: Vec<String> = Vec::new();
-        for entry in entrys {
-            if let Ok(e) = entry {
-                entrys_vec.push(e.path().to_str().unwrap().to_string());
-            }
-        }
-
-        entrys_vec.sort_by(|a, b| {
-            let path_a = Path::new(a);
-            let path_b = Path::new(b);
-
-            let get_modified = |p: &Path| {
-                fs::metadata(p)
-                    .and_then(|m| m.modified())
-                    .unwrap_or(SystemTime::UNIX_EPOCH)
-            };
-            let get_created = |p: &Path| {
-                fs::metadata(p)
-                    .and_then(|m| m.created())
-                    .unwrap_or(SystemTime::UNIX_EPOCH)
-            };
-
-            match self.sort_order {
-                SortOrder::NameAZ => {
-                    let a_is_dir = path_a.is_dir();
-                    let b_is_dir = path_b.is_dir();
-                    if a_is_dir && !b_is_dir {
-                        std::cmp::Ordering::Less
-                    } else if !a_is_dir && b_is_dir {
-                        std::cmp::Ordering::Greater
-                    } else {
-                        path_a.file_name().cmp(&path_b.file_name())
-                    }
-                }
-                SortOrder::NameZA => path_b.file_name().cmp(&path_a.file_name()),
-                SortOrder::ModifiedNewOld => get_modified(path_b).cmp(&get_modified(path_a)),
-                SortOrder::ModifiedOldNew => get_modified(path_a).cmp(&get_modified(path_b)),
-                SortOrder::CreatedNewOld => get_created(path_b).cmp(&get_created(path_a)),
-                SortOrder::CreatedOldNew => get_created(path_a).cmp(&get_created(path_b)),
-            }
-        });
-
-        for file_location in entrys_vec {
-            let file_name = Path::new(&file_location)
-                .file_name()
-                .expect("No fails")
-                .to_str()
-                .unwrap();
-
-            if Path::new(&file_location).is_dir() {
-                let count = fs::read_dir(&file_location).map(|i| i.count()).unwrap_or(0);
-                let folder_label = format!("{}   [{}]", file_name, count);
-
-                let header =
-                    egui::containers::collapsing_header::CollapsingHeader::new(folder_label);
-
-                let response = header.show(ui, |ui| {
-                    self.render_files(ui, &file_location, current_file, vault, sort_entrys);
-                });
-
-                let header_response = response.header_response;
-
-                if header_response.dnd_hover_payload::<String>().is_some() {
-                    ui.painter().rect_stroke(
-                        header_response.rect,
-                        2.0,
-                        egui::Stroke::new(2.0, ui.ctx().style().visuals.selection.stroke.color),
-                        egui::StrokeKind::Middle,
-                    );
-                }
-
-                if let Some(source_path) = header_response.dnd_release_payload::<String>() {
-                    let source_str: &str = &source_path;
-                    if source_str != file_location && !file_location.starts_with(source_str) {
-                        let source_path_obj = Path::new(source_str);
-                        let file_name_only = source_path_obj.file_name().unwrap();
-                        let target_path = Path::new(&file_location).join(file_name_only);
-
-                        if let Err(e) = fs::rename(source_str, &target_path) {
-                            self.menu_error = format!("Move error: {}", e);
-                        } else {
-                            if *current_file == source_str {
-                                *current_file = target_path.to_str().unwrap().to_string();
-                            }
-                        }
-                    }
-                }
-            } else {
-                let is_renaming_this = self
-                    .renaming_path
-                    .as_ref()
-                    .map_or(false, |p| *p == file_location);
-
-                if is_renaming_this {
-                    let response = ui.text_edit_singleline(&mut self.rename);
-                    response.request_focus();
-
-                    if ui.input(|i| i.key_pressed(egui::Key::Enter)) {
-                        let path_obj = Path::new(&file_location);
-                        let parent = path_obj.parent().unwrap();
-                        let new_path = parent.join(&self.rename);
-
-                        match fs::rename(&file_location, &new_path) {
-                            Ok(_) => {
-                                if *current_file == file_location {
-                                    *current_file = new_path.to_str().unwrap().to_string();
-                                }
-                                self.renaming_path = None;
-                            }
-                            Err(e) => {
-                                self.menu_error = format!("Error renaming: {}", e);
-                            }
-                        }
-                    } else if ui.input(|i| i.key_pressed(egui::Key::Escape)) {
-                        self.renaming_path = None;
-                    }
-                } else {
-                    let is_selected = &file_location == current_file;
-
-                    let item_id = Id::new("dnd_file").with(&file_location);
-                    let payload = file_location.clone();
-
-                    let dnd_response = ui.dnd_drag_source(item_id, payload, |ui| {
-                        let label = egui::Button::selectable(is_selected, file_name)
-                            .sense(egui::Sense::hover());
-                        ui.add(label)
-                    });
-
-                    let response = dnd_response.response.interact(egui::Sense::click());
-
-                    let popup_id = Id::new("file_menu").with(&file_location);
-                    Popup::context_menu(&response)
-                        .id(popup_id)
-                        .close_behavior(PopupCloseBehavior::CloseOnClickOutside)
-                        .show(|ui| {
-                            file_options(
-                                ui,
-                                &file_location,
-                                &path,
-                                &mut self.rename,
-                                &mut self.renaming_path,
-                                &mut self.menu_error,
-                                vault,
-                            );
-                        });
-
-                    if response.double_clicked() {
-                        self.renaming_path = Some(file_location.clone());
-                        self.rename = file_name.to_string();
-                    } else if response.clicked() {
-                        *current_file = file_location.to_string();
-                    }
-                }
-            }
-            ui.add_space(2.0);
         }
     }
 

@@ -23,6 +23,8 @@ pub struct MarmolProgramState {
     pub center_size: f32,
     pub sort_files: bool,
     pub dock_state: egui_dock::DockState<Tabe>,
+    #[serde(default)]
+    pub enable_icon_folder: bool,
 }
 
 impl Default for MarmolProgramState {
@@ -35,6 +37,7 @@ impl Default for MarmolProgramState {
         let default_sort_files = false;
         let default_window = screens::Screen::Default;
         let default_dock_state = egui_dock::DockState::new(vec![]);
+        let default_enable_icon_folder = false;
 
         Self {
             vault: default_vault,
@@ -45,21 +48,12 @@ impl Default for MarmolProgramState {
             center_size: default_center_size,
             sort_files: default_sort_files,
             dock_state: default_dock_state,
+            enable_icon_folder: default_enable_icon_folder,
         }
     }
 }
 
-pub fn load_program_state() -> (
-    String,
-    Vec<String>,
-    Option<String>,
-    String,
-    screens::Screen,
-    bool,
-    f32,
-    bool,
-    egui_dock::DockState<Tabe>,
-) {
+pub fn load_program_state() -> (MarmolProgramState, String) {
     let binding = BaseDirs::new().unwrap();
     let home_dir = binding.home_dir().to_str().unwrap();
 
@@ -77,49 +71,16 @@ pub fn load_program_state() -> (
             MarmolProgramState::default()
         });
 
-        (
-            state.vault,
-            state.vault_vec,
-            state.current_file,
-            config_dir_path,
-            state.initial_screen,
-            state.collapsed_left,
-            state.center_size,
-            state.sort_files,
-            state.dock_state,
-        )
+        (state, config_dir_path)
     } else {
         println!("Fichero de configuración no encontrado. Creando uno por defecto...");
         create_default_vault(&config_dir_path)
     }
 }
 
-fn create_default_vault(
-    config_dir: &str,
-) -> (
-    String,
-    Vec<String>,
-    Option<String>,
-    String,
-    screens::Screen,
-    bool,
-    f32,
-    bool,
-    egui_dock::DockState<Tabe>,
-) {
+fn create_default_vault(config_dir: &str) -> (MarmolProgramState, String) {
     let default_state = MarmolProgramState::default();
-
-    (
-        default_state.vault,
-        default_state.vault_vec,
-        default_state.current_file,
-        config_dir.to_string(),
-        default_state.initial_screen,
-        default_state.collapsed_left,
-        default_state.center_size,
-        default_state.sort_files,
-        default_state.dock_state,
-    )
+    (default_state, config_dir.to_string())
 }
 
 pub fn save_program_state(state: &MarmolProgramState) {
