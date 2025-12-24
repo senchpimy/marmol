@@ -235,43 +235,46 @@ impl IncomeGui {
         self.header_nav(ui);
 
         egui::CentralPanel::default().show_inside(ui, |ui| match self.ventana {
-            Ventana::Normal => {
-                if ui.available_width() > 800.0 {
-                    ui.columns(2, |cols| {
-                        cols[0].vertical(|ui| self.vista_separada(ui));
-
-                        cols[1].vertical(|ui| {
-                            self.add_record(ui);
-                            ui.separator();
-                            self.categorias(ui);
-                        });
-                    });
-                } else {
-                    let available_height = ui.available_height();
-
-                    egui::TopBottomPanel::bottom("controls_bottom")
-                        .resizable(true)
-                        .default_height(available_height * 0.5)
-                        .show_inside(ui, |ui| {
-                            egui::ScrollArea::vertical().show(ui, |ui| {
-                                self.add_record(ui);
-                                ui.add_space(20.0);
-                                ui.separator();
-                                self.categorias(ui);
-                            });
-                        });
-
-                    egui::CentralPanel::default().show_inside(ui, |ui| {
-                        self.vista_separada(ui);
-                    });
-                }
-            }
+            Ventana::Normal => self.view_normal(ui),
             Ventana::Graficos => self.grafica(ui),
             Ventana::Categorias => self.canvas(ui),
         });
 
         self.save();
     }
+
+    fn view_normal(&mut self, ui: &mut egui::Ui) {
+        if ui.available_width() > 800.0 {
+            ui.columns(2, |cols| {
+                cols[0].vertical(|ui| self.vista_separada(ui));
+
+                cols[1].vertical(|ui| {
+                    self.add_record(ui);
+                    ui.separator();
+                    self.categorias(ui);
+                });
+            });
+        } else {
+            let available_height = ui.available_height();
+
+            egui::TopBottomPanel::bottom("controls_bottom")
+                .resizable(true)
+                .default_height(available_height * 0.5)
+                .show_inside(ui, |ui| {
+                    egui::ScrollArea::vertical().show(ui, |ui| {
+                        self.add_record(ui);
+                        ui.add_space(20.0);
+                        ui.separator();
+                        self.categorias(ui);
+                    });
+                });
+
+            egui::CentralPanel::default().show_inside(ui, |ui| {
+                self.vista_separada(ui);
+            });
+        }
+    }
+
     fn header_nav(&mut self, ui: &mut egui::Ui) {
         egui::TopBottomPanel::top("nav_panel")
             .frame(
@@ -363,84 +366,76 @@ impl IncomeGui {
         });
     }
 
+    fn render_transactions_column(
+        &mut self,
+        ui: &mut egui::Ui,
+        title: &str,
+        title_color: Color32,
+        filter_type: TipoMovimiento,
+        tot: &mut f32,
+        remove: &mut i32,
+    ) {
+        ui.heading(RichText::new(title).color(title_color));
+        egui::ScrollArea::vertical()
+            .id_salt(format!("{}_scroll", title))
+            .max_height(ui.available_height() - 30.0)
+            .show(ui, |ui| {
+                for (this, elemento) in self.json_content.transacciones.iter_mut().enumerate() {
+                    if elemento.tipo == filter_type {
+                        match filter_type {
+                            TipoMovimiento::Gasto => *tot -= elemento.monto,
+                            TipoMovimiento::Ingreso => *tot += elemento.monto,
+                            _ => {}
+                        }
+                        if self.edit == (this as i32, filter_type.clone()) {
+                            draw_edit_card(
+                                ui,
+                                elemento,
+                                &mut self.edit,
+                                &mut self.cambiar,
+                                &self.json_content.categorias,
+                            );
+                        } else {
+                            draw_transaction_card(
+                                ui,
+                                elemento,
+                                remove,
+                                this as i32,
+                                filter_type == TipoMovimiento::Ingreso,
+                                &mut self.edit,
+                                &self.json_content.colores,
+                            );
+                        }
+                    }
+                }
+            });
+    }
+
     pub fn vista_separada(&mut self, ui: &mut egui::Ui) {
         let mut tot = 0.0;
         let mut remove: i32 = -1;
 
-        let Transacciones {
-            transacciones,
-            categorias,
-            colores,
-        } = &mut self.json_content;
-        let edit_state = &mut self.edit;
-        let cambiar_ref = &mut self.cambiar;
-
         ui.columns(2, |cols| {
             cols[0].vertical(|ui| {
-                ui.heading(RichText::new("📉 Gastos").color(Color32::from_rgb(230, 80, 80)));
-                egui::ScrollArea::vertical()
-                    .id_salt("gastos_scroll")
-                    .max_height(ui.available_height() - 30.0)
-                    .show(ui, |ui| {
-                        for (this, elemento) in transacciones.iter_mut().enumerate() {
-                            if elemento.tipo == TipoMovimiento::Gasto {
-                                tot -= elemento.monto;
-                                if *edit_state == (this as i32, TipoMovimiento::Gasto) {
-                                    draw_edit_card(
-                                        ui,
-                                        elemento,
-                                        edit_state,
-                                        cambiar_ref,
-                                        categorias,
-                                    );
-                                } else {
-                                    draw_transaction_card(
-                                        ui,
-                                        elemento,
-                                        &mut remove,
-                                        this as i32,
-                                        false,
-                                        edit_state,
-                                        colores,
-                                    );
-                                }
-                            }
-                        }
-                    });
+                self.render_transactions_column(
+                    ui,
+                    "📉 Gastos",
+                    Color32::from_rgb(230, 80, 80),
+                    TipoMovimiento::Gasto,
+                    &mut tot,
+                    &mut remove,
+                );
             });
 
-            // Columna Ingresos
             cols[1].vertical(|ui| {
-                ui.heading(RichText::new("📈 Ingresos").color(Color32::from_rgb(80, 200, 80)));
-                egui::ScrollArea::vertical()
-                    .id_salt("ingresos_scroll")
-                    .max_height(ui.available_height() - 30.0)
-                    .show(ui, |ui| {
-                        for (this, elemento) in transacciones.iter_mut().enumerate() {
-                            if elemento.tipo == TipoMovimiento::Ingreso {
-                                tot += elemento.monto;
-                                if *edit_state == (this as i32, TipoMovimiento::Ingreso) {
-                                    draw_edit_card(
-                                        ui,
-                                        elemento,
-                                        edit_state,
-                                        cambiar_ref,
-                                        categorias,
-                                    );
-                                } else {
-                                    draw_transaction_card(
-                                        ui,
-                                        elemento,
-                                        &mut remove,
-                                        this as i32,
-                                        true,
-                                        edit_state,
-                                        colores,
-                                    );
-                                }
-                            }
-                        }
-                    });
+                self.render_transactions_column(
+                    ui,
+                    "📈 Ingresos",
+                    Color32::from_rgb(80, 200, 80),
+                    TipoMovimiento::Ingreso,
+                    &mut tot,
+                    &mut remove,
+                );
             });
         });
 
@@ -675,117 +670,125 @@ impl IncomeGui {
 
     fn grafica(&mut self, ui: &mut egui::Ui) {
         if self.ver_gra == GraficaVer::Grafica {
-            ui.horizontal(|ui| {
-                ui.heading("Evolución del Balance");
-                ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                    ui.label(RichText::new(format!("Máximo Flujo: {:.2}", self.max)).small());
-                });
-            });
-
-            let mov_sort = self.mov_sort.clone();
-            let formatter = move |x: GridMark, _: &RangeInclusive<f64>| -> String {
-                if x.value >= 0.0 && (x.value as usize) < mov_sort.len() {
-                    mov_sort[x.value as usize].clone()
-                } else {
-                    String::new()
-                }
-            };
-
-            let plot = egui_plot::Plot::new("financial_plot")
-                .show_x(false)
-                .show_y(true)
-                .clamp_grid(true)
-                .auto_bounds(egui::Vec2b::TRUE)
-                .x_axis_formatter(formatter)
-                .legend(egui_plot::Legend::default());
-
-            let p = PlotPoints::new(self.points.clone());
-            let l = PlotPoints::new(self.lines.clone());
-
-            plot.show(ui, |plot_ui| {
-                plot_ui.line(Line::new("Balance", l).width(2.0));
-                plot_ui.points(
-                    Points::new("Puntos", p)
-                        .shape(MarkerShape::Circle)
-                        .radius(5.0),
-                );
-
-                if plot_ui.response().clicked() {
-                    let pp = plot_ui.pointer_coordinate();
-                    if let Some(p) = pp {
-                        let idx = p.x.round() as usize;
-                        if idx < self.points.len() {
-                            let val = self.points[idx][1];
-                            if (p.y - val).abs() < (self.max * 0.1).max(1.0) {
-                                self.ver_gra = GraficaVer::Elemento;
-                                self.ver_gra_i = idx;
-                            }
-                        }
-                    }
-                }
-            });
-            ui.label(
-                RichText::new("Haz clic en un punto para ver detalles del día.")
-                    .weak()
-                    .small(),
-            );
+            self.render_evolution_plot(ui);
         } else {
-            if ui.button("⬅ Regresar a la Gráfica").clicked() {
-                self.ver_gra = GraficaVer::Grafica;
+            self.render_day_details(ui);
+        }
+    }
+
+    fn render_evolution_plot(&mut self, ui: &mut egui::Ui) {
+        ui.horizontal(|ui| {
+            ui.heading("Evolución del Balance");
+            ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                ui.label(RichText::new(format!("Máximo Flujo: {:.2}", self.max)).small());
+            });
+        });
+
+        let mov_sort = self.mov_sort.clone();
+        let formatter = move |x: GridMark, _: &RangeInclusive<f64>| -> String {
+            if x.value >= 0.0 && (x.value as usize) < mov_sort.len() {
+                mov_sort[x.value as usize].clone()
+            } else {
+                String::new()
             }
-            ui.separator();
+        };
 
-            if self.ver_gra_i < self.mov_sort.len() {
-                let fecha_actual = &self.mov_sort[self.ver_gra_i];
-                ui.heading(format!("Detalles: {}", fecha_actual));
+        let plot = egui_plot::Plot::new("financial_plot")
+            .show_x(false)
+            .show_y(true)
+            .clamp_grid(true)
+            .auto_bounds(egui::Vec2b::TRUE)
+            .x_axis_formatter(formatter)
+            .legend(egui_plot::Legend::default());
 
-                let mut daily_balance = 0.0;
+        let p = PlotPoints::new(self.points.clone());
+        let l = PlotPoints::new(self.lines.clone());
 
-                egui::ScrollArea::vertical().show(ui, |ui| {
-                    for j in &self.json_content.transacciones {
-                        if &j.fecha == fecha_actual {
-                            let is_income = j.tipo == TipoMovimiento::Ingreso;
-                            let color = if is_income {
-                                Color32::GREEN
-                            } else {
-                                Color32::RED
-                            };
-                            let sign = if is_income { "+" } else { "-" };
+        plot.show(ui, |plot_ui| {
+            plot_ui.line(Line::new("Balance", l).width(2.0));
+            plot_ui.points(
+                Points::new("Puntos", p)
+                    .shape(MarkerShape::Circle)
+                    .radius(5.0),
+            );
 
-                            if is_income {
-                                daily_balance += j.monto;
-                            } else {
-                                daily_balance -= j.monto;
-                            }
-
-                            Frame::group(ui.style()).show(ui, |ui| {
-                                ui.horizontal(|ui| {
-                                    ui.label(
-                                        RichText::new(&self.json_content.categorias[j.categoria])
-                                            .strong(),
-                                    );
-                                    ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                                        ui.label(
-                                            RichText::new(format!("{}{}", sign, j.monto))
-                                                .color(color)
-                                                .strong()
-                                                .size(16.0),
-                                        );
-                                    });
-                                });
-                                ui.label(&j.description);
-                            });
-                            ui.add_space(5.0);
+            if plot_ui.response().clicked() {
+                let pp = plot_ui.pointer_coordinate();
+                if let Some(p) = pp {
+                    let idx = p.x.round() as usize;
+                    if idx < self.points.len() {
+                        let val = self.points[idx][1];
+                        if (p.y - val).abs() < (self.max * 0.1).max(1.0) {
+                            self.ver_gra = GraficaVer::Elemento;
+                            self.ver_gra_i = idx;
                         }
                     }
-                });
-                ui.separator();
-                ui.label(
-                    RichText::new(format!("Balance del día: {:.2}", daily_balance))
-                        .strong()
-                        .size(18.0),
-                );
+                }
             }
+        });
+        ui.label(
+            RichText::new("Haz clic en un punto para ver detalles del día.")
+                .weak()
+                .small(),
+        );
+    }
+
+    fn render_day_details(&mut self, ui: &mut egui::Ui) {
+        if ui.button("⬅ Regresar a la Gráfica").clicked() {
+            self.ver_gra = GraficaVer::Grafica;
+        }
+        ui.separator();
+
+        if self.ver_gra_i < self.mov_sort.len() {
+            let fecha_actual = &self.mov_sort[self.ver_gra_i];
+            ui.heading(format!("Detalles: {}", fecha_actual));
+
+            let mut daily_balance = 0.0;
+
+            egui::ScrollArea::vertical().show(ui, |ui| {
+                for j in &self.json_content.transacciones {
+                    if &j.fecha == fecha_actual {
+                        let is_income = j.tipo == TipoMovimiento::Ingreso;
+                        let color = if is_income {
+                            Color32::GREEN
+                        } else {
+                            Color32::RED
+                        };
+                        let sign = if is_income { "+" } else { "-" };
+
+                        if is_income {
+                            daily_balance += j.monto;
+                        } else {
+                            daily_balance -= j.monto;
+                        }
+
+                        Frame::group(ui.style()).show(ui, |ui| {
+                            ui.horizontal(|ui| {
+                                ui.label(
+                                    RichText::new(&self.json_content.categorias[j.categoria])
+                                        .strong(),
+                                );
+                                ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                                    ui.label(
+                                        RichText::new(format!("{}{}", sign, j.monto))
+                                            .color(color)
+                                            .strong()
+                                            .size(16.0),
+                                    );
+                                });
+                            });
+                            ui.label(&j.description);
+                        });
+                        ui.add_space(5.0);
+                    }
+                }
+            });
+            ui.separator();
+            ui.label(
+                RichText::new(format!("Balance del día: {:.2}", daily_balance))
+                    .strong()
+                    .size(18.0),
+            );
         }
     }
 }
