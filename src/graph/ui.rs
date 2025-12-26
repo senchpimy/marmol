@@ -26,6 +26,8 @@ pub fn draw_ui(
         .include_y(100.0)
         .include_y(-100.0);
 
+    let animation_duration = 0.5;
+
     let response = markers_plot
         .show(ui, |plot_ui| {
             if graph.points.is_empty() {
@@ -61,6 +63,7 @@ pub fn draw_ui(
             }
             let is_hovering = graph.hovered_node_index.is_some();
 
+            // --- 1. RENDERIZADO DE LÍNEAS / FLECHAS (CAPA INFERIOR) ---
             let base_line_color = plot_ui.ctx().style().visuals.window_stroke.color.linear_multiply(100.0 / 255.0);
 
             if graph.show_arrows {
@@ -81,31 +84,43 @@ pub fn draw_ui(
                 }
 
                 let mut arrows = Arrows::new("".to_string(), origins, tips).tip_length(25.0);
-
-                if is_hovering {
-                    arrows = arrows.color(base_line_color.linear_multiply(0.2));
-                } else {
-                    arrows = arrows.color(base_line_color);
-                }
+                
+                // Animación para el desvanecimiento de las flechas cuando hay un hover
+                let arrows_anim_id = Id::new("arrows_hover_anim");
+                let arrows_t = plot_ui.ctx().animate_bool_with_time(arrows_anim_id, !is_hovering, animation_duration);
+                let arrows_multiplier = 0.2 + 0.8 * arrows_t;
+                
+                arrows = arrows.color(base_line_color.linear_multiply(arrows_multiplier));
                 plot_ui.arrows(arrows);
             } else {
-                for &(idx_a, idx_b) in &graph.edges {
+                for (edge_idx, &(idx_a, idx_b)) in graph.edges.iter().enumerate() {
                     if graph.is_visible(idx_a) && graph.is_visible(idx_b) {
                         let p1 = graph.points_coord[idx_a];
                         let p2 = graph.points_coord[idx_b];
 
                         let mut line_color = base_line_color;
 
-                        if is_hovering {
+                        let is_edge_highlighted = if is_hovering {
                             let a_connected = connected_indices.contains(&idx_a);
                             let b_connected = connected_indices.contains(&idx_b);
+                            a_connected && b_connected && (idx_a == graph.hovered_node_index.unwrap() || idx_b == graph.hovered_node_index.unwrap())
+                        } else {
+                            false
+                        };
 
-                            if a_connected && b_connected {
-                                if idx_a == graph.hovered_node_index.unwrap()
-                                    || idx_b == graph.hovered_node_index.unwrap()
-                                {
-                                                                        line_color = plot_ui.ctx().style().visuals.widgets.hovered.bg_stroke.color.linear_multiply(180.0 / 255.0);
-                                }
+                        let edge_anim_id = Id::new("edge_h").with(edge_idx);
+                        let edge_t = plot_ui.ctx().animate_bool_with_time(edge_anim_id, is_edge_highlighted, animation_duration);
+
+                        if is_hovering {
+                            if is_edge_highlighted || edge_t > 0.0 {
+                                let highlight_color = plot_ui.ctx().style().visuals.widgets.hovered.bg_stroke.color.linear_multiply(180.0 / 255.0);
+                                // Mezclar entre base y highlight basado en la animación
+                                line_color = Color32::from_rgba_premultiplied(
+                                    lerp(base_line_color.r() as f32..=highlight_color.r() as f32, edge_t) as u8,
+                                    lerp(base_line_color.g() as f32..=highlight_color.g() as f32, edge_t) as u8,
+                                    lerp(base_line_color.b() as f32..=highlight_color.b() as f32, edge_t) as u8,
+                                    lerp(base_line_color.a() as f32..=highlight_color.a() as f32, edge_t) as u8,
+                                );
                             } else {
                                 line_color = line_color.linear_multiply(0.1);
                             }
@@ -123,6 +138,7 @@ pub fn draw_ui(
                 }
             }
 
+            // --- 2. RENDERIZADO DE PUNTOS Y TEXTO (CAPA SUPERIOR) ---
             let is_double_click = plot_ui.response().double_clicked();
             let is_drag_started = plot_ui.response().drag_started();
             let is_drag_released = plot_ui.ctx().input(|i| i.pointer.any_released());
@@ -136,15 +152,18 @@ pub fn draw_ui(
                     continue;
                 }
 
-                let mut point_color = graph.get_color_for_node(point);
+                let is_node_highlighted = if is_hovering {
+                    connected_indices.contains(&index)
+                } else {
+                    true
+                };
 
-                if is_hovering {
-                    if connected_indices.contains(&index) {
-                        point_color = point_color.linear_multiply(1.0);
-                    } else {
-                        point_color = point_color.linear_multiply(0.3);
-                    }
-                }
+                let node_anim_id = Id::new("node_h").with(index);
+                let node_t = plot_ui.ctx().animate_bool_with_time(node_anim_id, is_node_highlighted, animation_duration);
+
+                let mut point_color = graph.get_color_for_node(point);
+                let point_multiplier = 0.3 + 0.7 * node_t;
+                point_color = point_color.linear_multiply(point_multiplier);
 
                 let coords = [
                     graph.points_coord[index].0 as f64,
@@ -169,10 +188,25 @@ pub fn draw_ui(
                     shape = MarkerShape::Diamond;
                 }
 
+                // Efecto de borde rojo para nodos fantasma (archivos que no existen)
+                if !point.exists {
+                    plot_ui.points(
+                        Points::new("".to_string(), coords)
+                            .radius(radius + 1.0)
+                            .color(Color32::RED)
+                            .shape(shape),
+                    );
+                }
+
                 plot_ui.points(
                     Points::new("".to_string(), coords)
                         .radius(radius)
-                        .color(point_color)
+                        .color(Color32::from_rgba_unmultiplied(
+                            point_color.r(),
+                            point_color.g(),
+                            point_color.b(),
+                            255,
+                        ))
                         .shape(shape),
                 );
 
@@ -182,12 +216,19 @@ pub fn draw_ui(
                 if diff < graph.text_zoom_threshold {
                     let mut text_color = plot_ui.ctx().style().visuals.widgets.inactive.fg_stroke.color;
 
-                    if is_hovering {
-                        if connected_indices.contains(&index) {
-                            text_color = plot_ui.ctx().style().visuals.override_text_color.unwrap_or(Color32::WHITE);
-                        } else {
-                            text_color = text_color.linear_multiply(0.2); // Ocultar casi todo el resto
-                        }
+                    let text_multiplier = 0.2 + 0.8 * node_t;
+                    text_color = text_color.linear_multiply(text_multiplier);
+
+                    if is_hovering && node_t > 0.0 {
+                         if connected_indices.contains(&index) {
+                             let target_text_color = plot_ui.ctx().style().visuals.override_text_color.unwrap_or(Color32::WHITE);
+                             text_color = Color32::from_rgba_premultiplied(
+                                lerp(text_color.r() as f32..=target_text_color.r() as f32, node_t) as u8,
+                                lerp(text_color.g() as f32..=target_text_color.g() as f32, node_t) as u8,
+                                lerp(text_color.b() as f32..=target_text_color.b() as f32, node_t) as u8,
+                                lerp(text_color.a() as f32..=target_text_color.a() as f32, node_t) as u8,
+                            );
+                         }
                     }
 
                     let texto = Text::new(
@@ -200,7 +241,6 @@ pub fn draw_ui(
                     );
                     plot_ui.text(texto);
                 }
-
                 if let Some(hovered) = graph.hovered_node_index {
                     if hovered == index {
                         if is_double_click && graph.dragged_node_index.is_none() {
