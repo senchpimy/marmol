@@ -57,7 +57,6 @@ Cuando se esta en un archivo hay una vizualizacion del archivo y sus enlaces
   - ~Tags toogle en el principal (un nodo grandote en el cual todos los del mismo tag estan conectados)~
 
 
-### Bases
 
 ### Bookmarks
 
@@ -65,7 +64,6 @@ Cuando se esta en un archivo hay una vizualizacion del archivo y sus enlaces
 
 ### web clipper
 Abre una template segun que pagina web se abrio [[https://www.youtube.com/watch?v=O7vGsBghWfc]]
-
 
 ### Obsidian databases
 
@@ -105,4 +103,4 @@ Abre una template segun que pagina web se abrio [[https://www.youtube.com/watch?
 
 ### completr
 
-### kanban
+### ~~kanban~~

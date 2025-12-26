@@ -8,8 +8,8 @@ use egui::{
     text::CCursorRange,
 };
 
-#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
-#[cfg_attr(feature = "serde", serde(default))]
+#[derive(serde::Deserialize, serde::Serialize)]
+#[serde(default)]
 pub struct EasyMarkEditor {
     pub code: String,
     pub show_rendered: bool,
@@ -19,7 +19,7 @@ pub struct EasyMarkEditor {
     pub shortcut_code: KeyboardShortcut,
     pub shortcut_italics: KeyboardShortcut,
 
-    #[cfg_attr(feature = "serde", serde(skip))]
+    #[serde(skip)]
     highlighter: super::MemoizedEasymarkHighlighter,
 }
 

@@ -18,6 +18,7 @@ mod format;
 mod graph;
 mod iconize;
 mod income;
+mod kanban;
 mod main_area;
 mod screens;
 mod search;

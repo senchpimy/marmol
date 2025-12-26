@@ -173,7 +173,7 @@ impl FileTree {
                         if let Some(id) = &icon_id {
                             if let Some(source) = icon_manager.get_icon_source(id) {
                                 if let IconSource::Bytes(bytes) = source {
-                                    ui.allocate_ui_at_rect(icon_rect, |ui| {
+                                        ui.scope_builder(egui::UiBuilder::new().max_rect(icon_rect), |ui| {
                                         ui.add(
                                             egui::Image::from_bytes(
                                                 format!("bytes://{}.svg", id),
@@ -184,7 +184,7 @@ impl FileTree {
                                     });
                                 }
                             } else {
-                                ui.allocate_ui_at_rect(icon_rect, |ui| {
+                                    ui.scope_builder(egui::UiBuilder::new().max_rect(icon_rect), |ui| {
                                     egui_twemoji::EmojiLabel::new(id).show(ui);
                                 });
                             }
@@ -290,7 +290,7 @@ impl FileTree {
                         if let Some(id) = &icon_id {
                             if let Some(source) = icon_manager.get_icon_source(id) {
                                 if let IconSource::Bytes(bytes) = source {
-                                    ui.allocate_ui_at_rect(icon_rect, |ui| {
+                                        ui.scope_builder(egui::UiBuilder::new().max_rect(icon_rect), |ui| {
                                         ui.add(
                                             egui::Image::from_bytes(
                                                 format!("bytes://{}.svg", id),
@@ -302,7 +302,7 @@ impl FileTree {
                                 }
                             } else {
                                 // Emoji o texto usando egui-twemoji
-                                ui.allocate_ui_at_rect(icon_rect, |ui| {
+                                    ui.scope_builder(egui::UiBuilder::new().max_rect(icon_rect), |ui| {
                                     egui_twemoji::EmojiLabel::new(id).show(ui);
                                 });
                             }

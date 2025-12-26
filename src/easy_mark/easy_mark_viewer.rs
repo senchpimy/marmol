@@ -80,7 +80,7 @@ pub fn item_ui(ui: &mut Ui, item: easy_mark::Item<'_>) {
         easy_mark::Item::Image(_style, _alt, url) => {
             let img = Image::from_uri(url.to_string())
                 .max_width(ui.available_width())
-                .rounding(5.0);
+                .corner_radius(5.0);
             ui.add(img);
         }
 

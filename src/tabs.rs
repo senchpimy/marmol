@@ -3,6 +3,7 @@ use crate::easy_mark;
 use crate::files;
 use crate::format;
 use crate::income;
+use crate::kanban;
 
 use crate::main_area::content_enum::Content;
 use crate::main_area::metadata_renderer::create_metadata;
@@ -39,6 +40,11 @@ pub enum TabContent {
         path: String,
         #[serde(skip, default)]
         gui: excalidraw::ExcalidrawGui,
+    },
+    Kanban {
+        path: String,
+        #[serde(skip, default)]
+        gui: kanban::KanbanGui,
     },
     Markdown {
         #[serde(skip, default)]
@@ -87,6 +93,14 @@ impl Clone for TabContent {
                     gui: new_gui,
                 }
             }
+            TabContent::Kanban { path, .. } => {
+                let mut gui = kanban::KanbanGui::default();
+                gui.set_path(path);
+                TabContent::Kanban {
+                    path: path.clone(),
+                    gui,
+                }
+            }
             TabContent::Markdown { .. } => TabContent::Markdown {
                 editor: easy_mark::EasyMarkEditor::default(),
                 cache: CommonMarkCache::default(),
@@ -104,6 +118,14 @@ pub struct Tabe {
     #[serde(default)]
     pub content: TabContent,
     pub ctype: Content,
+    #[serde(default)]
+    pub history: Vec<String>,
+    #[serde(default)]
+    pub history_index: usize,
+    #[serde(skip)]
+    pub is_renaming: bool,
+    #[serde(skip)]
+    pub rename_buffer: String,
 }
 
 impl Tabe {
@@ -116,7 +138,7 @@ impl Tabe {
             .into();
         let loaded_content = files::read_file(&path);
 
-        let (initial_ctype, initial_buffer) = if loaded_content.trim().is_empty() {
+        let (initial_ctype, _initial_buffer) = if loaded_content.trim().is_empty() {
             (Content::Edit, loaded_content.clone())
         } else {
             (Content::View, String::new())
@@ -145,6 +167,13 @@ impl Tabe {
                 path: path.clone(),
                 gui,
             }
+        } else if loaded_content.contains("kanban-plugin: board") {
+            let mut gui = kanban::KanbanGui::default();
+            gui.set_path(&path);
+            TabContent::Kanban {
+                path: path.clone(),
+                gui,
+            }
         } else {
             let mut editor = easy_mark::EasyMarkEditor::default();
             editor.code = loaded_content;
@@ -158,8 +187,12 @@ impl Tabe {
             id: n,
             ctype: initial_ctype,
             title,
-            path,
+            path: path.clone(),
             content,
+            history: vec![path],
+            history_index: 0,
+            is_renaming: false,
+            rename_buffer: String::new(),
         }
     }
 
@@ -173,6 +206,10 @@ impl Tabe {
                 vault_path: vault.to_string(),
                 state: None,
             },
+            history: vec![String::new()],
+            history_index: 0,
+            is_renaming: false,
+            rename_buffer: String::new(),
         }
     }
 }
@@ -192,6 +229,48 @@ impl TabViewer for MTabViewer<'_> {
     }
 
     fn ui(&mut self, ui: &mut Ui, tab: &mut Self::Tab) {
+        ui.horizontal(|ui| {
+            ui.spacing_mut().item_spacing.x = 5.0;
+            if ui.add_enabled(tab.history_index > 0, egui::Button::new("⬅")).clicked() {
+                tab.history_index -= 1;
+                let path = tab.history[tab.history_index].clone();
+                *self.current_file = path.clone();
+                update_tab_content(tab, &path, true);
+            }
+            if ui.add_enabled(tab.history_index + 1 < tab.history.len(), egui::Button::new("➡")).clicked() {
+                tab.history_index += 1;
+                let path = tab.history[tab.history_index].clone();
+                *self.current_file = path.clone();
+                update_tab_content(tab, &path, true);
+            }
+
+            if tab.is_renaming {
+                let res = ui.text_edit_singleline(&mut tab.rename_buffer);
+                if res.lost_focus() || (res.changed() && ui.input(|i| i.key_pressed(egui::Key::Enter))) {
+                    tab.is_renaming = false;
+                    let old_path = Path::new(&tab.path);
+                    if let Some(parent) = old_path.parent() {
+                        let new_path = parent.join(&tab.rename_buffer);
+                        if std::fs::rename(&tab.path, &new_path).is_ok() {
+                            let new_path_str = new_path.to_str().unwrap().to_string();
+                            tab.path = new_path_str.clone();
+                            tab.title = tab.rename_buffer.clone();
+                            *self.current_file = new_path_str.clone();
+                            // Update history entry
+                            tab.history[tab.history_index] = new_path_str;
+                        }
+                    }
+                }
+            } else {
+                let label = ui.label(&tab.title).interact(egui::Sense::click());
+                if label.double_clicked() {
+                    tab.is_renaming = true;
+                    tab.rename_buffer = tab.title.clone();
+                }
+            }
+        });
+        ui.separator();
+
         match &mut tab.content {
             TabContent::Graph { vault_path, state } => {
                 if state.is_none() {
@@ -232,6 +311,13 @@ impl TabViewer for MTabViewer<'_> {
             TabContent::Tasks { path, gui } => {
                 gui.set_path(path);
                 gui.show(ui);
+            }
+            TabContent::Kanban { path, gui } => {
+                gui.set_path(path);
+                if let Some(new_path) = gui.show(ui, self.vault) {
+                     *self.current_file = new_path.clone();
+                     update_tab_content(tab, &new_path, false);
+                }
             }
             TabContent::Markdown { editor, cache } => {
                 if tab.ctype == Content::View {
@@ -305,7 +391,17 @@ impl TabViewer for MTabViewer<'_> {
     }
 }
 // Free function to update tab content
-fn update_tab_content(tab: &mut Tabe, path: &String) {
+fn update_tab_content(tab: &mut Tabe, path: &String, is_history_nav: bool) {
+    if !is_history_nav {
+        if &tab.path == path {
+            return;
+        }
+        // New navigation: truncate history after current index and push new path
+        tab.history.truncate(tab.history_index + 1);
+        tab.history.push(path.clone());
+        tab.history_index = tab.history.len() - 1;
+    }
+
     let new_title = Path::new(path)
         .file_name()
         .unwrap_or_else(|| std::ffi::OsStr::new("untitled"))
@@ -342,6 +438,13 @@ fn update_tab_content(tab: &mut Tabe, path: &String) {
         let mut gui = tasks::TasksGui::default();
         gui.set_path(path);
         TabContent::Tasks {
+            path: path.clone(),
+            gui,
+        }
+    } else if loaded_content.contains("kanban-plugin: board") {
+        let mut gui = kanban::KanbanGui::default();
+        gui.set_path(path);
+        TabContent::Kanban {
             path: path.clone(),
             gui,
         }
@@ -446,7 +549,7 @@ impl Tabs {
         }
 
         if let Some((_, tab)) = self.tree.find_active_focused() {
-            update_tab_content(tab, &path);
+            update_tab_content(tab, &path, false);
         } else {
             self.counter += 1;
             let new_tab = Tabe::new(self.counter, path);

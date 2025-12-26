@@ -455,7 +455,7 @@ impl IconSelector {
 
                                             let content_rect = rect.shrink(4.0);
 
-                                            ui.allocate_ui_at_rect(content_rect, |ui| {
+                                            ui.scope_builder(egui::UiBuilder::new().max_rect(content_rect), |ui| {
                                                 ui.horizontal_centered(|ui| {
                                                     // ICONO
                                                     if is_svg {
