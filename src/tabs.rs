@@ -1,4 +1,5 @@
 use crate::excalidraw;
+use crate::easy_mark;
 use crate::files;
 use crate::format;
 use crate::income;
@@ -40,8 +41,8 @@ pub enum TabContent {
         gui: excalidraw::ExcalidrawGui,
     },
     Markdown {
-        content: String,
-        buffer: String,
+        #[serde(skip, default)]
+        editor: easy_mark::EasyMarkEditor,
         #[serde(skip)]
         cache: CommonMarkCache,
     },
@@ -86,13 +87,8 @@ impl Clone for TabContent {
                     gui: new_gui,
                 }
             }
-            TabContent::Markdown {
-                content,
-                buffer,
-                cache: _,
-            } => TabContent::Markdown {
-                content: content.clone(),
-                buffer: buffer.clone(),
+            TabContent::Markdown { .. } => TabContent::Markdown {
+                editor: easy_mark::EasyMarkEditor::default(),
                 cache: CommonMarkCache::default(),
             },
         }
@@ -150,9 +146,10 @@ impl Tabe {
                 gui,
             }
         } else {
+            let mut editor = easy_mark::EasyMarkEditor::default();
+            editor.code = loaded_content;
             TabContent::Markdown {
-                content: loaded_content,
-                buffer: initial_buffer,
+                editor,
                 cache: CommonMarkCache::default(),
             }
         };
@@ -236,11 +233,7 @@ impl TabViewer for MTabViewer<'_> {
                 gui.set_path(path);
                 gui.show(ui);
             }
-            TabContent::Markdown {
-                content,
-                buffer,
-                cache,
-            } => {
+            TabContent::Markdown { editor, cache } => {
                 if tab.ctype == Content::View {
                     let cont = StripBuilder::new(ui)
                         .size(Size::relative(0.15))
@@ -249,15 +242,17 @@ impl TabViewer for MTabViewer<'_> {
                         strip.cell(|_| {});
                         strip.cell(|ui| {
                             egui::ScrollArea::vertical().show(ui, |ui| {
-                                *content = files::read_file(&tab.path);
+                                editor.code = files::read_file(&tab.path);
                                 let frame =
                                     Frame::NONE.inner_margin(egui::Margin::symmetric(30, 10));
                                 let inner_response = frame.show(ui, |ui| {
-                                    let (markdown_content, metadata) = files::contents(content);
+                                    let (markdown_content, metadata) = files::contents(&editor.code);
                                     ui.heading(&tab.title);
                                     if !metadata.is_empty() {
                                         create_metadata(metadata, ui);
                                     }
+                                    // Use CommonMarkViewer for viewing as it was before, 
+                                    // or easy_mark if preferred. The user asked for easy_mark editor.
                                     CommonMarkViewer::new().show(ui, cache, &markdown_content);
                                     ui.allocate_space(ui.available_size());
                                 });
@@ -270,7 +265,6 @@ impl TabViewer for MTabViewer<'_> {
 
                                 if interact_response.double_clicked() {
                                     tab.ctype = Content::Edit;
-                                    *buffer = content.clone();
                                 }
                             });
                         });
@@ -283,20 +277,14 @@ impl TabViewer for MTabViewer<'_> {
                         strip.cell(|_| {});
                         strip.cell(|ui| {
                             egui::ScrollArea::vertical().show(ui, |ui| {
-                                let zone = egui::TextEdit::multiline(buffer)
-                                    .font(FontId::proportional(15.0));
-                                let response = ui.add_sized(ui.available_size(), zone);
+                                let response = editor.ui(ui);
                                 if response.changed() {
-                                    if buffer.ends_with('\n') {
-                                        *buffer = format::indent(buffer);
-                                        response.request_focus();
-                                    }
                                     let mut f = std::fs::OpenOptions::new()
                                         .write(true)
                                         .truncate(true)
                                         .open(&tab.path)
                                         .unwrap();
-                                    f.write_all(buffer.as_bytes()).unwrap();
+                                    f.write_all(editor.code.as_bytes()).unwrap();
                                     f.flush().unwrap();
                                 }
                                 if ui.input(|i| i.key_pressed(egui::Key::Escape)) {
@@ -358,13 +346,10 @@ fn update_tab_content(tab: &mut Tabe, path: &String) {
             gui,
         }
     } else {
+        let mut editor = easy_mark::EasyMarkEditor::default();
+        editor.code = loaded_content;
         TabContent::Markdown {
-            content: loaded_content.clone(),
-            buffer: if tab.ctype == Content::Edit {
-                loaded_content
-            } else {
-                String::new()
-            },
+            editor,
             cache: CommonMarkCache::default(),
         }
     };

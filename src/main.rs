@@ -10,6 +10,7 @@ use std::path::Path;
 extern crate json;
 
 mod configuraciones;
+mod easy_mark;
 mod emojis;
 mod excalidraw;
 mod files;
