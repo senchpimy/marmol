@@ -255,6 +255,7 @@ impl LeftControls {
                     enable_icons,
                     &mut self.icon_manager,
                     icon_selector,
+                    0,
                 );
 
                 let available_size = ui.available_size();
