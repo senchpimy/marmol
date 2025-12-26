@@ -124,7 +124,10 @@ impl IconManager {
         let config_path =
             Path::new(vault_path).join(".obsidian/plugins/obsidian-icon-folder/data.json");
 
+        println!("Iconize: Looking for config at {:?}", config_path);
+
         if config_path.exists() {
+            println!("Iconize: Config file found!");
             if let Ok(data) = fs::read_to_string(config_path) {
                 if let Ok(json_parsed) = serde_json::from_str::<Value>(&data) {
                     if let Value::Object(map) = json_parsed {
@@ -140,13 +143,17 @@ impl IconManager {
                                 }
                             }
                         }
+                        println!("Iconize: Loaded {} icons from config", self.icons.len());
                     }
                 }
             }
+        } else {
+            println!("Iconize: Config file NOT found at {:?}", config_path);
         }
 
         if self.app_assets_path.exists() {
             self.scan_directory(&self.app_assets_path.clone(), None);
+            println!("Iconize: Scanned {} SVGs in assets", self.svg_cache.len());
         }
     }
 

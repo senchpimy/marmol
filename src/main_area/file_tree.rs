@@ -1,4 +1,4 @@
-use crate::iconize::{IconManager, IconSelector};
+use crate::iconize::{IconManager, IconSelector, IconSource};
 use crate::main_area::file_options::file_options;
 use crate::main_area::left_controls::enums::SortOrder;
 use eframe::egui::{self, Id, Popup, PopupCloseBehavior, RichText, Sense, Vec2};
@@ -39,7 +39,7 @@ impl FileTree {
     ) {
         let indent_step = 12.0;
         let current_indent = depth as f32 * indent_step;
-        
+
         let read_d = fs::read_dir(path);
         let entrys = match read_d {
             Ok(t) => t,
@@ -60,16 +60,28 @@ impl FileTree {
         entrys_vec.sort_by(|a, b| {
             let path_a = Path::new(a);
             let path_b = Path::new(b);
-            let get_modified = |p: &Path| fs::metadata(p).and_then(|m| m.modified()).unwrap_or(SystemTime::UNIX_EPOCH);
-            let get_created = |p: &Path| fs::metadata(p).and_then(|m| m.created()).unwrap_or(SystemTime::UNIX_EPOCH);
+            let get_modified = |p: &Path| {
+                fs::metadata(p)
+                    .and_then(|m| m.modified())
+                    .unwrap_or(SystemTime::UNIX_EPOCH)
+            };
+            let get_created = |p: &Path| {
+                fs::metadata(p)
+                    .and_then(|m| m.created())
+                    .unwrap_or(SystemTime::UNIX_EPOCH)
+            };
 
             match self.sort_order {
                 SortOrder::NameAZ => {
                     let a_is_dir = path_a.is_dir();
                     let b_is_dir = path_b.is_dir();
-                    if a_is_dir && !b_is_dir { std::cmp::Ordering::Less }
-                    else if !a_is_dir && b_is_dir { std::cmp::Ordering::Greater }
-                    else { path_a.file_name().cmp(&path_b.file_name()) }
+                    if a_is_dir && !b_is_dir {
+                        std::cmp::Ordering::Less
+                    } else if !a_is_dir && b_is_dir {
+                        std::cmp::Ordering::Greater
+                    } else {
+                        path_a.file_name().cmp(&path_b.file_name())
+                    }
                 }
                 SortOrder::NameZA => path_b.file_name().cmp(&path_a.file_name()),
                 SortOrder::ModifiedNewOld => get_modified(path_b).cmp(&get_modified(path_a)),
@@ -82,22 +94,21 @@ impl FileTree {
         for file_location in entrys_vec {
             let path_obj = Path::new(&file_location);
             let is_dir = path_obj.is_dir();
-            let file_name = path_obj.file_name().and_then(|n| n.to_str()).unwrap_or("unknown");
+            let file_name = path_obj
+                .file_name()
+                .and_then(|n| n.to_str())
+                .unwrap_or("unknown");
 
-            let mut icon_data: Option<(bool, String)> = None;
             let relative_path = if let Ok(rel) = path_obj.strip_prefix(vault) {
-                rel.to_str().unwrap_or(file_name).to_string()
+                rel.to_string_lossy().replace('\\', "/")
             } else {
                 file_name.to_string()
             };
 
+            let mut icon_id: Option<String> = None;
             if enable_icons {
                 if let Some(icon_str) = icon_manager.get_icon(&relative_path) {
-                    if let Some(svg_path) = icon_manager.get_icon_path(icon_str) {
-                        icon_data = Some((true, svg_path.to_string()));
-                    } else {
-                        icon_data = Some((false, icon_str.clone()));
-                    }
+                    icon_id = Some(icon_str.clone());
                 }
             }
 
@@ -106,68 +117,137 @@ impl FileTree {
 
             if is_dir {
                 let id = ui.make_persistent_id(&file_location);
-                let mut state = egui::collapsing_header::CollapsingState::load_with_default_open(ui.ctx(), id, false);
+                let mut state = egui::collapsing_header::CollapsingState::load_with_default_open(
+                    ui.ctx(),
+                    id,
+                    false,
+                );
 
-                let dnd_res = ui.dnd_drag_source(Id::new("dnd_dir").with(&file_location), file_location.clone(), |ui| {
-                    let (rect, response) = ui.allocate_exact_size(row_size, Sense::click());
-                    
-                    if response.hovered() || is_selected {
-                        ui.painter().rect_filled(rect, 2.0, if is_selected { ui.style().visuals.selection.bg_fill } else { ui.style().visuals.widgets.hovered.bg_fill });
-                    }
+                let dnd_res = ui.dnd_drag_source(
+                    Id::new("dnd_dir").with(&file_location),
+                    file_location.clone(),
+                    |ui| {
+                        let (rect, response) = ui.allocate_exact_size(row_size, Sense::click());
 
-                    // Flecha
-                    let arrow_color = ui.visuals().widgets.noninteractive.fg_stroke.color;
-                    let arrow_rect = egui::Rect::from_center_size(rect.left_center() + egui::vec2(current_indent + 8.0, 0.0), Vec2::new(10.0, 10.0));
-                    let mut arrow_points = vec![arrow_rect.left_top(), arrow_rect.left_bottom(), arrow_rect.right_center()];
-                    if state.is_open() {
-                        let rotation = egui::emath::Rot2::from_angle(std::f32::consts::PI / 2.0);
-                        for p in &mut arrow_points { *p = arrow_rect.center() + rotation * (*p - arrow_rect.center()); }
-                    }
-                    ui.painter().add(egui::Shape::convex_polygon(arrow_points, arrow_color, egui::Stroke::NONE));
-
-                    // Icono
-                    let icon_rect = egui::Rect::from_center_size(rect.left_center() + egui::vec2(current_indent + 24.0, 0.0), Vec2::new(14.0, 14.0));
-                    if let Some((is_svg, content)) = &icon_data {
-                        if *is_svg {
-                            let image = egui::Image::new(egui::ImageSource::Bytes {
-                                uri: content.clone().into(),
-                                bytes: std::fs::read(content).unwrap().into(),
-                            }).fit_to_exact_size(Vec2::new(14.0, 14.0));
-                            image.paint_at(ui, icon_rect);
-                        } else {
-                            ui.painter().text(icon_rect.center(), egui::Align2::CENTER_CENTER, content, egui::FontId::proportional(14.0), ui.style().visuals.text_color());
+                        if response.hovered() || is_selected {
+                            ui.painter().rect_filled(
+                                rect,
+                                2.0,
+                                if is_selected {
+                                    ui.style().visuals.selection.bg_fill
+                                } else {
+                                    ui.style().visuals.widgets.hovered.bg_fill
+                                },
+                            );
                         }
-                    }
 
-                    // Nombre
-                    let text_pos = rect.left_center() + egui::vec2(current_indent + 34.0, 0.0);
-                    ui.painter().text(text_pos, egui::Align2::LEFT_CENTER, file_name, egui::FontId::proportional(14.0), ui.style().visuals.text_color());
+                        // Flecha
+                        let arrow_color = ui.visuals().widgets.noninteractive.fg_stroke.color;
+                        let arrow_rect = egui::Rect::from_center_size(
+                            rect.left_center() + egui::vec2(current_indent + 8.0, 0.0),
+                            Vec2::new(10.0, 10.0),
+                        );
+                        let mut arrow_points = vec![
+                            arrow_rect.left_top(),
+                            arrow_rect.left_bottom(),
+                            arrow_rect.right_center(),
+                        ];
+                        if state.is_open() {
+                            let rotation =
+                                egui::emath::Rot2::from_angle(std::f32::consts::PI / 2.0);
+                            for p in &mut arrow_points {
+                                *p = arrow_rect.center() + rotation * (*p - arrow_rect.center());
+                            }
+                        }
+                        ui.painter().add(egui::Shape::convex_polygon(
+                            arrow_points,
+                            arrow_color,
+                            egui::Stroke::NONE,
+                        ));
 
-                    response
-                });
+                        // Icono
+                        let icon_rect = egui::Rect::from_center_size(
+                            rect.left_center() + egui::vec2(current_indent + 24.0, 0.0),
+                            Vec2::new(14.0, 14.0),
+                        );
+                        if let Some(id) = &icon_id {
+                            if let Some(source) = icon_manager.get_icon_source(id) {
+                                if let IconSource::Bytes(bytes) = source {
+                                    ui.allocate_ui_at_rect(icon_rect, |ui| {
+                                        ui.add(
+                                            egui::Image::from_bytes(
+                                                format!("bytes://{}.svg", id),
+                                                bytes,
+                                            )
+                                            .fit_to_exact_size(Vec2::new(14.0, 14.0)),
+                                        );
+                                    });
+                                }
+                            } else {
+                                ui.allocate_ui_at_rect(icon_rect, |ui| {
+                                    egui_twemoji::EmojiLabel::new(id).show(ui);
+                                });
+                            }
+                        }
+
+                        // Nombre
+                        let text_pos = rect.left_center() + egui::vec2(current_indent + 34.0, 0.0);
+                        ui.painter().text(
+                            text_pos,
+                            egui::Align2::LEFT_CENTER,
+                            file_name,
+                            egui::FontId::proportional(14.0),
+                            ui.style().visuals.text_color(),
+                        );
+
+                        response
+                    },
+                );
 
                 let response = dnd_res.response.interact(Sense::click());
-                if response.clicked() { 
-                    state.toggle(ui); 
+                if response.clicked() {
+                    state.toggle(ui);
                 }
 
                 if response.dnd_hover_payload::<String>().is_some() {
-                    ui.painter().rect_stroke(response.rect, 2.0, egui::Stroke::new(2.0, ui.ctx().style().visuals.selection.stroke.color), egui::StrokeKind::Middle);
+                    ui.painter().rect_stroke(
+                        response.rect,
+                        2.0,
+                        egui::Stroke::new(2.0, ui.ctx().style().visuals.selection.stroke.color),
+                        egui::StrokeKind::Middle,
+                    );
                 }
                 if let Some(source_path) = response.dnd_release_payload::<String>() {
                     let source_str: &str = &source_path;
                     if source_str != file_location && !file_location.starts_with(source_str) {
-                        let target_path = Path::new(&file_location).join(Path::new(source_str).file_name().unwrap());
-                        if let Err(e) = fs::rename(source_str, &target_path) { self.menu_error = format!("Move error: {}", e); }
-                        else if *current_file == source_str { *current_file = target_path.to_str().unwrap().to_string(); }
+                        let target_path = Path::new(&file_location)
+                            .join(Path::new(source_str).file_name().unwrap());
+                        if let Err(e) = fs::rename(source_str, &target_path) {
+                            self.menu_error = format!("Move error: {}", e);
+                        } else if *current_file == source_str {
+                            *current_file = target_path.to_str().unwrap().to_string();
+                        }
                     }
                 }
 
                 state.show_body_unindented(ui, |ui| {
-                    self.render(ui, &file_location, current_file, vault, sort_entrys, enable_icons, icon_manager, icon_selector, depth + 1);
+                    self.render(
+                        ui,
+                        &file_location,
+                        current_file,
+                        vault,
+                        sort_entrys,
+                        enable_icons,
+                        icon_manager,
+                        icon_selector,
+                        depth + 1,
+                    );
                 });
             } else {
-                let is_renaming = self.renaming_path.as_ref().map_or(false, |p| *p == file_location);
+                let is_renaming = self
+                    .renaming_path
+                    .as_ref()
+                    .map_or(false, |p| *p == file_location);
                 if is_renaming {
                     ui.horizontal(|ui| {
                         ui.add_space(current_indent + 34.0);
@@ -176,10 +256,14 @@ impl FileTree {
                         if ui.input(|i| i.key_pressed(egui::Key::Enter)) {
                             let new_path = path_obj.parent().unwrap().join(&self.rename);
                             if fs::rename(&file_location, &new_path).is_ok() {
-                                if *current_file == file_location { *current_file = new_path.to_str().unwrap().to_string(); }
+                                if *current_file == file_location {
+                                    *current_file = new_path.to_str().unwrap().to_string();
+                                }
                                 self.renaming_path = None;
                             }
-                        } else if ui.input(|i| i.key_pressed(egui::Key::Escape)) { self.renaming_path = None; }
+                        } else if ui.input(|i| i.key_pressed(egui::Key::Escape)) {
+                            self.renaming_path = None;
+                        }
                     });
                 } else {
                     let dnd_id = Id::new("dnd_file").with(&file_location);
@@ -187,46 +271,89 @@ impl FileTree {
                         let (rect, response) = ui.allocate_exact_size(row_size, Sense::click());
 
                         if is_selected || response.hovered() {
-                            ui.painter().rect_filled(rect, 2.0, if is_selected { ui.style().visuals.selection.bg_fill } else { ui.style().visuals.widgets.hovered.bg_fill });
+                            ui.painter().rect_filled(
+                                rect,
+                                2.0,
+                                if is_selected {
+                                    ui.style().visuals.selection.bg_fill
+                                } else {
+                                    ui.style().visuals.widgets.hovered.bg_fill
+                                },
+                            );
                         }
-                        
-                        // Icono
-                        let icon_rect = egui::Rect::from_center_size(rect.left_center() + egui::vec2(current_indent + 24.0, 0.0), Vec2::new(14.0, 14.0));
-                        if let Some((is_svg, content)) = &icon_data {
-                            if *is_svg {
-                                let img = egui::Image::new(egui::ImageSource::Bytes {
-                                    uri: content.clone().into(),
-                                    bytes: std::fs::read(content).unwrap().into(),
-                                }).fit_to_exact_size(Vec2::new(14.0, 14.0));
-                                img.paint_at(ui, icon_rect);
+
+                        // Icono (Personalizado o Espacio)
+                        let icon_rect = egui::Rect::from_center_size(
+                            rect.left_center() + egui::vec2(current_indent + 24.0, 0.0),
+                            Vec2::new(14.0, 14.0),
+                        );
+                        if let Some(id) = &icon_id {
+                            if let Some(source) = icon_manager.get_icon_source(id) {
+                                if let IconSource::Bytes(bytes) = source {
+                                    ui.allocate_ui_at_rect(icon_rect, |ui| {
+                                        ui.add(
+                                            egui::Image::from_bytes(
+                                                format!("bytes://{}.svg", id),
+                                                bytes,
+                                            )
+                                            .fit_to_exact_size(Vec2::new(14.0, 14.0)),
+                                        );
+                                    });
+                                }
                             } else {
-                                ui.painter().text(icon_rect.center(), egui::Align2::CENTER_CENTER, content, egui::FontId::proportional(14.0), ui.style().visuals.text_color());
+                                // Emoji o texto usando egui-twemoji
+                                ui.allocate_ui_at_rect(icon_rect, |ui| {
+                                    egui_twemoji::EmojiLabel::new(id).show(ui);
+                                });
                             }
                         }
 
-                        let text_color = if is_selected { ui.style().visuals.selection.stroke.color } else { ui.style().visuals.text_color() };
-                        ui.painter().text(rect.left_center() + egui::vec2(current_indent + 34.0, 0.0), egui::Align2::LEFT_CENTER, file_name, egui::FontId::proportional(14.0), text_color);
-                        
+                        let text_color = if is_selected {
+                            ui.style().visuals.selection.stroke.color
+                        } else {
+                            ui.style().visuals.text_color()
+                        };
+                        ui.painter().text(
+                            rect.left_center() + egui::vec2(current_indent + 34.0, 0.0),
+                            egui::Align2::LEFT_CENTER,
+                            file_name,
+                            egui::FontId::proportional(14.0),
+                            text_color,
+                        );
+
                         response
                     });
-                    
+
                     let response = dnd_res.response.interact(Sense::click());
-                    if response.clicked() { 
+                    if response.clicked() {
                         *current_file = file_location.clone();
                         ui.ctx().request_repaint();
                     }
-                    if response.double_clicked() { 
-                        self.renaming_path = Some(file_location.clone()); 
-                        self.rename = file_name.to_string(); 
+                    if response.double_clicked() {
+                        self.renaming_path = Some(file_location.clone());
+                        self.rename = file_name.to_string();
                     }
-                    
-                    Popup::context_menu(&response).id(Id::new("ctx").with(&file_location)).show(|ui| {
-                        if enable_icons {
-                            if ui.button("Change Icon").clicked() { icon_selector.open(relative_path.clone(), icon_manager); ui.close(); }
-                            ui.separator();
-                        }
-                        file_options(ui, &file_location, &path, &mut self.rename, &mut self.renaming_path, &mut self.menu_error, vault);
-                    });
+
+                    Popup::context_menu(&response)
+                        .id(Id::new("ctx").with(&file_location))
+                        .show(|ui| {
+                            if enable_icons {
+                                if ui.button("Change Icon").clicked() {
+                                    icon_selector.open(relative_path.clone(), icon_manager);
+                                    ui.close();
+                                }
+                                ui.separator();
+                            }
+                            file_options(
+                                ui,
+                                &file_location,
+                                &path,
+                                &mut self.rename,
+                                &mut self.renaming_path,
+                                &mut self.menu_error,
+                                vault,
+                            );
+                        });
                 }
             }
             ui.add_space(2.0);

@@ -1014,6 +1014,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "egui-twemoji"
+version = "0.7.1"
+dependencies = [
+ "egui",
+ "twemoji-assets",
+ "unicode-segmentation",
+]
+
+[[package]]
 name = "egui-wgpu"
 version = "0.33.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2240,6 +2249,7 @@ dependencies = [
  "directories",
  "eframe",
  "egui",
+ "egui-twemoji",
  "egui_commonmark",
  "egui_dock",
  "egui_extras",
@@ -4043,6 +4053,12 @@ name = "ttf-parser"
 version = "0.25.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d2df906b07856748fa3f6e0ad0cbaa047052d4a7dd609e231c4f72cee8c36f31"
+
+[[package]]
+name = "twemoji-assets"
+version = "1.4.0+16.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "017c4ab54d18564355728542435acefe322cbf6ca16efd912fa03c9a8b7f24bd"
 
 [[package]]
 name = "type-map"
