@@ -1,4 +1,4 @@
-use crate::graph_state::Graph;
+use crate::graph::Graph;
 use crate::iconize::IconSelector;
 use egui::*;
 use std::fmt;
@@ -14,8 +14,7 @@ mod emojis;
 mod excalidraw;
 mod files;
 mod format;
-mod graph_state;
-mod graph_ui;
+mod graph;
 mod iconize;
 mod income;
 mod main_area;

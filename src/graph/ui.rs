@@ -1,4 +1,4 @@
-use crate::graph_state::{CustomGroup, Graph, MatchType};
+use super::data::{CustomGroup, Graph, MatchType};
 use crate::main_area::content_enum::Content;
 use std::collections::HashSet;
 
