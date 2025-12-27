@@ -209,6 +209,10 @@ impl eframe::App for Marmol {
                 &mut self.vault,
                 &mut self.content,
                 &self.window_size,
+                &mut self.create_new_vault,
+                &mut self.new_vault_folder,
+                &mut self.new_vault_folder_err,
+                &mut self.show_create_button,
             );
         } else if self.current_window == screens::Screen::Main {
             if ctx.input(|i| i.modifiers.command && i.key_pressed(egui::Key::O)) {

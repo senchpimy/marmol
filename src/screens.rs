@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::main_area::content_enum::Content;
 use crate::MShape;
-use eframe::egui::{Button, CentralPanel, FontId, RichText};
+use eframe::egui::{CentralPanel, FontId, RichText};
 
 use rfd::FileDialog;
 use std::fs;
@@ -20,13 +20,16 @@ pub enum Screen {
 pub fn default(
     ctx: &egui::Context,
     current_window: &mut Screen,
-    nuevo: &mut String,
+    nuevo_vault_name: &mut String,
     vaults_vec: &mut Vec<String>,
     vault: &mut String,
     content: &mut Content,
     window_size: &MShape,
+    show_creation_ui: &mut bool,
+    parent_folder: &mut String,
+    creation_error: &mut String,
+    can_create: &mut bool,
 ) {
-    let mut nuevo_bool = false;
     CentralPanel::default().show(ctx, |ui| {
         let text = RichText::new("Marmol").strong().size(60.0);
         ui.with_layout(egui::Layout::top_down(egui::Align::Center), |ui| {
@@ -40,63 +43,130 @@ pub fn default(
             ui.add_space(20.0);
 
             ui.label(text);
-            ui.add_space(100.0);
-            if ui
-                .add_sized(
-                    [button_width, button_height],
-                    egui::Button::new("Select a Vault"),
-                )
-                .clicked()
-            {
-                let files = FileDialog::new().set_title("Select a Folder").pick_folder();
-                match files {
-                    Some(x) => {
-                        let selected_vault = x.to_str().unwrap();
-                        vaults_vec.push(selected_vault.to_owned());
-                        *vault = String::from(selected_vault);
-                        *current_window = Screen::Main;
-                        *content = Content::Blank;
-                    }
-                    None => {}
-                }
+            ui.add_space(40.0);
+
+            if !vaults_vec.is_empty() {
+                ui.label(RichText::new("Recent Vaults").strong().size(20.0));
+                ui.add_space(10.0);
+                egui::ScrollArea::vertical()
+                    .max_height(200.0)
+                    .show(ui, |ui| {
+                        let mut to_remove = None;
+                        for (idx, v) in vaults_vec.iter().enumerate() {
+                            ui.horizontal(|ui| {
+                                if ui
+                                    .add_sized([button_width * 0.8, 30.0], egui::Button::new(v))
+                                    .clicked()
+                                {
+                                    *vault = v.clone();
+                                    *current_window = Screen::Main;
+                                    *content = Content::Blank;
+                                }
+                                if ui.button("🗑").on_hover_text("Remove from list").clicked() {
+                                    to_remove = Some(idx);
+                                }
+                            });
+                            ui.add_space(5.0);
+                        }
+                        if let Some(idx) = to_remove {
+                            vaults_vec.remove(idx);
+                        }
+                    });
+                ui.add_space(20.0);
             }
-            ui.add_space(30.0);
-            ui.add(egui::TextEdit::singleline(nuevo));
-            if nuevo.len() > 2 {
-                let path = Path::new(nuevo);
-                let mut open_text = RichText::new("");
-                if !path.exists() {
-                    if path.is_dir() {
-                        open_text = RichText::new("Good!")
-                            .color(ui.ctx().style().visuals.selection.stroke.color);
-                        nuevo_bool = true;
+
+            ui.horizontal(|ui| {
+                ui.add_space((ui.available_width() - button_width) / 2.0);
+                ui.vertical(|ui| {
+                    if ui
+                        .add_sized(
+                            [button_width, button_height],
+                            egui::Button::new("📂 Open existing Vault"),
+                        )
+                        .clicked()
+                    {
+                        if let Some(x) = FileDialog::new().set_title("Select a Folder").pick_folder() {
+                            let selected_vault = x.to_str().unwrap().to_owned();
+                            if !vaults_vec.contains(&selected_vault) {
+                                vaults_vec.push(selected_vault.clone());
+                            }
+                            *vault = selected_vault;
+                            *current_window = Screen::Main;
+                            *content = Content::Blank;
+                        }
                     }
-                } else {
-                    open_text = RichText::new("Path already exists")
-                        .color(ui.ctx().style().visuals.error_fg_color);
-                }
-                ui.label(open_text);
-            }
-            if ui
-                .add_sized(
-                    [button_width, button_height],
-                    egui::Button::new("Create new Vault"),
-                )
-                .clicked()
-                && nuevo_bool
-            {
-                unimplemented!();
-            };
-            ui.add_space(30.0);
-            if ui
-                .add_sized(
-                    [button_width, button_height],
-                    egui::Button::new("Configuration"),
-                )
-                .clicked()
-            {
-                *current_window = Screen::Configuracion;
-            };
+
+                    ui.add_space(10.0);
+
+                    if ui
+                        .add_sized(
+                            [button_width, button_height],
+                            egui::Button::new("✨ Create new Vault"),
+                        )
+                        .clicked()
+                    {
+                        if let Some(x) = FileDialog::new().set_title("Select Parent Folder").pick_folder() {
+                            *show_creation_ui = true;
+                            *parent_folder = x.to_str().unwrap().to_owned();
+                        }
+                    }
+
+                    if *show_creation_ui {
+                        ui.add_space(10.0);
+                        ui.label(format!("Creating in: {}", parent_folder));
+                        ui.horizontal(|ui| {
+                            ui.label("Name:");
+                            let response = ui.add(egui::TextEdit::singleline(nuevo_vault_name));
+                            if response.changed() {
+                                let full_path = format!("{}/{}", parent_folder, nuevo_vault_name);
+                                if Path::new(&full_path).exists() {
+                                    *creation_error = "Folder already exists".to_string();
+                                    *can_create = false;
+                                } else {
+                                    *creation_error = String::new();
+                                    *can_create = !nuevo_vault_name.is_empty();
+                                }
+                            }
+                        });
+
+                        if !creation_error.is_empty() {
+                            ui.label(RichText::new(creation_error.as_str()).color(ui.ctx().style().visuals.error_fg_color));
+                        }
+
+                        ui.horizontal(|ui| {
+                            if ui.add_enabled(*can_create, egui::Button::new("Confirm")).clicked() {
+                                let full_path = format!("{}/{}", parent_folder, nuevo_vault_name);
+                                if fs::create_dir(&full_path).is_ok() {
+                                    let _ = fs::create_dir(format!("{}/.obsidian", full_path));
+                                    vaults_vec.push(full_path.clone());
+                                    *vault = full_path;
+                                    *current_window = Screen::Main;
+                                    *content = Content::Blank;
+                                    *show_creation_ui = false;
+                                    *nuevo_vault_name = String::new();
+                                } else {
+                                    *creation_error = "Failed to create directory".to_string();
+                                }
+                            }
+                            if ui.button("Cancel").clicked() {
+                                *show_creation_ui = false;
+                                *nuevo_vault_name = String::new();
+                            }
+                        });
+                    }
+
+                    ui.add_space(20.0);
+                    if ui
+                        .add_sized(
+                            [button_width, 40.0],
+                            egui::Button::new("⚙ Configuration"),
+                        )
+                        .clicked()
+                    {
+                        *current_window = Screen::Configuracion;
+                    };
+                });
+            });
         });
     });
 }
@@ -131,6 +201,7 @@ pub fn configuracion(
 
             vault_management(
                 ui,
+                current_window,
                 vaults,
                 vault,
                 nw_vault_str,
@@ -169,6 +240,7 @@ pub fn configuracion(
 
 fn vault_management(
     ui: &mut egui::Ui,
+    current_window: &mut Screen,
     vaults: &mut Vec<String>,
     vault: &mut String,
     nw_vault_str: &mut String,
@@ -188,10 +260,13 @@ fn vault_management(
             error,
             button,
             vaults,
+            vault,
+            current_window,
+            vault_changed,
             button_size,
         );
         manage_existing_vaults(ui, vaults, vault, vault_changed, button_size);
-        add_existing_vault(ui, vaults, vault, button_size);
+        add_existing_vault(ui, vaults, vault, current_window, vault_changed, button_size);
     });
 }
 
@@ -203,13 +278,16 @@ fn create_new_vault(
     error: &mut String,
     button: &mut bool,
     vaults: &mut Vec<String>,
+    vault: &mut String,
+    current_window: &mut Screen,
+    vault_changed: &mut bool,
     button_size: [f32; 2],
 ) {
     if ui
-        .add_sized(button_size, egui::Button::new("Create a New Vault"))
+        .add_sized(button_size, egui::Button::new("✨ Create a New Vault"))
         .clicked()
     {
-        let files = FileDialog::new().set_title("Select a Folder").pick_folder();
+        let files = FileDialog::new().set_title("Select Parent Folder").pick_folder();
         if let Some(x) = files {
             *show = true;
             *folder = String::from(x.to_str().unwrap());
@@ -218,6 +296,7 @@ fn create_new_vault(
         }
     }
     if *show {
+        ui.label(format!("Creating in: {}", folder));
         let edit = egui::TextEdit::singleline(nw_vault_str);
         let response = ui.add(edit);
         if response.changed() {
@@ -228,21 +307,24 @@ fn create_new_vault(
                 *button = false;
             } else {
                 *error = String::new();
-                *button = true;
+                *button = !nw_vault_str.is_empty();
             }
         }
     }
     if *button {
         if ui
-            .add_sized(button_size, egui::Button::new("Create!"))
+            .add_sized(button_size, egui::Button::new("Confirm Creation"))
             .clicked()
         {
             let full_path = format!("{}/{}", folder, nw_vault_str);
             if fs::create_dir(&full_path).is_ok() {
-                vaults.push(full_path.clone());
-                if fs::create_dir(format!("{}/.obsidian/", full_path)).is_err() {
-                    *error = "Failed to create .obsidian folder".to_string();
+                let _ = fs::create_dir(format!("{}/.obsidian/", full_path));
+                if !vaults.contains(&full_path) {
+                    vaults.push(full_path.clone());
                 }
+                *vault = full_path;
+                *vault_changed = true;
+                *current_window = Screen::Main;
             } else {
                 *error = "Failed to create vault folder".to_string();
             }
@@ -261,30 +343,37 @@ fn manage_existing_vaults(
     vault_changed: &mut bool,
     button_size: [f32; 2],
 ) {
-    egui::CollapsingHeader::new(RichText::new("Manage Vault").strong()).show(ui, |ui| {
-        let mut new_vaults = vaults.clone();
-        let mut changed = false;
+    egui::CollapsingHeader::new(RichText::new("Manage Vaults").strong()).show(ui, |ui| {
+        let mut to_remove = None;
         egui::ScrollArea::vertical().show(ui, |ui| {
-            for i in &mut *vaults {
-                let stri = i.as_str();
-                if stri == vault {
-                    ui.label(stri);
-                } else {
-                    let btn = Button::new(stri);
-                    let menu =
-                        |ui: &mut egui::Ui| remove_vault(ui, stri, &mut new_vaults, &mut changed);
-                    let response = ui.add_sized(button_size, btn);
-                    if response.clicked() {
-                        *vault = String::from(stri);
-                        *vault_changed = true;
+            for (idx, v) in vaults.iter().enumerate() {
+                ui.horizontal(|ui| {
+                    let is_current = v == vault;
+                    let btn_text = if is_current {
+                        format!("{} (Current)", v)
+                    } else {
+                        v.clone()
+                    };
+
+                    if ui
+                        .add_sized([button_size[0] * 0.85, 30.0], egui::Button::new(btn_text))
+                        .clicked()
+                    {
+                        if !is_current {
+                            *vault = v.clone();
+                            *vault_changed = true;
+                        }
                     }
-                    response.context_menu(menu);
-                }
-            }
-            if changed {
-                *vaults = new_vaults;
+                    if ui.button("🗑").on_hover_text("Remove from list").clicked() {
+                        to_remove = Some(idx);
+                    }
+                });
+                ui.add_space(5.0);
             }
         });
+        if let Some(idx) = to_remove {
+            vaults.remove(idx);
+        }
     });
 }
 
@@ -292,18 +381,22 @@ fn add_existing_vault(
     ui: &mut egui::Ui,
     vaults: &mut Vec<String>,
     vault: &mut String,
+    current_window: &mut Screen,
+    vault_changed: &mut bool,
     button_size: [f32; 2],
 ) {
     if ui
-        .add_sized(button_size, egui::Button::new("Add a Existing Vault"))
+        .add_sized(button_size, egui::Button::new("📂 Add an Existing Vault"))
         .clicked()
     {
         if let Some(x) = FileDialog::new().set_title("Select a Folder").pick_folder() {
             let selected_vault = x.to_str().unwrap().to_owned();
             if !vaults.contains(&selected_vault) {
-                vaults.push(selected_vault.to_owned());
-                *vault = selected_vault;
-            };
+                vaults.push(selected_vault.clone());
+            }
+            *vault = selected_vault;
+            *vault_changed = true;
+            *current_window = Screen::Main;
         }
     }
 }
@@ -420,14 +513,6 @@ fn server_settings(ui: &mut egui::Ui, current_window: &mut Screen, button_size: 
             *current_window = Screen::Server;
         };
     });
-}
-
-fn remove_vault(ui: &mut egui::Ui, s: &str, vec: &mut Vec<String>, changed: &mut bool) {
-    if ui.button("Delete").clicked() {
-        vec.retain(|x| x != &s);
-        *changed = true;
-    }
-    ui.label("This doens't delete the folder from your system, just from the program acces");
 }
 
 pub fn set_server(_ctx: &egui::Context) {}
