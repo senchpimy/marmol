@@ -280,6 +280,11 @@ impl LeftControls {
                             if let Err(e) = fs::rename(source_str, &target_path) {
                                 self.file_tree.menu_error = format!("Move error: {}", e);
                             } else {
+                                // Update icons
+                                let old_rel = Path::new(source_str).strip_prefix(path).map(|p| p.to_string_lossy().replace('\\', "/")).unwrap_or_else(|_| source_str.to_string());
+                                let new_rel = target_path.strip_prefix(path).map(|p| p.to_string_lossy().replace('\\', "/")).unwrap_or_else(|_| target_path.to_string_lossy().to_string());
+                                self.icon_manager.rename_icon(path, &old_rel, &new_rel);
+
                                 if *current_file == source_str {
                                     *current_file = target_path.to_str().unwrap().to_string();
                                 }

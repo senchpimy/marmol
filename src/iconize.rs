@@ -533,6 +533,31 @@ impl IconManager {
             let _ = fs::write(config_path, serialized);
         }
     }
+
+    pub fn rename_icon(&mut self, vault_path: &str, old_rel_path: &str, new_rel_path: &str) {
+        if let Some(icon) = self.icons.remove(old_rel_path) {
+            self.icons.insert(new_rel_path.to_string(), icon.clone());
+
+            let config_path =
+                Path::new(vault_path).join(".obsidian/plugins/obsidian-icon-folder/data.json");
+
+            let mut json_val: Value = if config_path.exists() {
+                let data = fs::read_to_string(&config_path).unwrap_or_else(|_| "{}".to_string());
+                serde_json::from_str(&data).unwrap_or(Value::Object(Map::new()))
+            } else {
+                Value::Object(Map::new())
+            };
+
+            if let Value::Object(ref mut map) = json_val {
+                map.remove(old_rel_path);
+                map.insert(new_rel_path.to_string(), Value::String(icon));
+            }
+
+            if let Ok(serialized) = serde_json::to_string_pretty(&json_val) {
+                let _ = fs::write(config_path, serialized);
+            }
+        }
+    }
 }
 
 // --- SELECTOR DE ICONOS ---

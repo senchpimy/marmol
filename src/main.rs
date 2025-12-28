@@ -289,7 +289,7 @@ impl eframe::App for Marmol {
                     &mut self.current_file,
                     &mut self.content,
                     &self.vault,
-                    &self.left_controls.icon_manager,
+                    &mut self.left_controls.icon_manager,
                 );
                 ctx.send_viewport_cmd(egui::ViewportCommand::Title(format!(
                     "Marmol - {}",

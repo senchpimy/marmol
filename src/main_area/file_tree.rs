@@ -236,8 +236,15 @@ impl FileTree {
                             .join(Path::new(source_str).file_name().unwrap());
                         if let Err(e) = fs::rename(source_str, &target_path) {
                             self.menu_error = format!("Move error: {}", e);
-                        } else if *current_file == source_str {
-                            *current_file = target_path.to_str().unwrap().to_string();
+                        } else {
+                            // Update icons
+                            let old_rel = Path::new(source_str).strip_prefix(vault).map(|p| p.to_string_lossy().replace('\\', "/")).unwrap_or_else(|_| source_str.to_string());
+                            let new_rel = target_path.strip_prefix(vault).map(|p| p.to_string_lossy().replace('\\', "/")).unwrap_or_else(|_| target_path.to_string_lossy().to_string());
+                            icon_manager.rename_icon(vault, &old_rel, &new_rel);
+
+                            if *current_file == source_str {
+                                *current_file = target_path.to_str().unwrap().to_string();
+                            }
                         }
                     }
                 }
@@ -268,6 +275,11 @@ impl FileTree {
                         if ui.input(|i| i.key_pressed(egui::Key::Enter)) {
                             let new_path = path_obj.parent().unwrap().join(&self.rename);
                             if fs::rename(&file_location, &new_path).is_ok() {
+                                // Update icons
+                                let old_rel = Path::new(&file_location).strip_prefix(vault).map(|p| p.to_string_lossy().replace('\\', "/")).unwrap_or_else(|_| file_location.clone());
+                                let new_rel = new_path.strip_prefix(vault).map(|p| p.to_string_lossy().replace('\\', "/")).unwrap_or_else(|_| new_path.to_string_lossy().to_string());
+                                icon_manager.rename_icon(vault, &old_rel, &new_rel);
+
                                 if *current_file == file_location {
                                     *current_file = new_path.to_str().unwrap().to_string();
                                 }

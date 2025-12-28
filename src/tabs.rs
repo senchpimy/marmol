@@ -219,7 +219,7 @@ struct MTabViewer<'a> {
     current_file: &'a mut String,
     content: &'a mut Content,
     vault: &'a str,
-    icon_manager: &'a IconManager,
+    icon_manager: &'a mut IconManager,
 }
 
 impl TabViewer for MTabViewer<'_> {
@@ -253,7 +253,16 @@ impl TabViewer for MTabViewer<'_> {
                     if let Some(parent) = old_path.parent() {
                         let new_path = parent.join(&tab.rename_buffer);
                         if std::fs::rename(&tab.path, &new_path).is_ok() {
+                            let old_rel = tab.path.strip_prefix(self.vault).unwrap_or(&tab.path);
+                            let old_rel = old_rel.strip_prefix('/').unwrap_or(old_rel).to_string();
+                            
                             let new_path_str = new_path.to_str().unwrap().to_string();
+                            
+                            let new_rel = new_path_str.strip_prefix(self.vault).unwrap_or(&new_path_str);
+                            let new_rel = new_rel.strip_prefix('/').unwrap_or(new_rel).to_string();
+
+                            self.icon_manager.rename_icon(self.vault, &old_rel, &new_rel);
+
                             tab.path = new_path_str.clone();
                             tab.title = tab.rename_buffer.clone();
                             *self.current_file = new_path_str.clone();
@@ -528,7 +537,7 @@ impl Tabs {
         current_file: &mut String,
         content: &mut Content,
         vault: &str,
-        icon_manager: &IconManager,
+        icon_manager: &mut IconManager,
     ) {
         if ui.input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::W)) {
             if let Some((focus_surf, focus_node)) = self.tree.focused_leaf() {
