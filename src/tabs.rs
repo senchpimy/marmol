@@ -246,7 +246,7 @@ impl TabViewer for MTabViewer<'_> {
             }
 
             if tab.is_renaming {
-                let res = ui.text_edit_singleline(&mut tab.rename_buffer);
+                let res = ui.add(egui::TextEdit::singleline(&mut tab.rename_buffer).frame(false));
                 if res.lost_focus() || (res.changed() && ui.input(|i| i.key_pressed(egui::Key::Enter))) {
                     tab.is_renaming = false;
                     let old_path = Path::new(&tab.path);

@@ -91,7 +91,8 @@ impl EasyMarkEditor {
                 .id(editor_id)
                 .desired_width(f32::INFINITY)
                 .font(egui::TextStyle::Monospace) // for cursor height
-                .layouter(&mut layouter),
+                .layouter(&mut layouter)
+                .frame(false),
         );
 
         if let Some(mut state) = TextEdit::load_state(ui.ctx(), response.id) {
