@@ -1,5 +1,6 @@
 use crate::graph::Graph;
-use crate::iconize::IconSelector;
+use crate::iconize::{IconSelector, IconPackInstaller};
+use crate::command_palette::{CommandPalette, CommandAction};
 use egui::*;
 use std::fmt;
 use std::fs;
@@ -10,6 +11,7 @@ use std::path::Path;
 extern crate json;
 
 mod configuraciones;
+mod command_palette;
 mod easy_mark;
 mod emojis;
 mod excalidraw;
@@ -96,6 +98,8 @@ struct Marmol {
     marker: Graph,
     enable_icon_folder: bool,
     icon_selector: IconSelector,
+    icon_pack_installer: IconPackInstaller,
+    command_palette: CommandPalette,
 }
 
 impl Marmol {
@@ -152,6 +156,8 @@ impl Marmol {
             sort_files: state.sort_files,
             enable_icon_folder: state.enable_icon_folder,
             icon_selector: IconSelector::default(),
+            icon_pack_installer: IconPackInstaller::default(),
+            command_palette: CommandPalette::default(),
         }
     }
 }
@@ -193,6 +199,8 @@ impl Default for Marmol {
             sort_files: false,
             enable_icon_folder: false,
             icon_selector: IconSelector::default(),
+            icon_pack_installer: IconPackInstaller::default(),
+            command_palette: CommandPalette::default(),
         }
     }
 }
@@ -221,6 +229,18 @@ impl eframe::App for Marmol {
 
             self.icon_selector
                 .ui(ctx, &self.vault, &mut self.left_controls.icon_manager);
+            
+            // Render Command Palette and handle actions
+            match self.command_palette.ui(ctx) {
+                CommandAction::OpenIconInstaller => {
+                    self.icon_pack_installer.is_open = true;
+                }
+                CommandAction::None => {}
+            }
+
+            // Render Icon Pack Installer
+            self.icon_pack_installer.ui(ctx, &self.vault, &mut self.left_controls.icon_manager);
+
             //Main screen
             self.left_controls.left_side_settings(
                 ctx,
@@ -232,6 +252,7 @@ impl eframe::App for Marmol {
                 &mut self.tabs,
                 &mut self.tabs_counter,
                 &self.window_size,
+                &mut self.command_palette,
             );
             self.left_controls.left_side_menu(
                 ctx,
@@ -268,6 +289,7 @@ impl eframe::App for Marmol {
                     &mut self.current_file,
                     &mut self.content,
                     &self.vault,
+                    &self.left_controls.icon_manager,
                 );
                 ctx.send_viewport_cmd(egui::ViewportCommand::Title(format!(
                     "Marmol - {}",

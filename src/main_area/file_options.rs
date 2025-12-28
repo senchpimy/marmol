@@ -22,8 +22,6 @@ pub fn file_options(
     let star = egui::Button::new("Star this file").frame(false);
     let path_s = Path::new(s).file_name().unwrap();
 
-    ui.label("Move");
-
     if ui.add(copy).clicked() {
         let tmp = s.to_owned() + ".copy";
         let s_copy = Path::new(&tmp);

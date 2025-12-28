@@ -209,6 +209,18 @@ impl FileTree {
                     state.toggle(ui);
                 }
 
+                Popup::context_menu(&response)
+                    .id(Id::new("ctx_dir").with(&file_location))
+                    .show(|ui| {
+                        if enable_icons {
+                            if ui.button("Change Icon").clicked() {
+                                icon_selector.open(relative_path.clone(), icon_manager);
+                                ui.close();
+                            }
+                            ui.separator();
+                        }
+                    });
+
                 if response.dnd_hover_payload::<String>().is_some() {
                     ui.painter().rect_stroke(
                         response.rect,

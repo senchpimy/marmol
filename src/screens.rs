@@ -216,6 +216,7 @@ pub fn configuracion(
             appearance_settings(
                 ui,
                 ctx,
+                vault,
                 font_size,
                 center_size,
                 center_size_remain,
@@ -404,6 +405,7 @@ fn add_existing_vault(
 fn appearance_settings(
     ui: &mut egui::Ui,
     ctx: &egui::Context,
+    vault: &str,
     font_size: &mut f32,
     center_size: &mut f32,
     center_size_remain: &mut f32,
@@ -421,6 +423,8 @@ fn appearance_settings(
         ui.checkbox(enable_icon_folder, "Enable Obsidian Icon Folder");
 
         if *enable_icon_folder {
+            let old_settings = icon_manager.settings.clone();
+
             ui.indent("icons_settings", |ui| {
                 let s = &mut icon_manager.settings;
 
@@ -480,6 +484,10 @@ fn appearance_settings(
 
                 ui.checkbox(&mut s.debug_mode, "Debug Mode");
             });
+
+            if old_settings != icon_manager.settings {
+                icon_manager.save_settings(vault);
+            }
             ui.separator();
         }
 

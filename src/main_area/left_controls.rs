@@ -363,6 +363,7 @@ impl LeftControls {
         tabs: &mut crate::tabs::Tabs,
         tabs_counter: &mut usize,
         window_size: &MShape,
+        command_palette: &mut crate::command_palette::CommandPalette,
     ) {
         let left_panel = SidePanel::left("buttons left")
             .resizable(false)
@@ -447,7 +448,7 @@ impl LeftControls {
                     .on_hover_text("Command Palette")
                     .clicked()
                 {
-                    println!("command palette")
+                    command_palette.open();
                 }
                 ui.add_space(space);
                 if ui

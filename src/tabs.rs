@@ -1,7 +1,7 @@
 use crate::excalidraw;
 use crate::easy_mark;
 use crate::files;
-use crate::format;
+use crate::iconize::{IconManager, IconSource};
 use crate::income;
 use crate::kanban;
 
@@ -9,7 +9,7 @@ use crate::main_area::content_enum::Content;
 use crate::main_area::metadata_renderer::create_metadata;
 use crate::tasks;
 use egui::Image;
-use egui::{FontId, Frame, Sense, Ui, WidgetText};
+use egui::{Frame, Sense, Ui, WidgetText};
 use egui_commonmark::*;
 use egui_dock::{DockArea, DockState, NodeIndex, Style, SurfaceIndex, TabViewer};
 use egui_extras::{Size, StripBuilder};
@@ -219,6 +219,7 @@ struct MTabViewer<'a> {
     current_file: &'a mut String,
     content: &'a mut Content,
     vault: &'a str,
+    icon_manager: &'a IconManager,
 }
 
 impl TabViewer for MTabViewer<'_> {
@@ -333,7 +334,42 @@ impl TabViewer for MTabViewer<'_> {
                                     Frame::NONE.inner_margin(egui::Margin::symmetric(30, 10));
                                 let inner_response = frame.show(ui, |ui| {
                                     let (markdown_content, metadata) = files::contents(&editor.code);
-                                    ui.heading(&tab.title);
+                                    
+                                    // Debug prints
+                                    // println!("DEBUG: icon_in_title_enabled: {}", self.icon_manager.settings.icon_in_title_enabled);
+                                    // println!("DEBUG: tab.path: {}", tab.path);
+                                    // println!("DEBUG: self.vault: {}", self.vault);
+
+                                    if self.icon_manager.settings.icon_in_title_enabled {
+                                        let relative_path = if tab.path.starts_with(self.vault) {
+                                            let p = tab.path.strip_prefix(self.vault).unwrap_or(&tab.path);
+                                            p.strip_prefix('/').unwrap_or(p).to_string()
+                                        } else {
+                                            tab.path.clone()
+                                        };
+                                        
+                                        let icon_str = self.icon_manager.get_icon(&relative_path);
+                                        
+                                        if let Some(icon_id) = icon_str {
+                                            ui.horizontal(|ui| {
+                                                 if let Some(IconSource::Bytes(bytes)) = self.icon_manager.get_icon_source(icon_id) {
+                                                     ui.add(egui::Image::from_bytes(
+                                                         format!("bytes://title_{}.svg", icon_id),
+                                                         bytes,
+                                                     ).fit_to_exact_size(egui::vec2(20.0, 20.0)));
+                                                 } else {
+                                                     // Fallback for emojis
+                                                     ui.label(egui::RichText::new(icon_id).size(20.0));
+                                                 }
+                                                 ui.heading(&tab.title);
+                                            });
+                                        } else {
+                                             ui.heading(&tab.title);
+                                        }
+                                    } else {
+                                        ui.heading(&tab.title);
+                                    }
+
                                     if !metadata.is_empty() {
                                         create_metadata(metadata, ui);
                                     }
@@ -492,6 +528,7 @@ impl Tabs {
         current_file: &mut String,
         content: &mut Content,
         vault: &str,
+        icon_manager: &IconManager,
     ) {
         if ui.input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::W)) {
             if let Some((focus_surf, focus_node)) = self.tree.focused_leaf() {
@@ -526,6 +563,7 @@ impl Tabs {
             current_file,
             content,
             vault,
+            icon_manager,
         };
         DockArea::new(&mut self.tree)
             .style(Style::from_egui(ui.style().as_ref()))

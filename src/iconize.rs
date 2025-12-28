@@ -4,11 +4,256 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use std::collections::HashMap;
 use std::fs;
+use std::io::Cursor;
 use std::path::{Path, PathBuf};
+use zip::ZipArchive;
 
 // --- ESTRUCTURAS DE CONFIGURACIÓN ---
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Clone)]
+pub struct IconPack {
+    pub name: &'static str,
+    pub display_name: &'static str,
+    pub internal_path: &'static str,
+    pub download_link: &'static str,
+}
+
+pub fn get_predefined_packs() -> Vec<IconPack> {
+    vec![
+        IconPack {
+            name: "font-awesome-brands",
+            display_name: "FontAwesome Brands",
+            internal_path: "fontawesome-free-6.5.1-web/svgs/brands/",
+            download_link: "https://github.com/FortAwesome/Font-Awesome/releases/download/6.5.1/fontawesome-free-6.5.1-web.zip",
+        },
+        IconPack {
+            name: "font-awesome-regular",
+            display_name: "FontAwesome Regular",
+            internal_path: "fontawesome-free-6.5.1-web/svgs/regular/",
+            download_link: "https://github.com/FortAwesome/Font-Awesome/releases/download/6.5.1/fontawesome-free-6.5.1-web.zip",
+        },
+        IconPack {
+            name: "font-awesome-solid",
+            display_name: "FontAwesome Solid",
+            internal_path: "fontawesome-free-6.5.1-web/svgs/solid/",
+            download_link: "https://github.com/FortAwesome/Font-Awesome/releases/download/6.5.1/fontawesome-free-6.5.1-web.zip",
+        },
+        IconPack {
+            name: "remix-icons",
+            display_name: "Remix Icons",
+            internal_path: "",
+            download_link: "https://github.com/Remix-Design/RemixIcon/releases/download/v4.2.0/RemixIcon_Svg_v4.2.0.zip",
+        },
+        IconPack {
+            name: "icon-brew",
+            display_name: "Icon Brew",
+            internal_path: "",
+            download_link: "https://github.com/FlorianWoelki/obsidian-iconize/raw/main/iconPacks/icon-brew.zip",
+        },
+        IconPack {
+            name: "simple-icons",
+            display_name: "Simple Icons",
+            internal_path: "simple-icons-11.10.0/icons/",
+            download_link: "https://github.com/simple-icons/simple-icons/archive/refs/tags/11.10.0.zip",
+        },
+        IconPack {
+            name: "lucide-icons",
+            display_name: "Lucide",
+            internal_path: "",
+            download_link: "https://github.com/lucide-icons/lucide/releases/download/0.363.0/lucide-icons-0.363.0.zip",
+        },
+        IconPack {
+            name: "tabler-icons",
+            display_name: "Tabler Icons",
+            internal_path: "svg",
+            download_link: "https://github.com/tabler/tabler-icons/releases/download/v3.1.0/tabler-icons-3.1.0.zip",
+        },
+        IconPack {
+            name: "boxicons",
+            display_name: "Boxicons",
+            internal_path: "svg",
+            download_link: "https://github.com/FlorianWoelki/obsidian-iconize/raw/main/iconPacks/boxicons.zip",
+        },
+        IconPack {
+            name: "rpg-awesome",
+            display_name: "RPG Awesome",
+            internal_path: "",
+            download_link: "https://github.com/FlorianWoelki/obsidian-iconize/raw/main/iconPacks/rpg-awesome.zip",
+        },
+        IconPack {
+            name: "coolicons",
+            display_name: "Coolicons",
+            internal_path: "cooliocns SVG",
+            download_link: "https://github.com/krystonschwarze/coolicons/releases/download/v4.1/coolicons.v4.1.zip",
+        },
+        IconPack {
+            name: "feather-icons",
+            display_name: "Feather Icons",
+            internal_path: "feather-4.29.1/icons/",
+            download_link: "https://github.com/feathericons/feather/archive/refs/tags/v4.29.1.zip",
+        },
+        IconPack {
+            name: "octicons",
+            display_name: "Octicons",
+            internal_path: "octicons-19.8.0/icons/",
+            download_link: "https://github.com/primer/octicons/archive/refs/tags/v19.8.0.zip",
+        },
+    ]
+}
+
+pub struct IconPackInstaller {
+    pub is_open: bool,
+    pub packs: Vec<IconPack>,
+    pub status_message: String,
+    pub is_downloading: bool,
+}
+
+impl Default for IconPackInstaller {
+    fn default() -> Self {
+        Self {
+            is_open: false,
+            packs: get_predefined_packs(),
+            status_message: String::new(),
+            is_downloading: false,
+        }
+    }
+}
+
+impl IconPackInstaller {
+    pub fn ui(&mut self, ctx: &egui::Context, vault_path: &str, icon_manager: &mut IconManager) {
+        if !self.is_open {
+            return;
+        }
+
+        let mut pack_to_install = None;
+
+        egui::Window::new("Install Icon Pack")
+            .anchor(egui::Align2::CENTER_TOP, [0.0, 100.0])
+            .fixed_size([400.0, 500.0])
+            .collapsible(false)
+            .show(ctx, |ui| {
+                ui.label("Select an icon pack to download and install:");
+                ui.add_space(10.0);
+
+                if self.is_downloading {
+                    ui.spinner();
+                    ui.label("Downloading and installing...");
+                } else {
+                    egui::ScrollArea::vertical().max_height(350.0).show(ui, |ui| {
+                        for pack in &self.packs {
+                            ui.horizontal(|ui| {
+                                ui.label(egui::RichText::new(pack.display_name).strong());
+                                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                                    if ui.button("Install").clicked() {
+                                        pack_to_install = Some(pack.clone());
+                                    }
+                                });
+                            });
+                            ui.separator();
+                        }
+                    });
+                }
+
+                if !self.status_message.is_empty() {
+                    ui.add_space(10.0);
+                    ui.label(&self.status_message);
+                }
+
+                ui.add_space(10.0);
+                if ui.button("Close").clicked() {
+                    self.is_open = false;
+                }
+            });
+
+        if let Some(pack) = pack_to_install {
+            self.is_downloading = true;
+            self.status_message = format!("Downloading {}...", pack.display_name);
+            
+            // Trigger repaint to show spinner
+            ctx.request_repaint();
+
+            // Perform download in a blocking way (for simplicity, ideally async/thread)
+            // Since we are in immediate mode GUI, blocking the main thread is bad.
+            // But for this prototype we'll do it or spawn a thread if possible.
+            // Let's spawn a thread to not freeze the UI entirely, but we need to handle state.
+            // For safety and simplicity in this context, we'll block briefly or use a channel.
+            // BUT eframe/egui is single threaded mostly. 
+            // We will do a blocking call here for now, accepting the freeze. 
+            // Better approach: Use std::thread::spawn and a channel, but that requires changing struct to hold receiver.
+            
+            // Let's try blocking for now to ensure it works.
+            match self.install_pack(vault_path, &pack) {
+                Ok(_) => {
+                    self.status_message = format!("Successfully installed {}!", pack.display_name);
+                    icon_manager.load_icons(vault_path); // Reload icons
+                }
+                Err(e) => {
+                    self.status_message = format!("Error: {}", e);
+                }
+            }
+            self.is_downloading = false;
+        }
+    }
+
+    fn install_pack(&self, vault_path: &str, pack: &IconPack) -> Result<(), Box<dyn std::error::Error>> {
+        let resp = reqwest::blocking::get(pack.download_link)?.bytes()?;
+        let reader = Cursor::new(resp);
+        let mut archive = ZipArchive::new(reader)?;
+
+        let icons_path = Path::new(vault_path).join(".obsidian/icons").join(pack.name);
+        fs::create_dir_all(&icons_path)?;
+
+        for i in 0..archive.len() {
+            let mut file = archive.by_index(i)?;
+            let file_name = file.name().to_string();
+
+            if file.is_dir() {
+                continue;
+            }
+
+            // Check if file matches internal path prefix
+            if !pack.internal_path.is_empty() && !file_name.starts_with(pack.internal_path) {
+                continue;
+            }
+
+            // Extract filename
+            let extracted_name = if !pack.internal_path.is_empty() {
+                file_name.strip_prefix(pack.internal_path).unwrap_or(&file_name).to_string()
+            } else {
+                // If no specific prefix, we might want to flatten or keep structure.
+                // The original logic seemed to flatten or just take the file.
+                // Let's just take the file name part to flatten it into the pack folder.
+                Path::new(&file_name).file_name().unwrap().to_string_lossy().to_string()
+            };
+            
+            if extracted_name.is_empty() || extracted_name.contains('/') || extracted_name.contains('\\') {
+                 // Skip nested folders if we just want flat icons, OR handle nested creation.
+                 // The predefined packs usually have a structure. 
+                 // Obsidian Iconize usually flattens specific paths.
+                 // Let's try to just write the file to the pack folder using the filename only.
+                 // But wait, some packs have subfolders.
+                 // Let's stick to simple flattening for now: only SVGs.
+                 if !extracted_name.ends_with(".svg") {
+                     continue;
+                 }
+                 
+                 let target_path = icons_path.join(Path::new(&file_name).file_name().unwrap());
+                 let mut outfile = fs::File::create(&target_path)?;
+                 std::io::copy(&mut file, &mut outfile)?;
+            } else {
+                 if !extracted_name.ends_with(".svg") {
+                     continue;
+                 }
+                 let target_path = icons_path.join(&extracted_name);
+                 let mut outfile = fs::File::create(&target_path)?;
+                 std::io::copy(&mut file, &mut outfile)?;
+            }
+        }
+        Ok(())
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct ExtraMargin {
     pub top: i32,
     pub right: i32,
@@ -27,7 +272,7 @@ impl Default for ExtraMargin {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct IconSettings {
     pub migrated: i32,
@@ -155,6 +400,13 @@ impl IconManager {
             self.scan_directory(&self.app_assets_path.clone(), None);
             println!("Iconize: Scanned {} SVGs in assets", self.svg_cache.len());
         }
+
+        // Scan downloaded icons in .obsidian/icons
+        let vault_icons_path = Path::new(vault_path).join(".obsidian/icons");
+        if vault_icons_path.exists() {
+            println!("Iconize: Scanning vault icons at {:?}", vault_icons_path);
+            self.scan_directory(&vault_icons_path, None);
+        }
     }
 
     fn scan_directory(&mut self, dir: &Path, prefix_override: Option<&str>) {
@@ -164,13 +416,17 @@ impl IconManager {
                 if path.is_dir() {
                     let folder_name = path.file_name().unwrap().to_str().unwrap().to_lowercase();
                     let detected_prefix = match folder_name.as_str() {
-                        "lucide" => Some("Li"),
+                        "lucide" | "lucide-icons" => Some("Li"),
                         "simple-icons" => Some("Si"),
                         "icon-brew" => Some("Ib"),
                         "remix-icons" | "remix" => Some("Ri"),
-                        "fa-brands" | "fa-regular" | "fa-solid" => Some("Fa"),
+                        "fa-brands" | "fa-regular" | "fa-solid" | "font-awesome-brands" | "font-awesome-regular" | "font-awesome-solid" => Some("Fa"),
                         "tabler-icons" => Some("Ti"),
                         "boxicons" => Some("Bi"),
+                        "rpg-awesome" => Some("Ra"),
+                        "coolicons" => Some("Co"),
+                        "feather-icons" => Some("Fi"),
+                        "octicons" => Some("Oc"),
                         _ => None,
                     };
                     let final_prefix = detected_prefix.or(prefix_override);
@@ -254,6 +510,28 @@ impl IconManager {
             }
         }
         None
+    }
+
+    pub fn save_settings(&self, vault_path: &str) {
+        let config_path =
+            Path::new(vault_path).join(".obsidian/plugins/obsidian-icon-folder/data.json");
+
+        let mut json_val: Value = if config_path.exists() {
+            let data = fs::read_to_string(&config_path).unwrap_or_else(|_| "{}".to_string());
+            serde_json::from_str(&data).unwrap_or(Value::Object(Map::new()))
+        } else {
+            Value::Object(Map::new())
+        };
+
+        if let Value::Object(ref mut map) = json_val {
+            if let Ok(settings_json) = serde_json::to_value(&self.settings) {
+                map.insert("settings".to_string(), settings_json);
+            }
+        }
+
+        if let Ok(serialized) = serde_json::to_string_pretty(&json_val) {
+            let _ = fs::write(config_path, serialized);
+        }
     }
 }
 
@@ -420,7 +698,7 @@ impl IconSelector {
 
                 // --- MIDDLE PANEL (Scroll) ---
                 egui::ScrollArea::vertical()
-                    .max_height(available_height) // ¡IMPORTANTE! Limitar la altura fuerza el scroll
+                    .max_height(300.0) // Fixed height to ensure scrolling works
                     .show(ui, |ui| {
                         egui::Grid::new("icons_grid_real")
                             .num_columns(2)
@@ -501,8 +779,24 @@ impl IconSelector {
                                                     } else {
                                                         text_color
                                                     };
-                                                    let label_text =
-                                                        if is_svg { icon_id } else { description };
+                                                    
+                                                    let label_text = if is_svg {
+                                                        if let Some(path) = icon_manager.svg_cache.get(icon_id) {
+                                                            if let Some(parent) = path.parent() {
+                                                                if let Some(pack_name) = parent.file_name() {
+                                                                    format!("{} ({})", icon_id, pack_name.to_string_lossy())
+                                                                } else {
+                                                                    icon_id.clone()
+                                                                }
+                                                            } else {
+                                                                icon_id.clone()
+                                                            }
+                                                        } else {
+                                                            icon_id.clone()
+                                                        }
+                                                    } else {
+                                                        description.clone()
+                                                    };
 
                                                     ui.label(
                                                         egui::RichText::new(label_text)
