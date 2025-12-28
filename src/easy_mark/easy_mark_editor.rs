@@ -200,6 +200,50 @@ fn shortcuts(ui: &Ui, editor: &mut EasyMarkEditor, ccursor_range: &mut CCursorRa
         }
     }
 
+    // Auto-continue lists
+    if ui.input(|i| i.key_pressed(Key::Enter) && i.modifiers.is_none()) {
+        let [primary, _secondary] = ccursor_range.sorted_cursors();
+        let index = primary.index;
+        if index > 0 && code.char_range(index - 1..index) == "\n" {
+            let mut line_start = index - 1;
+            while line_start > 0 && code.char_range(line_start - 1..line_start) != "\n" {
+                line_start -= 1;
+            }
+
+            let line = code.char_range(line_start..index - 1);
+            let mut indentation_char_count = 0;
+            for c in line.chars() {
+                if c.is_whitespace() {
+                    indentation_char_count += 1;
+                } else {
+                    break;
+                }
+            }
+            let indentation = code.char_range(line_start..line_start + indentation_char_count);
+            let trimmed_line = code.char_range(line_start + indentation_char_count..index - 1);
+
+            let markers = ["- [ ] ", "- [x] ", "- ", "+ ", "* "];
+            for marker in markers {
+                if trimmed_line.starts_with(marker) {
+                    any_change = true;
+                    if trimmed_line.trim() == marker.trim() {
+                        // Clear the whole line including indentation and the newline
+                        code.delete_char_range(line_start..index);
+                        ccursor_range.primary.index = line_start;
+                        ccursor_range.secondary.index = line_start;
+                    } else {
+                        let marker_to_add = if marker == "- [x] " { "- [ ] " } else { marker };
+                        let full_marker = format!("{}{}", indentation, marker_to_add);
+                        let advance = code.insert_text(&full_marker, index);
+                        ccursor_range.primary.index += advance;
+                        ccursor_range.secondary.index += advance;
+                    }
+                    break;
+                }
+            }
+        }
+    }
+
     for (shortcut, surrounding) in [
         (editor.shortcut_bold, "**"),
         (editor.shortcut_code, "`"),
