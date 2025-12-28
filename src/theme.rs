@@ -1,12 +1,11 @@
-use directories::BaseDirs;
 use egui::{
     Color32, Context, CornerRadius, FontData, FontDefinitions, FontFamily, FontId, TextStyle,
     Visuals,
 };
-use font_loader::system_fonts::{self, FontPropertyBuilder};
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::sync::Arc;
+use std::path::PathBuf;
 
 #[derive(Serialize, Deserialize, Debug, Default)]
 #[serde(default)]
@@ -31,10 +30,25 @@ struct ThemeConfig {
     corner_radius: Option<u8>,
 }
 
+fn get_theme_path() -> Option<PathBuf> {
+    #[cfg(target_os = "android")]
+    {
+        Some(PathBuf::from("/data/local/tmp/marmol/theme.json"))
+    }
+    #[cfg(not(target_os = "android"))]
+    {
+        use directories::BaseDirs;
+        BaseDirs::new().map(|binding| {
+            binding.config_dir().join("marmol").join("theme.json")
+        })
+    }
+}
+
 pub fn load_and_apply_theme(ctx: &Context) {
-    let binding = BaseDirs::new().unwrap();
-    let config_dir = binding.config_dir();
-    let theme_path = config_dir.join("marmol").join("theme.json");
+    let theme_path = match get_theme_path() {
+        Some(path) => path,
+        None => return,
+    };
 
     println!("Intentando cargar tema desde: {:?}", theme_path);
 
@@ -156,27 +170,36 @@ fn hex_to_color(hex: &str) -> Color32 {
 }
 
 fn load_system_font(ctx: &Context, font_family_name: &str) {
-    let property = FontPropertyBuilder::new().family(font_family_name).build();
-    if let Some((data, _)) = system_fonts::get(&property) {
-        let mut fonts = FontDefinitions::default();
-        fonts.font_data.insert(
-            font_family_name.to_owned(),
-            Arc::new(FontData::from_owned(data)),
-        );
-        fonts
-            .families
-            .entry(FontFamily::Proportional)
-            .or_default()
-            .insert(0, font_family_name.to_owned());
-        fonts
-            .families
-            .entry(FontFamily::Monospace)
-            .or_default()
-            .insert(0, font_family_name.to_owned());
-        ctx.set_fonts(fonts);
-        println!("Fuente cargada: {}", font_family_name);
-    } else {
-        eprintln!("Fuente NO encontrada: {}", font_family_name);
+    #[cfg(not(target_os = "android"))]
+    {
+        use font_loader::system_fonts::{self, FontPropertyBuilder};
+        let property = FontPropertyBuilder::new().family(font_family_name).build();
+        if let Some((data, _)) = system_fonts::get(&property) {
+            let mut fonts = FontDefinitions::default();
+            fonts.font_data.insert(
+                font_family_name.to_owned(),
+                Arc::new(FontData::from_owned(data)),
+            );
+            fonts
+                .families
+                .entry(FontFamily::Proportional)
+                .or_default()
+                .insert(0, font_family_name.to_owned());
+            fonts
+                .families
+                .entry(FontFamily::Monospace)
+                .or_default()
+                .insert(0, font_family_name.to_owned());
+            ctx.set_fonts(fonts);
+            println!("Fuente cargada: {}", font_family_name);
+        } else {
+            eprintln!("Fuente NO encontrada: {}", font_family_name);
+        }
+    }
+    #[cfg(target_os = "android")]
+    {
+        let _ = ctx;
+        let _ = font_family_name;
     }
 }
 

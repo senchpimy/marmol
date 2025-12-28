@@ -5,6 +5,7 @@ use crate::main_area::content_enum::Content;
 use crate::MShape;
 use eframe::egui::{CentralPanel, FontId, RichText};
 
+#[cfg(not(target_os = "android"))]
 use rfd::FileDialog;
 use std::fs;
 use std::path::Path;
@@ -15,6 +16,12 @@ pub enum Screen {
     Configuracion,
     Default,
     Server,
+}
+
+#[derive(PartialEq, Copy, Clone, Serialize, Deserialize)]
+pub enum AndroidStorage {
+    Internal,
+    System,
 }
 
 pub fn default(
@@ -29,6 +36,7 @@ pub fn default(
     parent_folder: &mut String,
     creation_error: &mut String,
     can_create: &mut bool,
+    android_storage: &mut AndroidStorage,
 ) {
     CentralPanel::default().show(ctx, |ui| {
         let text = RichText::new("Marmol").strong().size(60.0);
@@ -85,6 +93,7 @@ pub fn default(
                         )
                         .clicked()
                     {
+                        #[cfg(not(target_os = "android"))]
                         if let Some(x) = FileDialog::new().set_title("Select a Folder").pick_folder() {
                             let selected_vault = x.to_str().unwrap().to_owned();
                             if !vaults_vec.contains(&selected_vault) {
@@ -93,6 +102,11 @@ pub fn default(
                             *vault = selected_vault;
                             *current_window = Screen::Main;
                             *content = Content::Blank;
+                        }
+                        #[cfg(target_os = "android")]
+                        {
+                           // On Android, we might just want to ask for a path manually for now
+                           // or use a different file picker.
                         }
                     }
 
@@ -105,9 +119,15 @@ pub fn default(
                         )
                         .clicked()
                     {
+                        #[cfg(not(target_os = "android"))]
                         if let Some(x) = FileDialog::new().set_title("Select Parent Folder").pick_folder() {
                             *show_creation_ui = true;
                             *parent_folder = x.to_str().unwrap().to_owned();
+                        }
+                        #[cfg(target_os = "android")]
+                        {
+                            *show_creation_ui = true;
+                            *parent_folder = crate::configuraciones::get_config_dir();
                         }
                     }
 
@@ -288,12 +308,20 @@ fn create_new_vault(
         .add_sized(button_size, egui::Button::new("✨ Create a New Vault"))
         .clicked()
     {
-        let files = FileDialog::new().set_title("Select Parent Folder").pick_folder();
-        if let Some(x) = files {
+        #[cfg(not(target_os = "android"))]
+        {
+            let files = FileDialog::new().set_title("Select Parent Folder").pick_folder();
+            if let Some(x) = files {
+                *show = true;
+                *folder = String::from(x.to_str().unwrap());
+            } else {
+                *show = false;
+            }
+        }
+        #[cfg(target_os = "android")]
+        {
             *show = true;
-            *folder = String::from(x.to_str().unwrap());
-        } else {
-            *show = false;
+            *folder = crate::configuraciones::get_config_dir();
         }
     }
     if *show {
@@ -390,6 +418,7 @@ fn add_existing_vault(
         .add_sized(button_size, egui::Button::new("📂 Add an Existing Vault"))
         .clicked()
     {
+        #[cfg(not(target_os = "android"))]
         if let Some(x) = FileDialog::new().set_title("Select a Folder").pick_folder() {
             let selected_vault = x.to_str().unwrap().to_owned();
             if !vaults.contains(&selected_vault) {
@@ -398,6 +427,10 @@ fn add_existing_vault(
             *vault = selected_vault;
             *vault_changed = true;
             *current_window = Screen::Main;
+        }
+        #[cfg(target_os = "android")]
+        {
+            // Manual input maybe?
         }
     }
 }

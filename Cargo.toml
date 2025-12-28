@@ -4,22 +4,18 @@ version = "0.1.6"
 edition = "2021"
 resolver = "2"
 
-#[lib]
-#crate-type = ["cdylib", "lib"]
+[lib]
+crate-type = ["cdylib", "lib"]
 
 [dependencies]
 egui = "0.33"
 egui_dock = { version = "0.18", features = ["serde"] }
-eframe = { version = "0.33", features = ["wgpu"] }
 egui_plot = "0.34"
 chrono = "0.4.23"
 syntect = "5.0"
 base64 = "0.21"
-directories = "2.0"
 serde_json = "1.0"
 serde = { version = "1.0.228", features = ["derive"] }
-
-
 egui_extras = { version = "0.33", features = ["image","file"] }
 filebuffer = "0.4.0"
 image = { version = "0.25", default-features = false, features = [
@@ -28,58 +24,35 @@ image = { version = "0.25", default-features = false, features = [
 ] }
 json = "0.12.4"
 serde_yaml = "0.9"
-font-loader = "0.11" 
 yaml-rust = "0.4.5"
 egui_commonmark = {version="0.22",features = ["svg","fetch"]}
 rand = "0.9.2"
-
 walkdir = "2.3.1"
 regex = "1.7.2"
 fstream = "0.1.2"
-rfd = "0.11.3"
 egui-twemoji = "0.8"
 rust-embed = "8.9.0"
 zip = "7.0.0"
-reqwest = { version = "0.12.28", features = ["blocking", "rustls-tls"] }
+reqwest = { version = "0.12.28", default-features = false, features = ["blocking", "rustls-tls"] }
+log = "0.4"
+
+[target.'cfg(not(target_os = "android"))'.dependencies]
+font-loader = "0.11"
+directories = "2.0"
+rfd = "0.11.3"
+eframe = { version = "0.33", features = ["wgpu"] }
+
+[target.'cfg(target_os = "android")'.dependencies]
+android_logger = { version = "0.15", default-features = false }
+eframe = { version = "0.33", default-features = false, features = ["wgpu", "android-native-activity", "default_fonts"] }
+wgpu = { version = "27", default-features = false, features = ["gles"] }
+egui-winit = { version = "0.33", default-features = false, features = ["clipboard", "links"] }
+egui_keyboard = "0.5"
 
 [profile.release]
 panic = "abort"
 lto = true
-#strip = true
+strip = true
 codegen-units = 1
 incremental = false
-#opt-level = 3
 opt-level = "z"
-
-[target.'cfg(not(target_os = "android"))'.dependencies.eframe]
-version = "0.33"
-default-features = true
-
-[target.'cfg(target_os = "android")'.dependencies.android_logger]
-version = "0.15"
-default-features = false
-
-[target.'cfg(target_os = "android")'.dependencies.eframe]
-version = "0.33"
-default-features = false
-features = [
-    "wgpu",
-    "android-native-activity",
-    "default_fonts",
-]
-
-[target.'cfg(target_os = "android")'.dependencies.wgpu]
-version = "27"
-default-features = false
-features = [
-    "gles",
-]
-
-# Used to get same winit used by eframe.
-[target.'cfg(target_os = "android")'.dependencies.egui-winit]
-version = "0.33"
-default-features = false
-features = [
-    "clipboard",
-    "links",
-]
