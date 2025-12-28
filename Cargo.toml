@@ -37,7 +37,7 @@ walkdir = "2.3.1"
 regex = "1.7.2"
 fstream = "0.1.2"
 rfd = "0.11.3"
-egui-twemoji = { path = "/home/plof/egui-twemoji" }
+egui-twemoji = "0.8"
 
 [profile.release]
 panic = "abort"
