@@ -10,7 +10,7 @@ resolver = "2"
 [dependencies]
 egui = "0.33"
 egui_dock = { version = "0.18", features = ["serde"] }
-eframe = "0.33"
+eframe = { version = "0.33", features = ["wgpu"] }
 egui_plot = "0.34"
 chrono = "0.4.23"
 syntect = "5.0"

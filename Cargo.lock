@@ -1034,7 +1034,9 @@ dependencies = [
 
 [[package]]
 name = "egui-twemoji"
-version = "0.7.1"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bed954a0747231267737ed8e497df3fef34055898d98a995ee4355237ad2a562"
 dependencies = [
  "egui",
  "twemoji-assets",
