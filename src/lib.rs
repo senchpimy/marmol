@@ -88,6 +88,9 @@ pub struct Marmol {
     command_palette: CommandPalette,
     #[cfg(target_os = "android")]
     keyboard: egui_keyboard::Keyboard,
+    android_storage: configuraciones::AndroidStorage,
+    #[cfg(target_os = "android")]
+    pub android_app: Option<winit::platform::android::activity::AndroidApp>,
 }
 
 impl Marmol {
@@ -148,6 +151,9 @@ impl Marmol {
             command_palette: CommandPalette::default(),
             #[cfg(target_os = "android")]
             keyboard: egui_keyboard::Keyboard::default(),
+            android_storage: state.android_storage.unwrap_or(configuraciones::AndroidStorage::Unselected),
+            #[cfg(target_os = "android")]
+            android_app: None,
         }
     }
 }
@@ -193,6 +199,9 @@ impl Default for Marmol {
             command_palette: CommandPalette::default(),
             #[cfg(target_os = "android")]
             keyboard: egui_keyboard::Keyboard::default(),
+            android_storage: configuraciones::AndroidStorage::Unselected,
+            #[cfg(target_os = "android")]
+            android_app: None,
         }
     }
 }
@@ -211,6 +220,9 @@ impl eframe::App for Marmol {
         }
 
         if self.current_window == screens::Screen::Default {
+            let prev_win = self.current_window;
+            let prev_vaults_count = self.vault_vec.len();
+            let prev_storage = self.android_storage;
             //welcome screen
             screens::default(
                 ctx,
@@ -224,7 +236,13 @@ impl eframe::App for Marmol {
                 &mut self.new_vault_folder,
                 &mut self.new_vault_folder_err,
                 &mut self.show_create_button,
+                &mut self.android_storage,
+                #[cfg(target_os = "android")]
+                &self.android_app,
             );
+            if prev_win != self.current_window || prev_vaults_count != self.vault_vec.len() || prev_storage != self.android_storage {
+                self.save_to_disk();
+            }
         } else if self.current_window == screens::Screen::Main {
             if ctx.input(|i| i.modifiers.command && i.key_pressed(egui::Key::O)) {
                 self.switcher.open(&self.vault);
@@ -300,6 +318,7 @@ impl eframe::App for Marmol {
                 )));
             });
         } else if self.current_window == screens::Screen::Configuracion {
+            let prev_win = self.current_window;
             screens::configuracion(
                 ctx,
                 &mut self.prev_window,
@@ -320,8 +339,8 @@ impl eframe::App for Marmol {
                 &mut self.left_controls.icon_manager,
                 &self.window_size,
             );
-            if self.vault_changed {
-                self.marker.update_vault(Path::new(&self.vault));
+            if prev_win != self.current_window {
+                self.save_to_disk();
             }
         } else if self.current_window == screens::Screen::Server {
             screens::set_server(ctx);
@@ -369,6 +388,7 @@ impl Marmol {
             sort_files: self.sort_files,
             dock_state: self.tabs.dock_state().clone(),
             enable_icon_folder: self.enable_icon_folder,
+            android_storage: Some(self.android_storage),
         };
         configuraciones::save_program_state(&state);
 
@@ -461,7 +481,7 @@ fn android_main(app: winit::platform::android::activity::AndroidApp) {
     );
 
     let options = eframe::NativeOptions {
-        android_app: Some(app),
+        android_app: Some(app.clone()),
         renderer: Renderer::Wgpu,
         ..Default::default()
     };
@@ -471,7 +491,12 @@ fn android_main(app: winit::platform::android::activity::AndroidApp) {
         options,
         Box::new(|cc| {
             egui_extras::install_image_loaders(&cc.egui_ctx);
-            Ok(Box::new(Marmol::new(cc)))
+            let mut m = Marmol::new(cc);
+            #[cfg(target_os = "android")]
+            {
+                m.android_app = Some(app);
+            }
+            Ok(Box::new(m))
         }),
     ).unwrap();
 }

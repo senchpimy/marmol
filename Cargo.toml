@@ -48,6 +48,8 @@ eframe = { version = "0.33", default-features = false, features = ["wgpu", "andr
 wgpu = { version = "27", default-features = false, features = ["gles"] }
 egui-winit = { version = "0.33", default-features = false, features = ["clipboard", "links"] }
 egui_keyboard = "0.5"
+jni = "0.21"
+android-activity = "0.6"
 
 [profile.release]
 panic = "abort"
@@ -56,3 +58,18 @@ strip = true
 codegen-units = 1
 incremental = false
 opt-level = "z"
+
+
+[package.metadata.android]
+package_name = "com.example.marmol"
+version_code = 1
+version_name = "1.0"
+# Aquí es donde se definen los permisos en xbuild/cargo-apk:
+permissions = [
+    "android.permission.READ_EXTERNAL_STORAGE",
+    "android.permission.WRITE_EXTERNAL_STORAGE",
+    "android.permission.MANAGE_EXTERNAL_STORAGE"
+]
+
+[package.metadata.android.activity]
+name = "android.app.NativeActivity"

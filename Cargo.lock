@@ -2610,6 +2610,7 @@ dependencies = [
 name = "marmol"
 version = "0.1.6"
 dependencies = [
+ "android-activity",
  "android_logger",
  "base64 0.21.7",
  "chrono",
@@ -2627,6 +2628,7 @@ dependencies = [
  "font-loader",
  "fstream",
  "image",
+ "jni",
  "json",
  "log",
  "rand 0.9.2",

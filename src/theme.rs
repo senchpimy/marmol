@@ -204,6 +204,9 @@ fn load_system_font(ctx: &Context, font_family_name: &str) {
 }
 
 fn setup_font_sizes(ctx: &Context, base_size: f32) {
+    #[cfg(target_os = "android")]
+    let base_size = base_size.max(16.0);
+    
     let mut style = (*ctx.style()).clone();
     style.text_styles = [
         (

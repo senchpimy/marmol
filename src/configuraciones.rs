@@ -12,6 +12,13 @@ pub struct VaultConfig {
     graph_json_config: String,
 }
 
+#[derive(Serialize, Deserialize, PartialEq, Copy, Clone)]
+pub enum AndroidStorage {
+    Unselected,
+    Internal,
+    System,
+}
+
 #[derive(Serialize, Deserialize)]
 pub struct MarmolProgramState {
     pub vault: String,
@@ -24,6 +31,8 @@ pub struct MarmolProgramState {
     pub dock_state: egui_dock::DockState<Tabe>,
     #[serde(default)]
     pub enable_icon_folder: bool,
+    #[serde(default)]
+    pub android_storage: Option<AndroidStorage>,
 }
 
 impl Default for MarmolProgramState {
@@ -48,6 +57,7 @@ impl Default for MarmolProgramState {
             sort_files: default_sort_files,
             dock_state: default_dock_state,
             enable_icon_folder: default_enable_icon_folder,
+            android_storage: Some(AndroidStorage::Unselected),
         }
     }
 }
@@ -69,24 +79,46 @@ pub fn get_config_dir() -> String {
     }
 }
 
+pub fn get_external_dir() -> String {
+    #[cfg(target_os = "android")]
+    {
+        "/storage/emulated/0/Documents/Marmol".to_string()
+    }
+    #[cfg(not(target_os = "android"))]
+    {
+        get_config_dir()
+    }
+}
+
 pub fn load_program_state() -> (MarmolProgramState, String) {
     let config_dir_path = get_config_dir();
     let config_file_path = format!("{}/ProgramState", config_dir_path);
 
+    println!("Config path: {}", config_file_path);
+
     if Path::new(&config_file_path).exists() {
         println!("Fichero de configuración encontrado. Cargando estado...");
 
-        let data =
-            fs::read_to_string(&config_file_path).expect("No se pudo leer el archivo de estado");
-
-        let state: MarmolProgramState = serde_yaml::from_str(&data).unwrap_or_else(|e| {
-            eprintln!("Error deserializing ProgramState: {}. Creating default.", e);
-            MarmolProgramState::default()
-        });
-
-        (state, config_dir_path)
+        match fs::read_to_string(&config_file_path) {
+            Ok(data) => {
+                match serde_yaml::from_str(&data) {
+                    Ok(state) => {
+                        println!("Estado cargado correctamente.");
+                        (state, config_dir_path)
+                    }
+                    Err(e) => {
+                        eprintln!("Error deserializando ProgramState: {}. Creando uno por defecto.", e);
+                        (MarmolProgramState::default(), config_dir_path)
+                    }
+                }
+            }
+            Err(e) => {
+                eprintln!("No se pudo leer el archivo de estado: {}. Usando por defecto.", e);
+                (MarmolProgramState::default(), config_dir_path)
+            }
+        }
     } else {
-        println!("Fichero de configuración no encontrado. Creando uno por defecto...");
+        println!("Fichero de configuración no encontrado en {}. Creando uno por defecto...", config_file_path);
         create_default_vault(&config_dir_path)
     }
 }
@@ -100,16 +132,27 @@ pub fn save_program_state(state: &MarmolProgramState) {
     let config_dir_path = get_config_dir();
     let config_file_path = format!("{}/ProgramState", config_dir_path);
 
+    println!("Saving program state to {}...", config_file_path);
+
     if !Path::new(&config_dir_path).exists() {
-        let _ = fs::create_dir_all(&config_dir_path);
+        if let Err(e) = fs::create_dir_all(&config_dir_path) {
+            eprintln!("Could not create config directory {}: {}", config_dir_path, e);
+            return;
+        }
     }
 
-    let serialized_state =
-        serde_yaml::to_string(state).expect("Could not serialize program state to YAML");
-
-    let _ = fs::write(&config_file_path, serialized_state);
-
-    println!("Program state saved to {}", config_file_path);
+    match serde_yaml::to_string(state) {
+        Ok(serialized_state) => {
+            if let Err(e) = fs::write(&config_file_path, serialized_state) {
+                eprintln!("Could not write program state to {}: {}", config_file_path, e);
+            } else {
+                println!("Program state saved successfully.");
+            }
+        }
+        Err(e) => {
+            eprintln!("Could not serialize program state: {}", e);
+        }
+    }
 }
 
 pub fn load_context() -> f32 {

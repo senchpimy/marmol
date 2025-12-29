@@ -10,18 +10,17 @@ use rfd::FileDialog;
 use std::fs;
 use std::path::Path;
 
+use crate::configuraciones::AndroidStorage;
+
+#[cfg(target_os = "android")]
+use egui_winit::winit;
+
 #[derive(PartialEq, Copy, Clone, Serialize, Deserialize)]
 pub enum Screen {
     Main,
     Configuracion,
     Default,
     Server,
-}
-
-#[derive(PartialEq, Copy, Clone, Serialize, Deserialize)]
-pub enum AndroidStorage {
-    Internal,
-    System,
 }
 
 pub fn default(
@@ -36,7 +35,9 @@ pub fn default(
     parent_folder: &mut String,
     creation_error: &mut String,
     can_create: &mut bool,
-    android_storage: &mut AndroidStorage,
+    _android_storage: &mut AndroidStorage,
+    #[cfg(target_os = "android")]
+    android_app: &Option<egui_winit::winit::platform::android::activity::AndroidApp>,
 ) {
     CentralPanel::default().show(ctx, |ui| {
         let text = RichText::new("Marmol").strong().size(60.0);
@@ -127,13 +128,47 @@ pub fn default(
                         #[cfg(target_os = "android")]
                         {
                             *show_creation_ui = true;
-                            *parent_folder = crate::configuraciones::get_config_dir();
+                            *parent_folder = if *_android_storage == AndroidStorage::Internal {
+                                crate::configuraciones::get_config_dir()
+                            } else {
+                                crate::configuraciones::get_external_dir()
+                            };
                         }
                     }
 
                     if *show_creation_ui {
+                        #[cfg(target_os = "android")]
+                        {
+                            ui.horizontal(|ui| {
+                                ui.label("Storage:");
+                                if ui.radio_value(_android_storage, AndroidStorage::Unselected, "None").clicked() {
+                                    *parent_folder = String::new();
+                                }
+                                if ui.radio_value(_android_storage, AndroidStorage::Internal, "App Internal").clicked() {
+                                    *parent_folder = crate::configuraciones::get_config_dir();
+                                }
+                    if ui.radio_value(_android_storage, AndroidStorage::System, "System (Documents)").clicked() {
+                        *parent_folder = crate::configuraciones::get_external_dir();
+                        #[cfg(target_os = "android")]
+                        if let Some(app) = android_app {
+                            request_android_permission(app);
+                        }
+                    }
+                            });
+                            if *_android_storage == AndroidStorage::System {
+                                ui.horizontal(|ui| {
+                                    ui.label("Path:");
+                                    ui.text_edit_singleline(parent_folder);
+                                });
+                                ui.label(RichText::new("⚠️ You must grant 'All Files Access' in Android Settings for this to work.").small().color(ui.ctx().style().visuals.warn_fg_color));
+                            }
+                        }
                         ui.add_space(10.0);
-                        ui.label(format!("Creating in: {}", parent_folder));
+                        if !parent_folder.is_empty() {
+                            ui.label(format!("Creating in: {}", parent_folder));
+                        } else {
+                            ui.label(RichText::new("Please select a storage type").small().color(ui.ctx().style().visuals.warn_fg_color));
+                        }
                         ui.horizontal(|ui| {
                             ui.label("Name:");
                             let response = ui.add(egui::TextEdit::singleline(nuevo_vault_name));
@@ -156,8 +191,8 @@ pub fn default(
                         ui.horizontal(|ui| {
                             if ui.add_enabled(*can_create, egui::Button::new("Confirm")).clicked() {
                                 let full_path = format!("{}/{}", parent_folder, nuevo_vault_name);
-                                if fs::create_dir(&full_path).is_ok() {
-                                    let _ = fs::create_dir(format!("{}/.obsidian", full_path));
+                                if fs::create_dir_all(&full_path).is_ok() {
+                                    let _ = fs::create_dir_all(format!("{}/.obsidian", full_path));
                                     vaults_vec.push(full_path.clone());
                                     *vault = full_path;
                                     *current_window = Screen::Main;
@@ -557,3 +592,115 @@ fn server_settings(ui: &mut egui::Ui, current_window: &mut Screen, button_size: 
 }
 
 pub fn set_server(_ctx: &egui::Context) {}
+
+
+
+#[cfg(target_os = "android")]
+
+
+
+fn request_android_permission(app: &egui_winit::winit::platform::android::activity::AndroidApp) {
+
+
+
+
+
+
+
+    use jni::{objects::JValue, JavaVM};
+
+
+
+    let vm = match unsafe { JavaVM::from_raw(app.vm_as_ptr() as _) } {
+
+
+
+        Ok(vm) => vm,
+
+
+
+        Err(e) => { log::error!("Failed to get JavaVM: {:?}", e); return; }
+
+
+
+    };
+
+
+
+    let mut env = match vm.attach_current_thread() {
+
+
+
+        Ok(env) => env,
+
+
+
+        Err(e) => { log::error!("Failed to attach thread: {:?}", e); return; }
+
+
+
+    };
+
+
+
+    let activity = unsafe { jni::objects::JObject::from_raw(app.activity_as_ptr() as _) };
+
+
+
+    let launch_intent = |env: &mut jni::JNIEnv| -> Result<(), Box<dyn std::error::Error>> {
+
+
+
+        let pkg_name_obj = env.call_method(&activity, "getPackageName", "()Ljava/lang/String;", &[])?.l()?;
+
+
+
+        let pkg_name: String = env.get_string(&pkg_name_obj.into())?.into();
+
+
+
+        let action = env.new_string("android.settings.MANAGE_APP_ALL_FILES_ACCESS_PERMISSION")?;
+
+
+
+        let uri_str = env.new_string(format!("package:{}", pkg_name))?;
+
+
+
+        let uri = env.call_static_method("android/net/Uri", "parse", "(Ljava/lang/String;)Landroid/net/Uri;", &[JValue::from(&uri_str)])?.l()?;
+
+
+
+        let intent = env.new_object("android/content/Intent", "(Ljava/lang/String;Landroid/net/Uri;)V", &[JValue::from(&action), JValue::from(&uri)])?;
+
+
+
+        env.call_method(&activity, "startActivity", "(Landroid/content/Intent;)V", &[JValue::from(&intent)])?;
+
+
+
+        Ok(())
+
+
+
+    };
+
+
+
+    if let Err(e) = launch_intent(&mut env) {
+
+
+
+        log::error!("Error launching permission intent: {:?}", e);
+
+
+
+    }
+
+
+
+}
+
+
+
+
