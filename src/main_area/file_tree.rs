@@ -291,10 +291,10 @@ impl FileTree {
                         self.rename = file_name.to_string();
                     }
 
-                    Popup::context_menu(&response)
-                        .id(Id::new("ctx_dir").with(&file_location))
-                        .show(|ui| {
-                            if ui.button("New Folder").clicked() {
+                                    Popup::context_menu(&response)
+                                        .close_behavior(PopupCloseBehavior::CloseOnClickOutside)
+                                        .id(Id::new("ctx_dir").with(&file_location))
+                                        .show(|ui| {                            if ui.button("New Folder").clicked() {
                                 self.creating_folder_in = Some(file_location.clone());
                                 self.new_folder_name = "New Folder".to_string();
                                 ui.close();
@@ -459,6 +459,7 @@ impl FileTree {
                     }
 
                     Popup::context_menu(&response)
+                        .close_behavior(PopupCloseBehavior::CloseOnClickOutside)
                         .id(Id::new("ctx").with(&file_location))
                         .show(|ui| {
                             if enable_icons {
