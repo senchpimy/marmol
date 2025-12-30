@@ -2641,7 +2641,6 @@ dependencies = [
  "serde_yaml",
  "syntect",
  "walkdir",
- "wgpu",
  "yaml-rust",
  "zip",
 ]

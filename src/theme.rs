@@ -54,6 +54,8 @@ pub fn load_and_apply_theme(ctx: &Context) {
 
     if !theme_path.exists() {
         println!("No existe theme.json. Usando tema por defecto de la librería.");
+        #[cfg(target_os = "android")]
+        setup_font_sizes(ctx, 16.0);
         return;
     }
 
@@ -88,6 +90,9 @@ pub fn load_and_apply_theme(ctx: &Context) {
 
     if let Some(size) = theme_config.base_font_size {
         setup_font_sizes(ctx, size);
+    } else {
+        #[cfg(target_os = "android")]
+        setup_font_sizes(ctx, 16.0);
     }
 }
 
@@ -205,7 +210,7 @@ fn load_system_font(ctx: &Context, font_family_name: &str) {
 
 fn setup_font_sizes(ctx: &Context, base_size: f32) {
     #[cfg(target_os = "android")]
-    let base_size = base_size.max(16.0);
+    let base_size = (base_size * 1.5).max(22.0);
     
     let mut style = (*ctx.style()).clone();
     style.text_styles = [

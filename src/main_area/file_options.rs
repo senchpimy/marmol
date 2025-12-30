@@ -122,12 +122,10 @@ pub fn file_options(
             });
         });
     } else {
-        let btn_delete = Button::selectable(
+        if ui.add(egui::SelectableLabel::new(
             false,
             RichText::new("Delete file").color(ui.ctx().style().visuals.error_fg_color),
-        );
-
-        if ui.add(btn_delete).clicked() {
+        )).clicked() {
             ui.data_mut(|d| d.insert_temp(id, true));
         }
     }

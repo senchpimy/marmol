@@ -44,8 +44,7 @@ eframe = { version = "0.33", features = ["wgpu"] }
 
 [target.'cfg(target_os = "android")'.dependencies]
 android_logger = { version = "0.15", default-features = false }
-eframe = { version = "0.33", default-features = false, features = ["wgpu", "android-native-activity", "default_fonts"] }
-wgpu = { version = "27", default-features = false, features = ["gles"] }
+eframe = { version = "0.33", default-features = false, features = ["glow", "android-native-activity", "default_fonts"] }
 egui-winit = { version = "0.33", default-features = false, features = ["clipboard", "links"] }
 egui_keyboard = "0.5"
 jni = "0.21"
@@ -64,11 +63,14 @@ opt-level = "z"
 package_name = "com.example.marmol"
 version_code = 1
 version_name = "1.0"
-# Aquí es donde se definen los permisos en xbuild/cargo-apk:
+label = "Marmol App"
+
+# IMPORTANTE: Los permisos van en un array de strings
 permissions = [
     "android.permission.READ_EXTERNAL_STORAGE",
     "android.permission.WRITE_EXTERNAL_STORAGE",
-    "android.permission.MANAGE_EXTERNAL_STORAGE"
+    "android.permission.MANAGE_EXTERNAL_STORAGE",
+    "android.permission.INTERNET" 
 ]
 
 [package.metadata.android.activity]

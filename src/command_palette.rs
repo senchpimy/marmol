@@ -3,6 +3,7 @@ use eframe::egui;
 pub enum CommandAction {
     None,
     OpenIconInstaller,
+    CreateKanban,
 }
 
 pub struct Command {
@@ -28,6 +29,10 @@ impl Default for CommandPalette {
                 Command {
                     name: "Install Icon Pack".to_string(),
                     action: CommandAction::OpenIconInstaller,
+                },
+                Command {
+                    name: "Create Kanban Board".to_string(),
+                    action: CommandAction::CreateKanban,
                 },
             ],
             filtered_indices: vec![],
@@ -116,6 +121,7 @@ impl CommandPalette {
                     let real_index = self.filtered_indices[self.selected_index];
                     match &self.commands[real_index].action {
                         CommandAction::OpenIconInstaller => action_to_perform = CommandAction::OpenIconInstaller,
+                        CommandAction::CreateKanban => action_to_perform = CommandAction::CreateKanban,
                         CommandAction::None => {},
                     }
                     self.close();
@@ -140,6 +146,7 @@ impl CommandPalette {
                     if label.clicked() {
                         match cmd.action {
                             CommandAction::OpenIconInstaller => action_to_perform = CommandAction::OpenIconInstaller,
+                            CommandAction::CreateKanban => action_to_perform = CommandAction::CreateKanban,
                             CommandAction::None => {},
                         }
                         should_close = true;

@@ -241,6 +241,43 @@ impl LeftControls {
                         });
                 });
             });
+
+            ui.separator();
+
+            ui.horizontal(|ui| {
+                ui.add_space((ui.available_width() - window_size.btn_size) / 2.0);
+                let btn_size = Vec2::new(window_size.btn_size, window_size.btn_size);
+                let color = ui
+                    .ctx()
+                    .style()
+                    .visuals
+                    .widgets
+                    .noninteractive
+                    .fg_stroke
+                    .color;
+
+                if ui
+                    .add_sized(
+                        btn_size.clone(),
+                        Button::image(
+                            egui::Image::new(egui::include_image!("../../resources/folder.svg"))
+                                .fit_to_exact_size(btn_size.clone())
+                                .tint(color),
+                        )
+                        .corner_radius(egui::CornerRadius::same((btn_size.x / 2.0) as u8)),
+                    )
+                    .on_hover_text("New Folder")
+                    .clicked()
+                {
+                    let mut name = "Untitled".to_string();
+                    let mut i = 1;
+                    while Path::new(path).join(&name).exists() {
+                        name = format!("Untitled({})", i);
+                        i += 1;
+                    }
+                    let _ = fs::create_dir(Path::new(path).join(&name));
+                }
+            });
         });
 
         if self.current_left_tab == LeftTab::Files {
@@ -265,8 +302,16 @@ impl LeftControls {
                     available_size.y
                 };
 
-                let (_, dropped_payload) = ui.dnd_drop_zone::<String, ()>(Frame::NONE, |ui| {
+                let (response, dropped_payload) = ui.dnd_drop_zone::<String, ()>(Frame::NONE, |ui| {
                     ui.set_min_size(Vec2::new(ui.available_width(), min_height));
+                });
+
+                response.response.context_menu(|ui| {
+                    if ui.button("New Folder").clicked() {
+                        self.file_tree.creating_folder_in = Some(path.to_string());
+                        self.file_tree.new_folder_name = "New Folder".to_string();
+                        ui.close();
+                    }
                 });
 
                 if let Some(source_path_arc) = dropped_payload {
@@ -364,6 +409,7 @@ impl LeftControls {
         vault: &mut String,
         current_file: &mut String,
         current_window: &mut screens::Screen,
+        prev_window: &mut screens::Screen,
         content: &mut Content,
         tabs: &mut crate::tabs::Tabs,
         tabs_counter: &mut usize,
@@ -493,6 +539,7 @@ impl LeftControls {
                         .on_hover_text("Configuration")
                         .clicked()
                     {
+                        *prev_window = *current_window;
                         *current_window = screens::Screen::Configuracion;
                     }
                     ui.add_space(5.);

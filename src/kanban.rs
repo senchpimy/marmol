@@ -44,6 +44,8 @@ pub struct KanbanGui {
     pub new_task_str: String,
     pub adding_task_to: Option<usize>,
     pub editing_task: Option<(usize, usize)>,
+    pub adding_column: bool,
+    pub new_column_name: String,
 }
 
 impl KanbanGui {
@@ -267,6 +269,45 @@ impl KanbanGui {
                     
                     ui.add_space(10.0);
                 }
+
+                ui.vertical(|ui| {
+                    ui.set_width(260.0);
+                    let col_frame = Frame::group(ui.style())
+                        .fill(ui.visuals().faint_bg_color)
+                        .inner_margin(8.0)
+                        .corner_radius(8.0);
+                    
+                    col_frame.show(ui, |ui| {
+                        if self.adding_column {
+                            let res = ui.add(TextEdit::singleline(&mut self.new_column_name).hint_text("Column title..."));
+                            if self.adding_column {
+                                res.request_focus();
+                            }
+                            
+                            ui.horizontal(|ui| {
+                                if ui.button("Add").clicked() || (res.lost_focus() && ui.input(|i| i.key_pressed(Key::Enter))) {
+                                    if !self.new_column_name.is_empty() {
+                                        self.board.columns.push(KanbanColumn {
+                                            title: self.new_column_name.clone(),
+                                            tasks: Vec::new(),
+                                        });
+                                        self.new_column_name.clear();
+                                        self.adding_column = false;
+                                        needs_save = true;
+                                    }
+                                }
+                                if ui.button("Cancel").clicked() {
+                                    self.adding_column = false;
+                                    self.new_column_name.clear();
+                                }
+                            });
+                        } else {
+                             if ui.button("➕ Add Column").clicked() {
+                                 self.adding_column = true;
+                             }
+                        }
+                    });
+                });
             });
         });
 

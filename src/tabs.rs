@@ -278,6 +278,36 @@ impl TabViewer for MTabViewer<'_> {
                     tab.rename_buffer = tab.title.clone();
                 }
             }
+
+            // Selector de vista para archivos Kanban
+            let is_kanban_file = match &tab.content {
+                TabContent::Kanban { .. } => true,
+                TabContent::Markdown { editor, .. } => editor.code.contains("kanban-plugin: board"),
+                _ => false,
+            };
+
+            if is_kanban_file {
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    let is_kanban_view = matches!(tab.content, TabContent::Kanban { .. });
+                    
+                    if ui.selectable_label(!is_kanban_view, "📝 Text").clicked() && is_kanban_view {
+                        let mut editor = easy_mark::EasyMarkEditor::default();
+                        editor.code = files::read_file(&tab.path);
+                        tab.content = TabContent::Markdown {
+                            editor,
+                            cache: CommonMarkCache::default(),
+                        };
+                    }
+                    if ui.selectable_label(is_kanban_view, "📋 Board").clicked() && !is_kanban_view {
+                        let mut gui = kanban::KanbanGui::default();
+                        gui.set_path(&tab.path);
+                        tab.content = TabContent::Kanban {
+                            path: tab.path.clone(),
+                            gui,
+                        };
+                    }
+                });
+            }
         });
         ui.separator();
 
@@ -359,7 +389,7 @@ impl TabViewer for MTabViewer<'_> {
                                         
                                         let icon_str = self.icon_manager.get_icon(&relative_path);
                                         
-                                        if let Some(icon_id) = icon_str {
+                                        if let Some(icon_id) = icon_str.filter(|s| !s.is_empty()) {
                                             ui.horizontal(|ui| {
                                                  if let Some(IconSource::Bytes(bytes)) = self.icon_manager.get_icon_source(icon_id) {
                                                      ui.add(egui::Image::from_bytes(

@@ -21,11 +21,98 @@ pub enum Screen {
     Configuracion,
     Default,
     Server,
+    CreateVault,
+    Appearance,
+    Vaults,
+}
+
+pub fn create_vault_screen(
+    ctx: &egui::Context,
+    current_window: &mut Screen,
+    prev_window: &mut Screen,
+    nw_vault_str: &mut String,
+    folder: &mut String,
+    error: &mut String,
+    vaults: &mut Vec<String>,
+    vault: &mut String,
+    vault_changed: &mut bool,
+) {
+    CentralPanel::default().show(ctx, |ui| {
+        ui.vertical_centered(|ui| {
+            ui.add_space(20.0);
+            ui.heading("Create New Vault");
+            ui.add_space(20.0);
+            
+            ui.label(RichText::new(format!("Location: {}", folder)).weak());
+            ui.add_space(10.0);
+
+            ui.label("Vault Name:");
+            let edit = egui::TextEdit::singleline(nw_vault_str)
+                .hint_text("Enter vault name...")
+                .desired_width(f32::INFINITY);
+            
+            let response = ui.add(edit);
+            if response.changed() {
+                let full_path = format!("{}/{}", folder, nw_vault_str);
+                let new_vault = Path::new(&full_path);
+                if new_vault.exists() {
+                    *error = String::from("Folder already Exists");
+                } else {
+                    *error = String::new();
+                }
+            }
+
+            if !error.is_empty() {
+                ui.label(RichText::new(error.as_str()).color(ui.visuals().error_fg_color));
+            }
+
+            ui.add_space(30.0);
+
+            let btn_width = ui.available_width() * 0.8;
+            
+            if ui.add_sized([btn_width, 50.0], egui::Button::new("✨ Confirm Creation")).clicked() {
+                if nw_vault_str.is_empty() {
+                    *error = "Name cannot be empty".to_string();
+                } else {
+                    let full_path = format!("{}/{}", folder, nw_vault_str);
+                    if fs::create_dir(&full_path).is_ok() {
+                        let _ = fs::create_dir(format!("{}/.obsidian/", full_path));
+                        if !vaults.contains(&full_path) {
+                            vaults.push(full_path.clone());
+                        }
+                        *vault = full_path;
+                        *vault_changed = true;
+                        #[cfg(target_os = "android")]
+                        {
+                            *current_window = Screen::Configuracion;
+                        }
+                        #[cfg(not(target_os = "android"))]
+                        {
+                            *current_window = Screen::Main;
+                        }
+                        *nw_vault_str = String::new();
+                        *error = String::new();
+                    } else {
+                        *error = "Failed to create vault folder".to_string();
+                    }
+                }
+            }
+
+            ui.add_space(10.0);
+
+            if ui.add_sized([btn_width, 50.0], egui::Button::new("Cancel")).clicked() {
+                *current_window = *prev_window;
+                *nw_vault_str = String::new();
+                *error = String::new();
+            }
+        });
+    });
 }
 
 pub fn default(
     ctx: &egui::Context,
     current_window: &mut Screen,
+    prev_window: &mut Screen,
     nuevo_vault_name: &mut String,
     vaults_vec: &mut Vec<String>,
     vault: &mut String,
@@ -195,7 +282,15 @@ pub fn default(
                                     let _ = fs::create_dir_all(format!("{}/.obsidian", full_path));
                                     vaults_vec.push(full_path.clone());
                                     *vault = full_path;
-                                    *current_window = Screen::Main;
+                                    *prev_window = *current_window;
+                                    #[cfg(target_os = "android")]
+                                    {
+                                        *current_window = Screen::Configuracion;
+                                    }
+                                    #[cfg(not(target_os = "android"))]
+                                    {
+                                        *current_window = Screen::Main;
+                                    }
                                     *content = Content::Blank;
                                     *show_creation_ui = false;
                                     *nuevo_vault_name = String::new();
@@ -218,6 +313,7 @@ pub fn default(
                         )
                         .clicked()
                     {
+                        *prev_window = *current_window;
                         *current_window = Screen::Configuracion;
                     };
                 });
@@ -254,32 +350,48 @@ pub fn configuracion(
         ui.with_layout(egui::Layout::top_down(egui::Align::Center), |ui| {
             ui.heading("Configuration");
 
-            vault_management(
-                ui,
-                current_window,
-                vaults,
-                vault,
-                nw_vault_str,
-                show,
-                folder,
-                error,
-                button,
-                vault_changed,
-                button_size,
-            );
+            #[cfg(not(target_os = "android"))]
+            {
+                vault_management(
+                    ui,
+                    current_window,
+                    prev_window,
+                    vaults,
+                    vault,
+                    nw_vault_str,
+                    show,
+                    folder,
+                    error,
+                    button,
+                    vault_changed,
+                    button_size,
+                );
 
-            appearance_settings(
-                ui,
-                ctx,
-                vault,
-                font_size,
-                center_size,
-                center_size_remain,
-                sort_files,
-                enable_icon_folder, // Pasamos el booleano aquí
-                icon_manager,       // Pasar manager
-                button_size,
-            );
+                appearance_settings(
+                    ui,
+                    ctx,
+                    vault,
+                    font_size,
+                    center_size,
+                    center_size_remain,
+                    sort_files,
+                    enable_icon_folder,
+                    icon_manager,
+                    button_size,
+                );
+            }
+
+            #[cfg(target_os = "android")]
+            {
+                ui.add_space(10.0);
+                if ui.add_sized(button_size, egui::Button::new("📂 Vaults")).clicked() {
+                    *current_window = Screen::Vaults;
+                }
+                ui.add_space(10.0);
+                if ui.add_sized(button_size, egui::Button::new("🎨 Appearance")).clicked() {
+                    *current_window = Screen::Appearance;
+                }
+            }
 
             server_settings(ui, current_window, button_size);
 
@@ -294,9 +406,10 @@ pub fn configuracion(
     });
 }
 
-fn vault_management(
+pub fn vault_management(
     ui: &mut egui::Ui,
     current_window: &mut Screen,
+    prev_window: &mut Screen,
     vaults: &mut Vec<String>,
     vault: &mut String,
     nw_vault_str: &mut String,
@@ -307,23 +420,70 @@ fn vault_management(
     vault_changed: &mut bool,
     button_size: [f32; 2],
 ) {
+    #[cfg(not(target_os = "android"))]
     egui::CollapsingHeader::new(RichText::new("Vaults").strong()).show(ui, |ui| {
-        create_new_vault(
+        vault_management_content(
             ui,
+            current_window,
+            prev_window,
+            vaults,
+            vault,
             nw_vault_str,
             show,
             folder,
             error,
             button,
-            vaults,
-            vault,
-            current_window,
             vault_changed,
             button_size,
         );
-        manage_existing_vaults(ui, vaults, vault, vault_changed, button_size);
-        add_existing_vault(ui, vaults, vault, current_window, vault_changed, button_size);
     });
+    #[cfg(target_os = "android")]
+    vault_management_content(
+        ui,
+        current_window,
+        prev_window,
+        vaults,
+        vault,
+        nw_vault_str,
+        show,
+        folder,
+        error,
+        button,
+        vault_changed,
+        button_size,
+    );
+}
+
+fn vault_management_content(
+    ui: &mut egui::Ui,
+    current_window: &mut Screen,
+    prev_window: &mut Screen,
+    vaults: &mut Vec<String>,
+    vault: &mut String,
+    nw_vault_str: &mut String,
+    show: &mut bool,
+    folder: &mut String,
+    error: &mut String,
+    button: &mut bool,
+    vault_changed: &mut bool,
+    button_size: [f32; 2],
+) {
+    create_new_vault(
+        ui,
+        nw_vault_str,
+        show,
+        folder,
+        error,
+        button,
+        vaults,
+        vault,
+        current_window,
+        prev_window,
+        vault_changed,
+        button_size,
+    );
+    manage_existing_vaults(ui, vaults, vault, vault_changed, button_size);
+    add_existing_vault(ui, vaults, vault, current_window, vault_changed, button_size);
 }
 
 fn create_new_vault(
@@ -336,6 +496,7 @@ fn create_new_vault(
     vaults: &mut Vec<String>,
     vault: &mut String,
     current_window: &mut Screen,
+    prev_window: &mut Screen,
     vault_changed: &mut bool,
     button_size: [f32; 2],
 ) {
@@ -355,10 +516,12 @@ fn create_new_vault(
         }
         #[cfg(target_os = "android")]
         {
-            *show = true;
+            *prev_window = *current_window;
+            *current_window = Screen::CreateVault;
             *folder = crate::configuraciones::get_config_dir();
         }
     }
+    #[cfg(not(target_os = "android"))]
     if *show {
         ui.label(format!("Creating in: {}", folder));
         let edit = egui::TextEdit::singleline(nw_vault_str);
@@ -375,6 +538,7 @@ fn create_new_vault(
             }
         }
     }
+    #[cfg(not(target_os = "android"))]
     if *button {
         if ui
             .add_sized(button_size, egui::Button::new("Confirm Creation"))
@@ -470,7 +634,7 @@ fn add_existing_vault(
     }
 }
 
-fn appearance_settings(
+pub fn appearance_settings(
     ui: &mut egui::Ui,
     ctx: &egui::Context,
     vault: &str,
@@ -483,104 +647,142 @@ fn appearance_settings(
     _button_size: [f32; 2],
 ) {
     ui.add_space(10.0);
+    #[cfg(not(target_os = "android"))]
     egui::CollapsingHeader::new(RichText::new("Appearance").strong()).show(ui, |ui| {
-        ui.checkbox(sort_files, "Show files sorted");
-        ui.add_space(5.0);
+        appearance_settings_content(
+            ui,
+            ctx,
+            vault,
+            font_size,
+            center_size,
+            center_size_remain,
+            sort_files,
+            enable_icon_folder,
+            icon_manager,
+        );
+    });
+    #[cfg(target_os = "android")]
+    appearance_settings_content(
+        ui,
+        ctx,
+        vault,
+        font_size,
+        center_size,
+        center_size_remain,
+        sort_files,
+        enable_icon_folder,
+        icon_manager,
+    );
+}
 
-        ui.separator();
-        ui.checkbox(enable_icon_folder, "Enable Obsidian Icon Folder");
+fn appearance_settings_content(
+    ui: &mut egui::Ui,
+    ctx: &egui::Context,
+    vault: &str,
+    font_size: &mut f32,
+    center_size: &mut f32,
+    center_size_remain: &mut f32,
+    sort_files: &mut bool,
+    enable_icon_folder: &mut bool,
+    icon_manager: &mut IconManager,
+) {
+    ui.checkbox(sort_files, "Show files sorted");
+    ui.add_space(5.0);
 
-        if *enable_icon_folder {
-            let old_settings = icon_manager.settings.clone();
+    ui.separator();
+    ui.checkbox(enable_icon_folder, "Enable Obsidian Icon Folder");
 
-            ui.indent("icons_settings", |ui| {
-                let s = &mut icon_manager.settings;
+    if *enable_icon_folder {
+        let old_settings = icon_manager.settings.clone();
 
-                ui.label(RichText::new("Icon Folder Settings").strong());
+        ui.indent("icons_settings", |ui| {
+            let s = &mut icon_manager.settings;
 
-                ui.horizontal(|ui| {
-                    ui.label("Icon Packs Path:");
-                    ui.text_edit_singleline(&mut s.icon_packs_path);
-                });
-                ui.add(egui::Slider::new(&mut s.font_size, 8.0..=32.0).text("Icon Font Size"));
+            ui.label(RichText::new("Icon Folder Settings").strong());
 
-                ui.collapsing("Visibility & Position", |ui| {
-                    ui.checkbox(&mut s.icon_in_tabs_enabled, "Icon in Tabs");
-                    ui.checkbox(&mut s.icon_in_title_enabled, "Icon in Title");
-                    if s.icon_in_title_enabled {
-                        egui::ComboBox::from_label("Position")
-                            .selected_text(&s.icon_in_title_position)
-                            .show_ui(ui, |ui| {
-                                ui.selectable_value(
-                                    &mut s.icon_in_title_position,
-                                    "above".to_string(),
-                                    "Above",
-                                );
-                                ui.selectable_value(
-                                    &mut s.icon_in_title_position,
-                                    "inline".to_string(),
-                                    "Inline",
-                                );
-                            });
-                    }
-                    ui.checkbox(&mut s.icons_in_notes_enabled, "Icons in Notes");
-                    ui.checkbox(&mut s.icons_in_links_enabled, "Icons in Links");
-                });
+            ui.horizontal(|ui| {
+                ui.label("Icon Packs Path:");
+                ui.text_edit_singleline(&mut s.icon_packs_path);
+            });
+            ui.add(egui::Slider::new(&mut s.font_size, 8.0..=32.0).text("Icon Font Size"));
 
-                ui.collapsing("Margins", |ui| {
-                    ui.horizontal(|ui| {
-                        ui.label("Top:");
-                        ui.add(egui::DragValue::new(&mut s.extra_margin.top));
-                        ui.label("Right:");
-                        ui.add(egui::DragValue::new(&mut s.extra_margin.right));
-                    });
-                    ui.horizontal(|ui| {
-                        ui.label("Bottom:");
-                        ui.add(egui::DragValue::new(&mut s.extra_margin.bottom));
-                        ui.label("Left:");
-                        ui.add(egui::DragValue::new(&mut s.extra_margin.left));
-                    });
-                });
-
-                ui.collapsing("Frontmatter", |ui| {
-                    ui.checkbox(&mut s.icon_in_frontmatter_enabled, "Use Frontmatter");
-                    if s.icon_in_frontmatter_enabled {
-                        ui.text_edit_singleline(&mut s.icon_in_frontmatter_field_name)
-                            .on_hover_text("Field Name");
-                    }
-                });
-
-                ui.checkbox(&mut s.debug_mode, "Debug Mode");
+            ui.collapsing("Visibility & Position", |ui| {
+                ui.checkbox(&mut s.icon_in_tabs_enabled, "Icon in Tabs");
+                ui.checkbox(&mut s.icon_in_title_enabled, "Icon in Title");
+                if s.icon_in_title_enabled {
+                    egui::ComboBox::from_label("Position")
+                        .selected_text(&s.icon_in_title_position)
+                        .show_ui(ui, |ui| {
+                            ui.selectable_value(
+                                &mut s.icon_in_title_position,
+                                "above".to_string(),
+                                "Above",
+                            );
+                            ui.selectable_value(
+                                &mut s.icon_in_title_position,
+                                "inline".to_string(),
+                                "Inline",
+                            );
+                        });
+                }
+                ui.checkbox(&mut s.icons_in_notes_enabled, "Icons in Notes");
+                ui.checkbox(&mut s.icons_in_links_enabled, "Icons in Links");
             });
 
-            if old_settings != icon_manager.settings {
-                icon_manager.save_settings(vault);
-            }
-            ui.separator();
-        }
+            ui.collapsing("Margins", |ui| {
+                ui.horizontal(|ui| {
+                    ui.label("Top:");
+                    ui.add(egui::DragValue::new(&mut s.extra_margin.top));
+                    ui.label("Right:");
+                    ui.add(egui::DragValue::new(&mut s.extra_margin.right));
+                });
+                ui.horizontal(|ui| {
+                    ui.label("Bottom:");
+                    ui.add(egui::DragValue::new(&mut s.extra_margin.bottom));
+                    ui.label("Left:");
+                    ui.add(egui::DragValue::new(&mut s.extra_margin.left));
+                });
+            });
 
-        if ui
-            .add(egui::Slider::new(center_size, 0.35..=0.9).text("Line length"))
-            .changed()
-        {
-            *center_size_remain = (1.0 - *center_size) / 2.0;
-        };
-        ui.add_space(10.0);
+            ui.collapsing("Frontmatter", |ui| {
+                ui.checkbox(&mut s.icon_in_frontmatter_enabled, "Use Frontmatter");
+                if s.icon_in_frontmatter_enabled {
+                    ui.text_edit_singleline(&mut s.icon_in_frontmatter_field_name)
+                        .on_hover_text("Field Name");
+                }
+            });
 
-        if ui
-            .add(egui::Slider::new(font_size, 10.0..=80.0).text("Font size"))
-            .changed()
-        {
-            let mut style = (*ctx.style()).clone();
-            let font_id = FontId::proportional(*font_size);
-            style.override_font_id = Some(font_id);
-            ctx.set_style(style);
+            ui.checkbox(&mut s.debug_mode, "Debug Mode");
+        });
+
+        if old_settings != icon_manager.settings {
+            icon_manager.save_settings(vault);
         }
-    });
+        ui.separator();
+    }
+
+    if ui
+        .add(egui::Slider::new(center_size, 0.35..=0.9).text("Line length"))
+        .changed()
+    {
+        *center_size_remain = (1.0 - *center_size) / 2.0;
+    };
+    ui.add_space(10.0);
+
+    if ui
+        .add(egui::Slider::new(font_size, 10.0..=80.0).text("Font size"))
+        .changed()
+    {
+        let mut style = (*ctx.style()).clone();
+        let font_id = FontId::proportional(*font_size);
+        style.override_font_id = Some(font_id);
+        ctx.set_style(style);
+    }
 }
 
 fn server_settings(ui: &mut egui::Ui, current_window: &mut Screen, button_size: [f32; 2]) {
     ui.add_space(10.0);
+    #[cfg(not(target_os = "android"))]
     egui::CollapsingHeader::new(RichText::new("Server").strong()).show(ui, |ui| {
         if ui
             .add_sized(button_size, egui::Button::new("Configure Backup Server"))
@@ -589,6 +791,10 @@ fn server_settings(ui: &mut egui::Ui, current_window: &mut Screen, button_size: 
             *current_window = Screen::Server;
         };
     });
+    #[cfg(target_os = "android")]
+    if ui.add_sized(button_size, egui::Button::new("☁ Server")).clicked() {
+        *current_window = Screen::Server;
+    }
 }
 
 pub fn set_server(_ctx: &egui::Context) {}

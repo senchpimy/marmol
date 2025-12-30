@@ -1,6 +1,6 @@
+use crate::command_palette::{CommandAction, CommandPalette};
 use crate::graph::Graph;
-use crate::iconize::{IconSelector, IconPackInstaller};
-use crate::command_palette::{CommandPalette, CommandAction};
+use crate::iconize::{IconPackInstaller, IconSelector};
 use egui::*;
 use std::fmt;
 use std::fs;
@@ -11,8 +11,8 @@ use std::path::Path;
 extern crate json;
 extern crate log;
 
-pub mod configuraciones;
 pub mod command_palette;
+pub mod configuraciones;
 pub mod easy_mark;
 pub mod emojis;
 pub mod excalidraw;
@@ -151,7 +151,9 @@ impl Marmol {
             command_palette: CommandPalette::default(),
             #[cfg(target_os = "android")]
             keyboard: egui_keyboard::Keyboard::default(),
-            android_storage: state.android_storage.unwrap_or(configuraciones::AndroidStorage::Unselected),
+            android_storage: state
+                .android_storage
+                .unwrap_or(configuraciones::AndroidStorage::Unselected),
             #[cfg(target_os = "android")]
             android_app: None,
         }
@@ -227,6 +229,7 @@ impl eframe::App for Marmol {
             screens::default(
                 ctx,
                 &mut self.current_window,
+                &mut self.prev_window,
                 &mut self.new_vault_str,
                 &mut self.vault_vec,
                 &mut self.vault,
@@ -240,9 +243,24 @@ impl eframe::App for Marmol {
                 #[cfg(target_os = "android")]
                 &self.android_app,
             );
-            if prev_win != self.current_window || prev_vaults_count != self.vault_vec.len() || prev_storage != self.android_storage {
+            if prev_win != self.current_window
+                || prev_vaults_count != self.vault_vec.len()
+                || prev_storage != self.android_storage
+            {
                 self.save_to_disk();
             }
+        } else if self.current_window == screens::Screen::CreateVault {
+            screens::create_vault_screen(
+                ctx,
+                &mut self.current_window,
+                &mut self.prev_window,
+                &mut self.new_vault_str,
+                &mut self.new_vault_folder,
+                &mut self.new_vault_folder_err,
+                &mut self.vault_vec,
+                &mut self.vault,
+                &mut self.vault_changed,
+            );
         } else if self.current_window == screens::Screen::Main {
             if ctx.input(|i| i.modifiers.command && i.key_pressed(egui::Key::O)) {
                 self.switcher.open(&self.vault);
@@ -250,17 +268,35 @@ impl eframe::App for Marmol {
 
             self.icon_selector
                 .ui(ctx, &self.vault, &mut self.left_controls.icon_manager);
-            
+
             // Render Command Palette and handle actions
             match self.command_palette.ui(ctx) {
                 CommandAction::OpenIconInstaller => {
                     self.icon_pack_installer.is_open = true;
                 }
+                CommandAction::CreateKanban => {
+                    let mut name = "untitledKanban.md".to_string();
+                    let mut path = format!("{}/{}", self.vault, name);
+                    let mut count = 1;
+                    while Path::new(&path).exists() {
+                        name = format!("untitledKanban {}.md", count);
+                        path = format!("{}/{}", self.vault, name);
+                        count += 1;
+                    }
+
+                    if let Ok(mut file) = File::create(&path) {
+                        let content = "---\nkanban-plugin: board\n---\n";
+                        let _ = file.write_all(content.as_bytes());
+                        self.current_file = path;
+                        self.content = main_area::content_enum::Content::View;
+                    }
+                }
                 CommandAction::None => {} // Do nothing
             }
 
             // Render Icon Pack Installer
-            self.icon_pack_installer.ui(ctx, &self.vault, &mut self.left_controls.icon_manager);
+            self.icon_pack_installer
+                .ui(ctx, &self.vault, &mut self.left_controls.icon_manager);
 
             //Main screen
             self.left_controls.left_side_settings(
@@ -269,6 +305,7 @@ impl eframe::App for Marmol {
                 &mut self.vault,
                 &mut self.current_file,
                 &mut self.current_window,
+                &mut self.prev_window,
                 &mut self.content,
                 &mut self.tabs,
                 &mut self.tabs_counter,
@@ -342,6 +379,62 @@ impl eframe::App for Marmol {
             if prev_win != self.current_window {
                 self.save_to_disk();
             }
+        } else if self.current_window == screens::Screen::Appearance {
+            let prev_win = self.current_window;
+            CentralPanel::default().show(ctx, |ui| {
+                ui.vertical_centered(|ui| {
+                    ui.heading("Appearance");
+                    ui.add_space(20.0);
+                    screens::appearance_settings(
+                        ui,
+                        ctx,
+                        &self.vault,
+                        &mut self.font_size,
+                        &mut self.center_size,
+                        &mut self.center_size_remain,
+                        &mut self.sort_files,
+                        &mut self.enable_icon_folder,
+                        &mut self.left_controls.icon_manager,
+                        [ui.available_width() * 0.8, 40.0],
+                    );
+                    ui.add_space(20.0);
+                    if ui.button("Return").clicked() {
+                        self.current_window = screens::Screen::Configuracion;
+                    }
+                });
+            });
+            if prev_win != self.current_window {
+                self.save_to_disk();
+            }
+        } else if self.current_window == screens::Screen::Vaults {
+            let prev_win = self.current_window;
+            CentralPanel::default().show(ctx, |ui| {
+                ui.vertical_centered(|ui| {
+                    ui.heading("Vaults");
+                    ui.add_space(20.0);
+                    screens::vault_management(
+                        ui,
+                        &mut self.current_window,
+                        &mut self.prev_window,
+                        &mut self.vault_vec,
+                        &mut self.vault,
+                        &mut self.new_vault_str,
+                        &mut self.create_new_vault,
+                        &mut self.new_vault_folder,
+                        &mut self.new_vault_folder_err,
+                        &mut self.show_create_button,
+                        &mut self.vault_changed,
+                        [ui.available_width() * 0.8, 40.0],
+                    );
+                    ui.add_space(20.0);
+                    if ui.button("Return").clicked() {
+                        self.current_window = screens::Screen::Configuracion;
+                    }
+                });
+            });
+            if prev_win != self.current_window {
+                self.save_to_disk();
+            }
         } else if self.current_window == screens::Screen::Server {
             screens::set_server(ctx);
         };
@@ -365,13 +458,7 @@ impl eframe::App for Marmol {
         };
     }
 
-    #[cfg(not(target_os = "android"))]
     fn on_exit(&mut self, _gl: Option<&eframe::glow::Context>) {
-        self.save_to_disk();
-    }
-
-    #[cfg(target_os = "android")]
-    fn on_exit(&mut self) {
         self.save_to_disk();
     }
 }
@@ -470,7 +557,7 @@ fn android_main(app: winit::platform::android::activity::AndroidApp) {
     use eframe::Renderer;
 
     std::env::set_var("RUST_BACKTRACE", "full");
-    
+
     // Capture internal data path for Android
     if let Some(path) = app.internal_data_path() {
         std::env::set_var("MARMOL_DATA_DIR", path.to_string_lossy().to_string());
@@ -482,7 +569,7 @@ fn android_main(app: winit::platform::android::activity::AndroidApp) {
 
     let options = eframe::NativeOptions {
         android_app: Some(app.clone()),
-        renderer: Renderer::Wgpu,
+        renderer: Renderer::Glow,
         ..Default::default()
     };
 
@@ -498,5 +585,6 @@ fn android_main(app: winit::platform::android::activity::AndroidApp) {
             }
             Ok(Box::new(m))
         }),
-    ).unwrap();
+    )
+    .unwrap();
 }
