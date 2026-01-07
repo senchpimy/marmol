@@ -27,10 +27,10 @@ pub fn color_to_hex(c: Color32) -> String {
 
 pub fn move_element_group(elements: &mut Vec<ExcalidrawElement>, root_idx: usize, delta: Vec2) {
     let mut indices = vec![root_idx];
-    let rid = elements[root_idx].id.clone();
+    let rid = &elements[root_idx].id;
     let cid = elements[root_idx].container_id.clone();
     if let Some(c) = cid {
-        if let Some(p) = elements.iter().position(|e| e.id == c) {
+        if let Some(p) = elements.iter().position(|e| e.id == *c) {
             indices.push(p);
         }
     }
@@ -43,7 +43,7 @@ pub fn move_element_group(elements: &mut Vec<ExcalidrawElement>, root_idx: usize
     }
     for (i, el) in elements.iter().enumerate() {
         if let Some(c) = &el.container_id {
-            if *c == rid && !indices.contains(&i) {
+            if c == rid && !indices.contains(&i) {
                 indices.push(i);
             }
         }

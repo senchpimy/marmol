@@ -153,7 +153,7 @@ impl Tabe {
                 path: path.clone(),
                 gui,
             }
-        } else if path.ends_with(".excalidraw") {
+        } else if path.ends_with(".excalidraw.md") {
             let mut gui = excalidraw::ExcalidrawGui::default();
             gui.set_path(&path);
             TabContent::Excalidraw {
@@ -598,7 +598,7 @@ fn update_tab_content(tab: &mut Tabe, path: &String, is_history_nav: bool) {
             path: path.clone(),
             gui,
         }
-    } else if path.ends_with(".excalidraw") {
+    } else if path.ends_with(".excalidraw.md") {
         let mut gui = excalidraw::ExcalidrawGui::default();
         gui.set_path(path);
         TabContent::Excalidraw {

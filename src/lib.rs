@@ -1,4 +1,5 @@
 use crate::command_palette::{CommandAction, CommandPalette};
+use lz_str;
 use crate::graph::Graph;
 use crate::iconize::{IconPackInstaller, IconSelector};
 use egui::*;
@@ -39,6 +40,7 @@ pub enum NewFileType {
     Markdown,
     Income,
     Tasks,
+    Excalidraw,
 }
 pub struct MShape {
     pub height: f32,
@@ -300,6 +302,43 @@ impl eframe::App for Marmol {
                         self.content = main_area::content_enum::Content::View;
                     }
                 }
+                CommandAction::CreateExcalidraw => {
+                    let mut name = "untitledExcalidraw.excalidraw.md".to_string();
+                    let mut path = format!("{}/{}", self.vault, name);
+                    let mut count = 1;
+                    while Path::new(&path).exists() {
+                        name = format!("untitledExcalidraw {}.excalidraw.md", count);
+                        path = format!("{}/{}", self.vault, name);
+                        count += 1;
+                    }
+
+                    if let Ok(mut file) = File::create(&path) {
+                        let json_contents = String::from("{\"type\":\"excalidraw\",\"version\":2,\"source\":\"https://excalidraw.com\",\"elements\":[],\"appState\":{\"viewBackgroundColor\":\"#ffffff\"},\"files\":{}}");
+                        let compressed = lz_str::compress_to_base64(&json_contents);
+                        let full_content = format!(
+"---
+
+excalidraw-plugin: parsed
+tags: [excalidraw]
+
+---
+==⚠  Switch to EXCALIDRAW VIEW in the MORE OPTIONS menu of this document. ⚠== You can decompress Drawing data with the command palette: 'Decompress current Excalidraw file'. For more info check in plugin settings under 'Saving'
+
+
+# Excalidraw Data
+
+## Text Elements
+
+%%
+## Drawing
+```compressed-json
+{}
+```", compressed);
+                        let _ = file.write_all(full_content.as_bytes());
+                        self.current_file = path;
+                        self.content = main_area::content_enum::Content::View;
+                    }
+                }
                 CommandAction::None => {} // Do nothing
             }
 
@@ -509,11 +548,14 @@ impl Marmol {
                 ui.selectable_value(&mut self.new_file_type, NewFileType::Markdown, "Markdown");
                 ui.selectable_value(&mut self.new_file_type, NewFileType::Tasks, "Tasks");
                 ui.selectable_value(&mut self.new_file_type, NewFileType::Income, "Income");
+                ui.selectable_value(&mut self.new_file_type, NewFileType::Excalidraw, "Excalidraw");
             });
         let path = if self.new_file_type == NewFileType::Tasks {
             format!("{}.graph", new_path)
         } else if self.new_file_type == NewFileType::Income {
             format!("{}.inc", new_path)
+        } else if self.new_file_type == NewFileType::Excalidraw {
+            format!("{}.excalidraw.md", new_path)
         } else {
             String::new()
         };
@@ -540,6 +582,29 @@ impl Marmol {
                         } else if self.new_file_type == NewFileType::Income {
                             let contents=String::from("{\"transacciones\":[],\"categorias\":[ \"Categoria\"],\"colores\":[[0.0,0.0,0.0]]}");
                             re.write_all(contents.as_bytes()).unwrap();
+                        } else if self.new_file_type == NewFileType::Excalidraw {
+                            let json_contents = String::from("{\"type\":\"excalidraw\",\"version\":2,\"source\":\"https://excalidraw.com\",\"elements\":[],\"appState\":{\"viewBackgroundColor\":\"#ffffff\"},\"files\":{}}");
+                            let compressed = lz_str::compress_to_base64(&json_contents);
+                            let full_content = format!(
+"---
+
+excalidraw-plugin: parsed
+tags: [excalidraw]
+
+---
+==⚠  Switch to EXCALIDRAW VIEW in the MORE OPTIONS menu of this document. ⚠== You can decompress Drawing data with the command palette: 'Decompress current Excalidraw file'. For more info check in plugin settings under 'Saving'
+
+
+# Excalidraw Data
+
+## Text Elements
+
+%%
+## Drawing
+```compressed-json
+{}
+```", compressed);
+                            re.write_all(full_content.as_bytes()).unwrap();
                         }
                         self.current_file = String::from(new_file.to_str().unwrap());
                     }

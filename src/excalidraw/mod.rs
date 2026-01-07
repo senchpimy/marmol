@@ -1,5 +1,7 @@
 use base64::{engine::general_purpose, Engine as _};
+use lz_str;
 use egui::UiBuilder;
+
 use egui::{
     ColorImage, Context, PointerButton, Pos2, Rect,
     Sense, Stroke, TextureHandle, TextureOptions, Ui, Vec2,
@@ -88,35 +90,94 @@ impl ExcalidrawGui {
             return;
         }
         match fs::read_to_string(&self.path) {
-            Ok(json) => match serde_json::from_str::<ExcalidrawScene>(&json) {
-                Ok(mut sc) => {
-                    for (i, el) in sc.elements.iter_mut().enumerate() {
-                        if el.id.is_empty() {
-                            el.id = format!("gen_{}", i);
+            Ok(content) => {
+                let json_to_parse: Option<String> = if content.trim().starts_with('{') {
+                    Some(content)
+                } else {
+                    // Intentar extraer de bloque ```json o ```compressed-json
+                    if let Some(start) = content.find("```json\n") {
+                        let rest = &content[start + 8..];
+                        if let Some(end) = rest.find("\n```") {
+                            Some(rest[..end].to_string())
+                        } else {
+                            None
                         }
+                    } else if let Some(start) = content.find("```compressed-json\n") {
+                        let rest = &content[start + 19..];
+                        if let Some(end) = rest.find("\n```") {
+                            let compressed = rest[..end].trim();
+                            lz_str::decompress_from_base64(compressed)
+                                .and_then(|v| String::from_utf16(&v).ok())
+                        } else {
+                            None
+                        }
+                    } else {
+                        None
                     }
-                    self.scene = Some(sc);
-                    self.error_msg = None;
-                    self.is_dirty = false;
-                    self.texture_cache.clear();
-                    self.failed_textures.clear();
-                    if self.scale == 0.0 {
-                        self.scale = 1.0;
+                };
+
+                if let Some(json) = json_to_parse {
+                    match serde_json::from_str::<ExcalidrawScene>(&json) {
+                        Ok(mut sc) => {
+                            for (i, el) in sc.elements.iter_mut().enumerate() {
+                                if el.id.is_empty() {
+                                    el.id = format!("gen_{}", i);
+                                }
+                            }
+                            self.scene = Some(sc);
+                            self.error_msg = None;
+                            self.is_dirty = false;
+                            self.texture_cache.clear();
+                            self.failed_textures.clear();
+                            if self.scale == 0.0 {
+                                self.scale = 1.0;
+                            }
+                            if self.active_tool.is_none() {
+                                self.active_tool = Some(Tool::Selection);
+                            }
+                        }
+                        Err(e) => self.error_msg = Some(format!("Error parsing: {}", e)),
                     }
-                    if self.active_tool.is_none() {
-                        self.active_tool = Some(Tool::Selection);
-                    }
+                } else {
+                    self.error_msg = Some("Could not find valid drawing data in file".to_string());
                 }
-                Err(e) => self.error_msg = Some(format!("Error parsing: {}", e)),
-            },
+            }
             Err(e) => self.error_msg = Some(format!("Error reading: {}", e)),
         }
     }
 
     fn save_file(&mut self) {
         if let Some(scene) = &self.scene {
-            if let Ok(json) = serde_json::to_string_pretty(scene) {
-                let _ = fs::write(&self.path, json);
+            if let Ok(json) = serde_json::to_string(scene) {
+                let compressed = lz_str::compress_to_base64(&json);
+                let mut text_elements = String::new();
+                for el in &scene.elements {
+                    if el.element_type == "text" && !el.text.is_empty() {
+                        text_elements.push_str(&format!("{} ^{}\n\n", el.text, el.id));
+                    }
+                }
+
+                let full_content = format!(
+"---
+
+excalidraw-plugin: parsed
+tags: [excalidraw]
+
+---
+==⚠  Switch to EXCALIDRAW VIEW in the MORE OPTIONS menu of this document. ⚠== You can decompress Drawing data with the command palette: 'Decompress current Excalidraw file'. For more info check in plugin settings under 'Saving'
+
+
+# Excalidraw Data
+
+## Text Elements
+{}
+%%
+## Drawing
+```compressed-json
+{}
+```", text_elements, compressed);
+
+                let _ = fs::write(&self.path, full_content);
                 self.is_dirty = false;
             }
         }
@@ -216,6 +277,12 @@ impl ExcalidrawGui {
                 .clicked()
             {
                 self.active_tool = Some(Tool::Arrow);
+            }
+            if ui
+                .selectable_label(self.active_tool == Some(Tool::Freedraw), "✏")
+                .clicked()
+            {
+                self.active_tool = Some(Tool::Freedraw);
             }
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 if ui.button("💾").clicked() {
@@ -348,6 +415,10 @@ impl ExcalidrawGui {
                                     Tool::Rectangle => new_el.element_type = "rectangle".into(),
                                     Tool::Ellipse => new_el.element_type = "ellipse".into(),
                                     Tool::Diamond => new_el.element_type = "diamond".into(),
+                                    Tool::Freedraw => {
+                                        new_el.element_type = "freedraw".into();
+                                        new_el.points = vec![[0.0, 0.0]];
+                                    }
                                     _ => {}
                                 }
                                 self.drawing_element = Some(new_el);
@@ -364,6 +435,37 @@ impl ExcalidrawGui {
                                             el.points = vec![[0.0, 0.0], [dx, dy]];
                                             el.width = dx.abs();
                                             el.height = dy.abs();
+                                        } else if tool == Tool::Freedraw {
+                                            let dx = cw.x - sp.x;
+                                            let dy = cw.y - sp.y;
+                                            el.points.push([dx, dy]);
+
+                                            // Recalculate bounding box
+                                            let mut min_x = 0.0f32;
+                                            let mut min_y = 0.0f32;
+                                            let mut max_x = 0.0f32;
+                                            let mut max_y = 0.0f32;
+
+                                            for p in &el.points {
+                                                min_x = min_x.min(p[0]);
+                                                min_y = min_y.min(p[1]);
+                                                max_x = max_x.max(p[0]);
+                                                max_y = max_y.max(p[1]);
+                                            }
+
+                                            if min_x != 0.0 || min_y != 0.0 {
+                                                el.x += min_x;
+                                                el.y += min_y;
+                                                for p in &mut el.points {
+                                                    p[0] -= min_x;
+                                                    p[1] -= min_y;
+                                                }
+                                                // Adjust start pos as well to keep logic consistent
+                                                self.drawing_start_pos =
+                                                    Some(Pos2::new(sp.x + min_x, sp.y + min_y));
+                                            }
+                                            el.width = max_x - min_x;
+                                            el.height = max_y - min_y;
                                         } else {
                                             el.x = sp.x.min(cw.x);
                                             el.y = sp.y.min(cw.y);

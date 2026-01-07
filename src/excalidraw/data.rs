@@ -9,6 +9,7 @@ pub enum Tool {
     Diamond,
     Line,
     Arrow,
+    Freedraw,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]

@@ -4,6 +4,7 @@ pub enum CommandAction {
     None,
     OpenIconInstaller,
     CreateKanban,
+    CreateExcalidraw,
 }
 
 pub struct Command {
@@ -33,6 +34,10 @@ impl Default for CommandPalette {
                 Command {
                     name: "Create Kanban Board".to_string(),
                     action: CommandAction::CreateKanban,
+                },
+                Command {
+                    name: "Create Excalidraw Drawing".to_string(),
+                    action: CommandAction::CreateExcalidraw,
                 },
             ],
             filtered_indices: vec![],
@@ -122,6 +127,7 @@ impl CommandPalette {
                     match &self.commands[real_index].action {
                         CommandAction::OpenIconInstaller => action_to_perform = CommandAction::OpenIconInstaller,
                         CommandAction::CreateKanban => action_to_perform = CommandAction::CreateKanban,
+                        CommandAction::CreateExcalidraw => action_to_perform = CommandAction::CreateExcalidraw,
                         CommandAction::None => {},
                     }
                     self.close();
@@ -147,6 +153,7 @@ impl CommandPalette {
                         match cmd.action {
                             CommandAction::OpenIconInstaller => action_to_perform = CommandAction::OpenIconInstaller,
                             CommandAction::CreateKanban => action_to_perform = CommandAction::CreateKanban,
+                            CommandAction::CreateExcalidraw => action_to_perform = CommandAction::CreateExcalidraw,
                             CommandAction::None => {},
                         }
                         should_close = true;
