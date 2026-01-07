@@ -28,7 +28,7 @@ pub struct MarmolProgramState {
     pub collapsed_left: bool,
     pub center_size: f32,
     pub sort_files: bool,
-    pub dock_state: egui_dock::DockState<Tabe>,
+    pub dock_state: crate::egui_dock::DockState<Tabe>,
     #[serde(default)]
     pub enable_icon_folder: bool,
     #[serde(default)]
@@ -44,7 +44,7 @@ impl Default for MarmolProgramState {
         let default_center_size = 0.8;
         let default_sort_files = false;
         let default_window = screens::Screen::Default;
-        let default_dock_state = egui_dock::DockState::new(vec![]);
+        let default_dock_state = crate::egui_dock::DockState::new(vec![]);
         let default_enable_icon_folder = false;
 
         Self {

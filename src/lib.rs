@@ -14,6 +14,7 @@ extern crate log;
 pub mod command_palette;
 pub mod configuraciones;
 pub mod easy_mark;
+pub mod egui_dock;
 pub mod emojis;
 pub mod excalidraw;
 pub mod files;

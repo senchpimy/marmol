@@ -16,6 +16,8 @@ pub struct KanbanTask {
 pub struct KanbanColumn {
     pub title: String,
     pub tasks: Vec<KanbanTask>,
+    #[serde(default)]
+    pub collapsed: bool,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]
@@ -104,7 +106,36 @@ impl KanbanGui {
                 for col_idx in 0..self.board.columns.len() {
                     
                     // Contenedor visual de la columna
+                    let is_collapsed = self.board.columns[col_idx].collapsed;
                     ui.vertical(|ui| {
+                        if is_collapsed {
+                            ui.set_width(40.0);
+                            let col_frame = Frame::group(ui.style())
+                                .fill(ui.visuals().faint_bg_color)
+                                .inner_margin(8.0)
+                                .corner_radius(8.0);
+                            col_frame.show(ui, |ui| {
+                                if ui.button("▶").clicked() {
+                                    self.board.columns[col_idx].collapsed = false;
+                                    needs_save = true;
+                                }
+                                ui.add_space(8.0);
+                                let text = &self.board.columns[col_idx].title;
+                                let font_id = TextStyle::Heading.resolve(ui.style());
+                                let galley = ui.painter().layout_no_wrap(text.clone(), font_id, ui.visuals().text_color());
+                                let (rect, _) = ui.allocate_exact_size(vec2(24.0, galley.rect.width()), Sense::hover());
+                                let pos = rect.left_bottom() + vec2(rect.width() / 2.0 - galley.rect.height() / 2.0, 0.0);
+                                ui.painter().add(egui::epaint::TextShape {
+                                    pos,
+                                    galley,
+                                    underline: Stroke::NONE,
+                                    override_text_color: None,
+                                    angle: -std::f32::consts::PI / 2.0,
+                                    fallback_color: Color32::TRANSPARENT,
+                                    opacity_factor: 1.0,
+                                });
+                            });
+                        } else {
                         ui.set_width(260.0);
                         
                         let col_frame = Frame::group(ui.style())
@@ -126,6 +157,10 @@ impl KanbanGui {
                                     let header_res = ui.dnd_drag_source(header_id, ColumnLocation { col: col_idx }, |ui| {
                                         ui.set_width(ui.available_width());
                                         ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
+                                            if ui.button("◀").clicked() {
+                                                self.board.columns[col_idx].collapsed = true;
+                                                needs_save = true;
+                                            }
                                             ui.heading(&self.board.columns[col_idx].title);
                                         });
                                     });
@@ -265,6 +300,7 @@ impl KanbanGui {
                                 to_task = Some(Location { col: col_idx, row: usize::MAX });
                             }
                         }
+                        }
                     });
                     
                     ui.add_space(10.0);
@@ -290,6 +326,7 @@ impl KanbanGui {
                                         self.board.columns.push(KanbanColumn {
                                             title: self.new_column_name.clone(),
                                             tasks: Vec::new(),
+                                            collapsed: false,
                                         });
                                         self.new_column_name.clear();
                                         self.adding_column = false;
@@ -436,6 +473,7 @@ fn parse_kanban(content: &str) -> KanbanBoard {
             current_column = Some(KanbanColumn {
                 title: line[3..].to_string(),
                 tasks: Vec::new(),
+                collapsed: false,
             });
         } else if line.trim().starts_with("- [") {
             let completed = line.contains("- [x]");

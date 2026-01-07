@@ -11,7 +11,7 @@ use crate::tasks;
 use egui::Image;
 use egui::{Frame, Sense, Ui, WidgetText};
 use egui_commonmark::*;
-use egui_dock::{DockArea, DockState, NodeIndex, Style, SurfaceIndex, TabViewer};
+use crate::egui_dock::{DockArea, DockState, NodeIndex, Style, SurfaceIndex, TabViewer};
 use egui_extras::{Size, StripBuilder};
 use serde::{Deserialize, Serialize};
 use std::io::Write;
@@ -226,7 +226,49 @@ impl TabViewer for MTabViewer<'_> {
     type Tab = Tabe;
 
     fn title(&mut self, tab: &mut Self::Tab) -> WidgetText {
-        tab.title.as_str().into()
+        let mut title = tab.title.clone();
+        if self.icon_manager.settings.icon_in_title_enabled {
+            let relative_path = if tab.path.starts_with(self.vault) {
+                let p = tab.path.strip_prefix(self.vault).unwrap_or(&tab.path);
+                p.strip_prefix('/').unwrap_or(p).to_string()
+            } else {
+                tab.path.clone()
+            };
+            
+            if let Some(icon_id) = self.icon_manager.get_icon(&relative_path).filter(|s| !s.is_empty()) {
+                      // Only prepend if it is NOT a byte-source (i.e. it is emoji or text)
+                      // This check might be slow if get_icon_source reads disk. 
+                      // Ideally we should check if it looks like an emoji or check svg_cache presence directly.
+                      if !self.icon_manager.svg_cache.contains_key(icon_id) && !self.icon_manager.legacy_mappings.contains_key(icon_id) {
+                          title = format!("{} {}", icon_id, title);
+                      }
+            }
+        }
+        title.into()
+    }
+
+    fn icon(&mut self, tab: &mut Self::Tab) -> Option<egui::Image<'static>> {
+        if !self.icon_manager.settings.icon_in_title_enabled {
+            return None;
+        }
+
+        let relative_path = if tab.path.starts_with(self.vault) {
+            let p = tab.path.strip_prefix(self.vault).unwrap_or(&tab.path);
+            p.strip_prefix('/').unwrap_or(p).to_string()
+        } else {
+            tab.path.clone()
+        };
+
+        let icon_id = self.icon_manager.get_icon(&relative_path).filter(|s| !s.is_empty())?;
+
+        if let Some(IconSource::Bytes(bytes)) = self.icon_manager.get_icon_source(icon_id) {
+             Some(egui::Image::from_bytes(
+                 format!("bytes://title_{}.svg", icon_id),
+                 bytes,
+             ))
+        } else {
+             None
+        }
     }
 
     fn ui(&mut self, ui: &mut Ui, tab: &mut Self::Tab) {
@@ -461,7 +503,7 @@ impl TabViewer for MTabViewer<'_> {
             }
         }
     }
-    fn on_add(&mut self, surface: egui_dock::SurfaceIndex, node: NodeIndex) {
+    fn on_add(&mut self, surface: crate::egui_dock::SurfaceIndex, node: NodeIndex) {
         self.added_nodes.push((surface, node))
     }
 }
@@ -574,10 +616,10 @@ impl Tabs {
                 let mut to_remove = None;
 
                 for (s_idx, surface) in self.tree.iter_surfaces().enumerate() {
-                    if egui_dock::SurfaceIndex(s_idx) == focus_surf {
+                    if crate::egui_dock::SurfaceIndex(s_idx) == focus_surf {
                         for (n_idx, node) in surface.iter_nodes().enumerate() {
-                            if egui_dock::NodeIndex(n_idx) == focus_node {
-                                if let egui_dock::Node::Leaf(leaf) = node {
+                            if crate::egui_dock::NodeIndex(n_idx) == focus_node {
+                                if let crate::egui_dock::Node::Leaf(leaf) = node {
                                     to_remove = Some((focus_surf, focus_node, leaf.active));
                                 }
                                 break;

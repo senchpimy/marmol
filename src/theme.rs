@@ -6,6 +6,7 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use std::sync::Arc;
 use std::path::PathBuf;
+use crate::egui_dock::Style;
 
 #[derive(Serialize, Deserialize, Debug, Default)]
 #[serde(default)]
@@ -28,6 +29,17 @@ struct ThemeConfig {
     font_family: Option<String>,
     base_font_size: Option<f32>,
     corner_radius: Option<u8>,
+
+    // Tab configuration
+    tab_bar_bg: Option<String>,
+    tab_bar_height: Option<f32>,
+    tab_bg_active: Option<String>,
+    tab_bg_inactive: Option<String>,
+    tab_bg_focused: Option<String>,
+    tab_text_active: Option<String>,
+    tab_text_inactive: Option<String>,
+    tab_outline: Option<String>,
+    tab_corner_radius: Option<f32>,
 }
 
 fn get_theme_path() -> Option<PathBuf> {
@@ -44,10 +56,12 @@ fn get_theme_path() -> Option<PathBuf> {
     }
 }
 
-pub fn load_and_apply_theme(ctx: &Context) {
+pub fn load_and_apply_theme(ctx: &Context) -> Style {
+    let mut dock_style = Style::from_egui(ctx.style().as_ref());
+
     let theme_path = match get_theme_path() {
         Some(path) => path,
-        None => return,
+        None => return dock_style,
     };
 
     println!("Intentando cargar tema desde: {:?}", theme_path);
@@ -56,7 +70,7 @@ pub fn load_and_apply_theme(ctx: &Context) {
         println!("No existe theme.json. Usando tema por defecto de la librería.");
         #[cfg(target_os = "android")]
         setup_font_sizes(ctx, 16.0);
-        return;
+        return dock_style;
     }
 
     let theme_config: ThemeConfig = match fs::read_to_string(&theme_path) {
@@ -78,11 +92,12 @@ pub fn load_and_apply_theme(ctx: &Context) {
                 "Error leyendo archivo: {}. Usando tema por defecto de la librería.",
                 e
             );
-            return;
+            return dock_style;
         }
     };
 
     apply_visuals(ctx, &theme_config);
+    apply_dock_style(&mut dock_style, &theme_config);
 
     if let Some(font_name) = &theme_config.font_family {
         load_system_font(ctx, font_name);
@@ -93,6 +108,51 @@ pub fn load_and_apply_theme(ctx: &Context) {
     } else {
         #[cfg(target_os = "android")]
         setup_font_sizes(ctx, 16.0);
+    }
+
+    dock_style
+}
+
+fn apply_dock_style(style: &mut Style, t: &ThemeConfig) {
+    let to_col = |opt: &Option<String>| opt.as_deref().map(hex_to_color);
+
+    if let Some(c) = to_col(&t.tab_bar_bg) {
+        style.tab_bar.bg_fill = c;
+    }
+    if let Some(h) = t.tab_bar_height {
+        style.tab_bar.height = h;
+    }
+    
+    if let Some(c) = to_col(&t.tab_bg_active) {
+        style.tab.active.bg_fill = c;
+        style.tab.active_with_kb_focus.bg_fill = c;
+    }
+    if let Some(c) = to_col(&t.tab_bg_inactive) {
+        style.tab.inactive.bg_fill = c;
+        style.tab.inactive_with_kb_focus.bg_fill = c;
+    }
+    if let Some(c) = to_col(&t.tab_bg_focused) {
+        style.tab.focused.bg_fill = c;
+        style.tab.focused_with_kb_focus.bg_fill = c;
+    }
+    
+    if let Some(c) = to_col(&t.tab_text_active) {
+        style.tab.active.text_color = c;
+        style.tab.active_with_kb_focus.text_color = c;
+        style.tab.focused.text_color = c;
+        style.tab.focused_with_kb_focus.text_color = c;
+    }
+    if let Some(c) = to_col(&t.tab_text_inactive) {
+        style.tab.inactive.text_color = c;
+        style.tab.inactive_with_kb_focus.text_color = c;
+    }
+
+    if let Some(c) = to_col(&t.tab_outline) {
+        style.tab.outline_color = c;
+    }
+    
+    if let Some(r) = t.tab_corner_radius {
+        style.tab.corner_radius = CornerRadius::same(r as u8); // Assuming u8 for now based on previous config
     }
 }
 

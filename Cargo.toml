@@ -8,8 +8,7 @@ resolver = "2"
 crate-type = ["cdylib", "lib"]
 
 [dependencies]
-egui = "0.33"
-egui_dock = { version = "0.18", features = ["serde"] }
+egui = { version = "0.33", features = ["serde"] }
 egui_plot = "0.34"
 chrono = "0.4.23"
 syntect = "5.0"
@@ -35,6 +34,12 @@ rust-embed = "8.9.0"
 zip = "7.0.0"
 reqwest = { version = "0.12.28", default-features = false, features = ["blocking", "rustls-tls"] }
 log = "0.4"
+duplicate = "2.0"
+paste = "1.0"
+
+[features]
+default = ["serde"]
+serde = []
 
 [target.'cfg(not(target_os = "android"))'.dependencies]
 font-loader = "0.11"
