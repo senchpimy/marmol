@@ -111,11 +111,11 @@ impl LeftControls {
 
                 if ui
                     .add_sized(
-                        btn_size.clone(),
+                        btn_size,
                         Button::image(
                             egui::Image::new(egui::include_image!("../../resources/folder.svg"))
                                 .tint(color)
-                                .fit_to_exact_size(btn_size.clone()),
+                                .fit_to_exact_size(btn_size),
                         ),
                     )
                     .clicked()
@@ -124,11 +124,11 @@ impl LeftControls {
                 }
                 if ui
                     .add_sized(
-                        btn_size.clone(),
+                        btn_size,
                         Button::image(
                             egui::Image::new(egui::include_image!("../../resources/search.svg"))
                                 .tint(color)
-                                .fit_to_exact_size(btn_size.clone()),
+                                .fit_to_exact_size(btn_size),
                         ),
                     )
                     .clicked()
@@ -137,10 +137,10 @@ impl LeftControls {
                 }
                 if ui
                     .add_sized(
-                        btn_size.clone(),
+                        btn_size,
                         Button::image(
                             egui::Image::new(egui::include_image!("../../resources/star.svg"))
-                                .fit_to_exact_size(btn_size.clone())
+                                .fit_to_exact_size(btn_size)
                                 .tint(color),
                         ),
                     )
@@ -152,12 +152,12 @@ impl LeftControls {
                 ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                     let sort_btn_response = ui
                         .add_sized(
-                            btn_size.clone(),
+                            btn_size,
                             Button::image(
                                 egui::Image::new(egui::include_image!(
                                     "../../resources/arrow-down-wide-narrow.svg"
                                 ))
-                                .fit_to_exact_size(btn_size.clone())
+                                .fit_to_exact_size(btn_size)
                                 .tint(color),
                             ),
                         )
@@ -256,10 +256,10 @@ impl LeftControls {
 
                 if ui
                     .add_sized(
-                        btn_size.clone(),
+                        btn_size,
                         Button::image(
                             egui::Image::new(egui::include_image!("../../resources/folder.svg"))
-                                .fit_to_exact_size(btn_size.clone())
+                                .fit_to_exact_size(btn_size)
                                 .tint(color),
                         )
                         .corner_radius(egui::CornerRadius::same((btn_size.x / 2.0) as u8)),
@@ -425,7 +425,7 @@ impl LeftControls {
                         egui::Image::new(egui::include_image!(
                             "../../resources/fold-horizontal.svg"
                         ))
-                        .fit_to_exact_size(btn_size.clone())
+                        .fit_to_exact_size(btn_size)
                         .tint(color),
                     ))
                     .clicked()
@@ -436,7 +436,7 @@ impl LeftControls {
                 if ui
                     .add(egui::Button::image(
                         egui::Image::new(egui::include_image!("../../resources/file-search.svg"))
-                            .fit_to_exact_size(btn_size.clone())
+                            .fit_to_exact_size(btn_size)
                             .tint(color),
                     ))
                     .on_hover_text("Switcher")
@@ -448,7 +448,7 @@ impl LeftControls {
                 if ui
                     .add(egui::Button::image(
                         egui::Image::new(egui::include_image!("../../resources/graph.svg"))
-                            .fit_to_exact_size(btn_size.clone())
+                            .fit_to_exact_size(btn_size)
                             .tint(color),
                     ))
                     .on_hover_text("Graph")
@@ -461,7 +461,7 @@ impl LeftControls {
                 if ui
                     .add(egui::Button::image(
                         egui::Image::new(egui::include_image!("../../resources/canvas.svg"))
-                            .fit_to_exact_size(btn_size.clone())
+                            .fit_to_exact_size(btn_size)
                             .tint(color),
                     ))
                     .on_hover_text("Canvas")
@@ -475,7 +475,7 @@ impl LeftControls {
                         egui::Image::new(egui::include_image!(
                             "../../resources/calendar-check.svg"
                         ))
-                        .fit_to_exact_size(btn_size.clone())
+                        .fit_to_exact_size(btn_size)
                         .tint(color),
                     ))
                     .on_hover_text("Daily note")
@@ -487,7 +487,7 @@ impl LeftControls {
                 if ui
                     .add(egui::Button::image(
                         egui::Image::new(egui::include_image!("../../resources/terminal.svg"))
-                            .fit_to_exact_size(btn_size.clone())
+                            .fit_to_exact_size(btn_size)
                             .tint(color),
                     ))
                     .on_hover_text("Command Palette")
@@ -499,7 +499,7 @@ impl LeftControls {
                 if ui
                     .add(egui::Button::image(
                         egui::Image::new(egui::include_image!("../../resources/new_file.svg"))
-                            .fit_to_exact_size(btn_size.clone())
+                            .fit_to_exact_size(btn_size)
                             .tint(color),
                     ))
                     .on_hover_text("New File")
@@ -513,7 +513,7 @@ impl LeftControls {
                         egui::Image::new(egui::include_image!(
                             "../../resources/square-check-big.svg"
                         ))
-                        .fit_to_exact_size(btn_size.clone())
+                        .fit_to_exact_size(btn_size)
                         .tint(color),
                     ))
                     .on_hover_text("New Task")
@@ -527,7 +527,7 @@ impl LeftControls {
                     if ui
                         .add(egui::Button::image(
                             egui::Image::new(egui::include_image!("../../resources/cog.svg"))
-                                .fit_to_exact_size(btn_size.clone())
+                                .fit_to_exact_size(btn_size)
                                 .tint(color),
                         ))
                         .on_hover_text("Configuration")
@@ -542,7 +542,7 @@ impl LeftControls {
                             egui::Image::new(egui::include_image!(
                                 "../../resources/badge-question-mark.svg"
                             ))
-                            .fit_to_exact_size(btn_size.clone())
+                            .fit_to_exact_size(btn_size)
                             .tint(color),
                         ))
                         .on_hover_text("Help")

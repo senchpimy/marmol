@@ -362,11 +362,10 @@ fn draw_controls(graph: &mut Graph, ui: &mut Ui) -> bool {
         if ui.button("Agregar Grupo").clicked() {
             if !graph.new_group_val.is_empty() {
                 graph.custom_groups.push(CustomGroup {
-                    match_type: graph.new_group_type.clone(),
-                    value: graph.new_group_val.clone(),
+                    match_type: graph.new_group_type,
+                    value: std::mem::take(&mut graph.new_group_val),
                     color: graph.new_group_col,
                 });
-                graph.new_group_val.clear();
             }
         }
 

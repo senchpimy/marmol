@@ -202,7 +202,7 @@ impl TasksGui {
 
     pub fn show(&mut self, ui: &mut egui::Ui) {
         // --- 1. Gráfica ---
-        let labels = self.labels_grafica.clone();
+        let labels = &self.labels_grafica;
 
         let x_fmt = move |x: GridMark, _range: &RangeInclusive<f64>| {
             let i = x.value as usize;

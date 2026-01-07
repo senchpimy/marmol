@@ -230,12 +230,12 @@ impl TabViewer for MTabViewer<'_> {
         if self.icon_manager.settings.icon_in_title_enabled {
             let relative_path = if tab.path.starts_with(self.vault) {
                 let p = tab.path.strip_prefix(self.vault).unwrap_or(&tab.path);
-                p.strip_prefix('/').unwrap_or(p).to_string()
+                p.strip_prefix('/').unwrap_or(p)
             } else {
-                tab.path.clone()
+                &tab.path
             };
             
-            if let Some(icon_id) = self.icon_manager.get_icon(&relative_path).filter(|s| !s.is_empty()) {
+            if let Some(icon_id) = self.icon_manager.get_icon(relative_path).filter(|s| !s.is_empty()) {
                       // Only prepend if it is NOT a byte-source (i.e. it is emoji or text)
                       // This check might be slow if get_icon_source reads disk. 
                       // Ideally we should check if it looks like an emoji or check svg_cache presence directly.
@@ -254,12 +254,12 @@ impl TabViewer for MTabViewer<'_> {
 
         let relative_path = if tab.path.starts_with(self.vault) {
             let p = tab.path.strip_prefix(self.vault).unwrap_or(&tab.path);
-            p.strip_prefix('/').unwrap_or(p).to_string()
+            p.strip_prefix('/').unwrap_or(p)
         } else {
-            tab.path.clone()
+            &tab.path
         };
 
-        let icon_id = self.icon_manager.get_icon(&relative_path).filter(|s| !s.is_empty())?;
+        let icon_id = self.icon_manager.get_icon(relative_path).filter(|s| !s.is_empty())?;
 
         if let Some(IconSource::Bytes(bytes)) = self.icon_manager.get_icon_source(icon_id) {
              Some(egui::Image::from_bytes(
@@ -276,15 +276,13 @@ impl TabViewer for MTabViewer<'_> {
             ui.spacing_mut().item_spacing.x = 5.0;
             if ui.add_enabled(tab.history_index > 0, egui::Button::new("⬅")).clicked() {
                 tab.history_index -= 1;
-                let path = tab.history[tab.history_index].clone();
-                *self.current_file = path.clone();
-                update_tab_content(tab, &path, true);
+                *self.current_file = tab.history[tab.history_index].clone();
+                update_tab_content(tab, self.current_file, true);
             }
             if ui.add_enabled(tab.history_index + 1 < tab.history.len(), egui::Button::new("➡")).clicked() {
                 tab.history_index += 1;
-                let path = tab.history[tab.history_index].clone();
-                *self.current_file = path.clone();
-                update_tab_content(tab, &path, true);
+                *self.current_file = tab.history[tab.history_index].clone();
+                update_tab_content(tab, self.current_file, true);
             }
 
             if tab.is_renaming {
@@ -296,14 +294,14 @@ impl TabViewer for MTabViewer<'_> {
                         let new_path = parent.join(&tab.rename_buffer);
                         if std::fs::rename(&tab.path, &new_path).is_ok() {
                             let old_rel = tab.path.strip_prefix(self.vault).unwrap_or(&tab.path);
-                            let old_rel = old_rel.strip_prefix('/').unwrap_or(old_rel).to_string();
+                            let old_rel = old_rel.strip_prefix('/').unwrap_or(old_rel);
                             
                             let new_path_str = new_path.to_str().unwrap().to_string();
                             
                             let new_rel = new_path_str.strip_prefix(self.vault).unwrap_or(&new_path_str);
-                            let new_rel = new_rel.strip_prefix('/').unwrap_or(new_rel).to_string();
+                            let new_rel = new_rel.strip_prefix('/').unwrap_or(new_rel);
 
-                            self.icon_manager.rename_icon(self.vault, &old_rel, &new_rel);
+                            self.icon_manager.rename_icon(self.vault, old_rel, new_rel);
 
                             tab.path = new_path_str.clone();
                             tab.title = tab.rename_buffer.clone();
@@ -717,18 +715,18 @@ impl Tabs {
         });
     }
 
-    pub fn file_changed(&mut self, path: String) {
+    pub fn file_changed(&mut self, path: &str) {
         if self.tree.iter_all_tabs().count() == 0 {
             self.counter += 1;
-            self.tree = DockState::new(vec![Tabe::new(self.counter, path)]);
+            self.tree = DockState::new(vec![Tabe::new(self.counter, path.to_string())]);
             return;
         }
 
         if let Some((_, tab)) = self.tree.find_active_focused() {
-            update_tab_content(tab, &path, false);
+            update_tab_content(tab, &path.to_string(), false);
         } else {
             self.counter += 1;
-            let new_tab = Tabe::new(self.counter, path);
+            let new_tab = Tabe::new(self.counter, path.to_string());
             self.tree.push_to_first_leaf(new_tab);
         }
     }

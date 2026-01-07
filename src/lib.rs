@@ -117,7 +117,7 @@ impl Marmol {
     }
 
     fn from_program_state(state: configuraciones::MarmolProgramState, ctx: &egui::Context) -> Self {
-        let current_path_str = state.current_file.clone().unwrap_or_default();
+        let current_path_str = state.current_file.unwrap_or_default();
         Self {
             tabs_counter: 0,
             window_size: MShape {
@@ -335,7 +335,7 @@ impl eframe::App for Marmol {
                 if self.prev_current_file != self.current_file {
                     self.content = main_area::content_enum::Content::View;
                     self.prev_current_file = self.current_file.clone();
-                    self.tabs.file_changed(self.current_file.clone());
+                    self.tabs.file_changed(&self.current_file);
                 }
 
                 if self.content == main_area::content_enum::Content::NewFile
@@ -479,7 +479,7 @@ impl Marmol {
             vault: self.vault.clone(),
             vault_vec: self.vault_vec.clone(),
             current_file: Some(self.current_file.clone()),
-            initial_screen: self.current_window.clone(),
+            initial_screen: self.current_window,
             collapsed_left: self.left_collpased,
             center_size: self.center_size,
             sort_files: self.sort_files,

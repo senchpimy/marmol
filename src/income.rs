@@ -684,7 +684,7 @@ impl IncomeGui {
             });
         });
 
-        let mov_sort = self.mov_sort.clone();
+        let mov_sort = &self.mov_sort;
         let formatter = move |x: GridMark, _: &RangeInclusive<f64>| -> String {
             if x.value >= 0.0 && (x.value as usize) < mov_sort.len() {
                 mov_sort[x.value as usize].clone()
@@ -701,8 +701,8 @@ impl IncomeGui {
             .x_axis_formatter(formatter)
             .legend(egui_plot::Legend::default());
 
-        let p = PlotPoints::new(self.points.clone());
-        let l = PlotPoints::new(self.lines.clone());
+        let p = PlotPoints::from_iter(self.points.iter().copied());
+        let l = PlotPoints::from_iter(self.lines.iter().copied());
 
         plot.show(ui, |plot_ui| {
             plot_ui.line(Line::new("Balance", l).width(2.0));
