@@ -14,6 +14,8 @@ extern crate log;
 pub mod command_palette;
 pub mod configuraciones;
 pub mod easy_mark;
+pub mod egui_commonmark;
+pub mod egui_commonmark_backend;
 pub mod egui_dock;
 pub mod emojis;
 pub mod excalidraw;
@@ -92,13 +94,16 @@ pub struct Marmol {
     android_storage: configuraciones::AndroidStorage,
     #[cfg(target_os = "android")]
     pub android_app: Option<winit::platform::android::activity::AndroidApp>,
+    
+    // Style
+    dock_style: crate::egui_dock::Style,
 }
 
 impl Marmol {
     pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
         let font_size = configuraciones::load_context();
 
-        crate::theme::load_and_apply_theme(&cc.egui_ctx);
+        let dock_style = crate::theme::load_and_apply_theme(&cc.egui_ctx);
 
         // Load the full program state
         let (initial_state, config_dir_path) = configuraciones::load_program_state();
@@ -106,6 +111,7 @@ impl Marmol {
         let mut app = Self::from_program_state(initial_state, &cc.egui_ctx);
         app.font_size = font_size; // Set font_size after loading state
         app.config_path = config_dir_path; // Set config_path after loading state
+        app.dock_style = dock_style;
 
         app
     }
@@ -157,6 +163,7 @@ impl Marmol {
                 .unwrap_or(configuraciones::AndroidStorage::Unselected),
             #[cfg(target_os = "android")]
             android_app: None,
+            dock_style: crate::egui_dock::Style::from_egui(ctx.style().as_ref()),
         }
     }
 }
@@ -205,6 +212,7 @@ impl Default for Marmol {
             android_storage: configuraciones::AndroidStorage::Unselected,
             #[cfg(target_os = "android")]
             android_app: None,
+            dock_style: crate::egui_dock::Style::default(),
         }
     }
 }
@@ -349,6 +357,7 @@ impl eframe::App for Marmol {
                     &mut self.content,
                     &self.vault,
                     &mut self.left_controls.icon_manager,
+                    &self.dock_style,
                 );
                 ctx.send_viewport_cmd(egui::ViewportCommand::Title(format!(
                     "Marmol - {}",

@@ -15,7 +15,7 @@ syntect = "5.0"
 base64 = "0.21"
 serde_json = "1.0"
 serde = { version = "1.0.228", features = ["derive"] }
-egui_extras = { version = "0.33", features = ["image","file"] }
+egui_extras = { version = "0.33", features = ["image","file","svg","http"] }
 filebuffer = "0.4.0"
 image = { version = "0.25", default-features = false, features = [
   "png",
@@ -24,7 +24,6 @@ image = { version = "0.25", default-features = false, features = [
 json = "0.12.4"
 serde_yaml = "0.9"
 yaml-rust = "0.4.5"
-egui_commonmark = {version="0.22",features = ["svg","fetch"]}
 rand = "0.9.2"
 walkdir = "2.3.1"
 regex = "1.7.2"
@@ -36,10 +35,13 @@ reqwest = { version = "0.12.28", default-features = false, features = ["blocking
 log = "0.4"
 duplicate = "2.0"
 paste = "1.0"
+pulldown-cmark = "0.13"
+percent-encoding = "2.3"
 
 [features]
-default = ["serde"]
+default = ["serde", "pulldown_cmark"]
 serde = []
+pulldown_cmark = []
 
 [target.'cfg(not(target_os = "android"))'.dependencies]
 font-loader = "0.11"

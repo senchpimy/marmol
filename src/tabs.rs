@@ -10,7 +10,7 @@ use crate::main_area::metadata_renderer::create_metadata;
 use crate::tasks;
 use egui::Image;
 use egui::{Frame, Sense, Ui, WidgetText};
-use egui_commonmark::*;
+use crate::egui_commonmark::*;
 use crate::egui_dock::{DockArea, DockState, NodeIndex, Style, SurfaceIndex, TabViewer};
 use egui_extras::{Size, StripBuilder};
 use serde::{Deserialize, Serialize};
@@ -454,20 +454,69 @@ impl TabViewer for MTabViewer<'_> {
                                     if !metadata.is_empty() {
                                         create_metadata(metadata, ui);
                                     }
-                                    // Use CommonMarkViewer for viewing as it was before, 
-                                    // or easy_mark if preferred. The user asked for easy_mark editor.
-                                    CommonMarkViewer::new().show(ui, cache, &markdown_content);
+                                    
+                                    // Store context for the 'static closure
+                                    let ctx = ui.ctx().clone();
+                                    ctx.data_mut(|d| {
+                                        d.insert_temp(egui::Id::new("nav_vault"), self.vault.to_string());
+                                        d.insert_temp(egui::Id::new("nav_current_path"), tab.path.clone());
+                                    });
+
+                                    CommonMarkViewer::new()
+                                        .process_link(Some(&|ui, url, layout| {
+                                            let response = ui.link(layout);
+                                            if response.clicked() {
+                                                let ctx = ui.ctx();
+                                                let vault: String = ctx.data(|d| d.get_temp(egui::Id::new("nav_vault")).unwrap_or_default());
+                                                let current_path: String = ctx.data(|d| d.get_temp(egui::Id::new("nav_current_path")).unwrap_or_default());
+                                                
+                                                let decoded_url = percent_encoding::percent_decode_str(url).decode_utf8_lossy().to_string();
+                                                let clean_url = decoded_url.split('|').next().unwrap_or(&decoded_url).trim();
+                                                
+                                                let mut resolved = None;
+                                                if clean_url.starts_with('/') {
+                                                    let p = format!("{}{}", vault, clean_url);
+                                                    if Path::new(&p).exists() { resolved = Some(p); }
+                                                }
+                                                
+                                                if resolved.is_none() {
+                                                    let current_dir = Path::new(&current_path).parent().unwrap_or(Path::new(""));
+                                                    let joined = current_dir.join(clean_url);
+                                                    if joined.exists() && joined.is_file() {
+                                                        resolved = Some(joined.to_string_lossy().to_string());
+                                                    } else {
+                                                        let joined_md = current_dir.join(format!("{}.md", clean_url));
+                                                        if joined_md.exists() {
+                                                            resolved = Some(joined_md.to_string_lossy().to_string());
+                                                        }
+                                                    }
+                                                }
+
+                                                if resolved.is_none() {
+                                                    let target_name = if clean_url.ends_with(".md") { clean_url.to_string() } else { format!("{}.md", clean_url) };
+                                                    for entry in walkdir::WalkDir::new(&vault).into_iter().filter_map(|e| e.ok()) {
+                                                        if entry.file_type().is_file() && entry.file_name().to_string_lossy() == target_name {
+                                                            resolved = Some(entry.path().to_string_lossy().to_string());
+                                                            break;
+                                                        }
+                                                    }
+                                                }
+
+                                                if let Some(path) = resolved {
+                                                    ctx.data_mut(|d| d.insert_temp(egui::Id::new("global_nav_request"), Some(path)));
+                                                }
+                                            }
+                                            true 
+                                        }))
+                                        .show(ui, cache, &markdown_content);
+                                    
                                     ui.allocate_space(ui.available_size());
                                 });
 
-                                let interact_response = ui.interact(
-                                    inner_response.response.rect,
-                                    ui.id().with("frame_interact"),
-                                    Sense::click(),
-                                );
-
-                                if interact_response.double_clicked() {
-                                    tab.ctype = Content::Edit;
+                                if ui.input(|i| i.pointer.button_double_clicked(egui::PointerButton::Primary)) {
+                                    if ui.rect_contains_pointer(inner_response.response.rect) {
+                                        tab.ctype = Content::Edit;
+                                    }
                                 }
                             });
                         });
@@ -501,6 +550,13 @@ impl TabViewer for MTabViewer<'_> {
             TabContent::Empty => {
                 ui.label("Empty tab content.");
             }
+        }
+
+        let nav_req: Option<String> = ui.ctx().data_mut(|d| d.get_temp(egui::Id::new("global_nav_request")).flatten());
+        if let Some(path) = nav_req {
+             ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("global_nav_request"), None::<String>));
+             *self.current_file = path.clone();
+             update_tab_content(tab, &path, false);
         }
     }
     fn on_add(&mut self, surface: crate::egui_dock::SurfaceIndex, node: NodeIndex) {
@@ -610,6 +666,7 @@ impl Tabs {
         content: &mut Content,
         vault: &str,
         icon_manager: &mut IconManager,
+        dock_style: &Style,
     ) {
         if ui.input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::W)) {
             if let Some((focus_surf, focus_node)) = self.tree.focused_leaf() {
@@ -647,7 +704,7 @@ impl Tabs {
             icon_manager,
         };
         DockArea::new(&mut self.tree)
-            .style(Style::from_egui(ui.style().as_ref()))
+            .style(dock_style.clone())
             .show_add_buttons(true)
             .show_inside(ui, tab_viewer);
         added_nodes.drain(..).for_each(|(surface, node)| {

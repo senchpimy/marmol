@@ -148,11 +148,24 @@ fn apply_dock_style(style: &mut Style, t: &ThemeConfig) {
     }
 
     if let Some(c) = to_col(&t.tab_outline) {
-        style.tab.outline_color = c;
+        style.tab.active.outline_color = c;
+        style.tab.active_with_kb_focus.outline_color = c;
+        style.tab.inactive.outline_color = c;
+        style.tab.inactive_with_kb_focus.outline_color = c;
+        style.tab.focused.outline_color = c;
+        style.tab.focused_with_kb_focus.outline_color = c;
+        style.tab.hovered.outline_color = c;
     }
     
     if let Some(r) = t.tab_corner_radius {
-        style.tab.corner_radius = CornerRadius::same(r as u8); // Assuming u8 for now based on previous config
+        let cr = CornerRadius::same(r as u8); // Assuming u8 for now based on previous config
+        style.tab.active.corner_radius = cr;
+        style.tab.active_with_kb_focus.corner_radius = cr;
+        style.tab.inactive.corner_radius = cr;
+        style.tab.inactive_with_kb_focus.corner_radius = cr;
+        style.tab.focused.corner_radius = cr;
+        style.tab.focused_with_kb_focus.corner_radius = cr;
+        style.tab.hovered.corner_radius = cr;
     }
 }
 
