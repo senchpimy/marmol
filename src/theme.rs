@@ -57,46 +57,46 @@ fn get_theme_path() -> Option<PathBuf> {
 }
 
 pub fn load_and_apply_theme(ctx: &Context) -> Style {
-    let mut dock_style = Style::from_egui(ctx.style().as_ref());
-
     let theme_path = match get_theme_path() {
         Some(path) => path,
-        None => return dock_style,
+        None => return Style::from_egui(ctx.style().as_ref()),
     };
 
     println!("Intentando cargar tema desde: {:?}", theme_path);
 
-    if !theme_path.exists() {
+    let theme_config: ThemeConfig = if !theme_path.exists() {
         println!("No existe theme.json. Usando tema por defecto de la librería.");
         #[cfg(target_os = "android")]
         setup_font_sizes(ctx, 16.0);
-        return dock_style;
-    }
-
-    let theme_config: ThemeConfig = match fs::read_to_string(&theme_path) {
-        Ok(data) => {
-            println!("Archivo encontrado. Parseando...");
-            match serde_json::from_str(&data) {
-                Ok(cfg) => {
-                    println!("Tema cargado exitosamente.");
-                    cfg
-                }
-                Err(e) => {
-                    eprintln!("Error de sintaxis en theme.json: {}. Se usarán valores por defecto de la librería para los campos ilegibles.", e);
-                    ThemeConfig::default()
+        ThemeConfig::default()
+    } else {
+        match fs::read_to_string(&theme_path) {
+            Ok(data) => {
+                println!("Archivo encontrado. Parseando...");
+                match serde_json::from_str(&data) {
+                    Ok(cfg) => {
+                        println!("Tema cargado exitosamente.");
+                        cfg
+                    }
+                    Err(e) => {
+                        eprintln!("Error de sintaxis en theme.json: {}. Se usarán valores por defecto de la librería para los campos ilegibles.", e);
+                        ThemeConfig::default()
+                    }
                 }
             }
-        }
-        Err(e) => {
-            eprintln!(
-                "Error leyendo archivo: {}. Usando tema por defecto de la librería.",
-                e
-            );
-            return dock_style;
+            Err(e) => {
+                eprintln!(
+                    "Error leyendo archivo: {}. Usando tema por defecto de la librería.",
+                    e
+                );
+                ThemeConfig::default()
+            }
         }
     };
 
     apply_visuals(ctx, &theme_config);
+    
+    let mut dock_style = Style::from_egui(ctx.style().as_ref());
     apply_dock_style(&mut dock_style, &theme_config);
 
     if let Some(font_name) = &theme_config.font_family {
@@ -158,7 +158,13 @@ fn apply_dock_style(style: &mut Style, t: &ThemeConfig) {
     }
     
     if let Some(r) = t.tab_corner_radius {
-        let cr = CornerRadius::same(r as u8); // Assuming u8 for now based on previous config
+        let r_u8 = r as u8;
+        let cr = CornerRadius {
+            nw: r_u8,
+            ne: r_u8,
+            sw: 0,
+            se: 0,
+        };
         style.tab.active.corner_radius = cr;
         style.tab.active_with_kb_focus.corner_radius = cr;
         style.tab.inactive.corner_radius = cr;
