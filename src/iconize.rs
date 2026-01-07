@@ -718,7 +718,7 @@ impl IconSelector {
                 // Calculamos cuánto espacio necesitamos abajo para los botones
                 let footer_height = 40.0;
                 // El espacio que queda es todo para el scroll
-                let available_height = ui.available_height() - footer_height;
+                let _available_height = ui.available_height() - footer_height;
                 let text_color = ui.visuals().text_color();
 
                 // --- MIDDLE PANEL (Scroll) ---

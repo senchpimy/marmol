@@ -32,7 +32,7 @@ impl QuickSwitcher {
         self.selected_index = 0;
 
         self.all_files.clear();
-        self.scan_dir(vault_path, vault_path);
+        self.scan_dir(vault_path);
         self.update_filter();
         self.initialized = true;
     }
@@ -41,21 +41,24 @@ impl QuickSwitcher {
         self.is_open = false;
     }
 
-    fn scan_dir(&mut self, dir: &str, root: &str) {
-        if let Ok(entries) = fs::read_dir(dir) {
-            for entry in entries.flatten() {
-                let path = entry.path();
+    fn scan_dir(&mut self, vault_path: &str) {
+        use walkdir::WalkDir;
+        self.all_files = WalkDir::new(vault_path)
+            .into_iter()
+            .filter_map(|e| e.ok())
+            .filter(|e| {
+                let path = e.path();
                 if path.is_dir() {
-                    if !path.ends_with(".obsidian") && !path.ends_with(".git") {
-                        self.scan_dir(path.to_str().unwrap(), root);
-                    }
-                } else {
-                    if let Some(path_str) = path.to_str() {
-                        self.all_files.push(path_str.to_string());
-                    }
+                    return false;
                 }
-            }
-        }
+                // Skip .obsidian and .git folders
+                !path.components().any(|c| {
+                    let s = c.as_os_str().to_str().unwrap_or("");
+                    s == ".obsidian" || s == ".git"
+                })
+            })
+            .filter_map(|e| e.path().to_str().map(|s| s.to_string()))
+            .collect();
     }
 
     fn update_filter(&mut self) {

@@ -1,4 +1,4 @@
-### 1. WikiLinks (`[[Enlace Interno]]`) - **La más importante**
+### 1. ~~WikiLinks (`[[Enlace Interno]]`) - **La más importante**~~
 Obsidian no es nada sin la capacidad de enlazar notas usando doble corchete. Actualmente usas Markdown estándar, pero el usuario de Obsidian espera escribir `[[` y que aparezca un autocompletado de sus archivos.
 
 *   **El Reto:** `egui_commonmark` (que usas para visualizar) renderiza Markdown estándar (`[link](url)`).

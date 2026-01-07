@@ -12,15 +12,13 @@ use eframe::egui::{
 use egui::Vec2;
 use egui::{text::LayoutJob, TextFormat, Widget};
 
-use egui::{Id, Popup, PopupCloseBehavior, Sense};
+use egui::{Id, Popup};
 use std::fs;
 use std::fs::File;
 use std::path::Path;
-use std::time::SystemTime;
 
 use self::enums::{LeftTab, SortOrder};
 use crate::main_area::content_enum::Content;
-use crate::main_area::file_options::file_options;
 use crate::main_area::file_tree::FileTree;
 
 pub struct LeftControls {
@@ -342,13 +340,9 @@ impl LeftControls {
             ui.text_edit_singleline(&mut self.search_string_menu);
             ui.checkbox(&mut self.regex_search, "regex");
             if self.search_string_menu != self.prev_search_string_menu {
-                if self.regex_search {
-                    self.search_results = search::check_dir_regex(path, &self.search_string_menu);
-                    self.prev_search_string_menu = self.search_string_menu.to_string();
-                } else {
-                    self.search_results = search::check_dir(path, &self.search_string_menu);
-                    self.prev_search_string_menu = self.search_string_menu.to_string();
-                }
+                self.search_results =
+                    search::search_dir(path, &self.search_string_menu, self.regex_search);
+                self.prev_search_string_menu = self.search_string_menu.to_string();
             }
             let style_frame = Style::default();
             let frame = Frame::group(&style_frame);

@@ -1,7 +1,7 @@
 use crate::iconize::{IconManager, IconSelector, IconSource};
 use crate::main_area::file_options::file_options;
 use crate::main_area::left_controls::enums::SortOrder;
-use eframe::egui::{self, Id, Popup, PopupCloseBehavior, RichText, Sense, Vec2};
+use eframe::egui::{self, Id, Popup, PopupCloseBehavior, Sense, Vec2};
 use std::fs;
 use std::path::Path;
 use std::time::SystemTime;
