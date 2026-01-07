@@ -64,6 +64,10 @@ pub struct ExcalidrawElement {
     pub points: Vec<[f32; 2]>,
     #[serde(default)]
     pub text: String,
+    #[serde(default, rename = "rawText")]
+    pub raw_text: Option<String>,
+    #[serde(default, rename = "originalText")]
+    pub original_text: Option<String>,
     #[serde(default, rename = "fontSize")]
     pub font_size: f32,
     #[serde(default)]
@@ -76,6 +80,8 @@ pub struct ExcalidrawElement {
     pub container_id: Option<String>,
     #[serde(default, rename = "fileId")]
     pub file_id: Option<String>,
+    #[serde(default)]
+    pub link: Option<String>,
     #[serde(default)]
     pub scale: Option<[f32; 2]>,
 }
@@ -99,6 +105,9 @@ impl Default for ExcalidrawElement {
             roughness: 1.0,
             points: vec![],
             text: "".to_string(),
+            raw_text: None,
+            original_text: None,
+            link: None,
             font_size: 20.0,
             roundness: Some(ExcalidrawRoundness { round_type: 3 }),
             end_arrowhead: None,

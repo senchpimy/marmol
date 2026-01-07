@@ -374,7 +374,7 @@ impl TabViewer for MTabViewer<'_> {
             }
             TabContent::Excalidraw { path, gui } => {
                 gui.set_path(path);
-                gui.show(ui);
+                gui.show(ui, self.vault);
             }
             TabContent::Image(image_path) => {
                 egui::ScrollArea::vertical()
@@ -471,34 +471,7 @@ impl TabViewer for MTabViewer<'_> {
                                                 let decoded_url = percent_encoding::percent_decode_str(url).decode_utf8_lossy().to_string();
                                                 let clean_url = decoded_url.split('|').next().unwrap_or(&decoded_url).trim();
                                                 
-                                                let mut resolved = None;
-                                                if clean_url.starts_with('/') {
-                                                    let p = format!("{}{}", vault, clean_url);
-                                                    if Path::new(&p).exists() { resolved = Some(p); }
-                                                }
-                                                
-                                                if resolved.is_none() {
-                                                    let current_dir = Path::new(&current_path).parent().unwrap_or(Path::new(""));
-                                                    let joined = current_dir.join(clean_url);
-                                                    if joined.exists() && joined.is_file() {
-                                                        resolved = Some(joined.to_string_lossy().to_string());
-                                                    } else {
-                                                        let joined_md = current_dir.join(format!("{}.md", clean_url));
-                                                        if joined_md.exists() {
-                                                            resolved = Some(joined_md.to_string_lossy().to_string());
-                                                        }
-                                                    }
-                                                }
-
-                                                if resolved.is_none() {
-                                                    let target_name = if clean_url.ends_with(".md") { clean_url.to_string() } else { format!("{}.md", clean_url) };
-                                                    for entry in walkdir::WalkDir::new(&vault).into_iter().filter_map(|e| e.ok()) {
-                                                        if entry.file_type().is_file() && entry.file_name().to_string_lossy() == target_name {
-                                                            resolved = Some(entry.path().to_string_lossy().to_string());
-                                                            break;
-                                                        }
-                                                    }
-                                                }
+                                                let resolved = crate::files::resolve_path(&vault, &current_path, clean_url);
 
                                                 if let Some(path) = resolved {
                                                     ctx.data_mut(|d| d.insert_temp(egui::Id::new("global_nav_request"), Some(path)));

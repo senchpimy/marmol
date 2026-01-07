@@ -1,6 +1,9 @@
 use base64::{engine::general_purpose, Engine as _};
 use lz_str;
 use egui::UiBuilder;
+use regex::Regex;
+use std::path::Path;
+use walkdir::WalkDir;
 
 use egui::{
     ColorImage, Context, PointerButton, Pos2, Rect,
@@ -225,7 +228,7 @@ tags: [excalidraw]
         None
     }
 
-    pub fn show(&mut self, ui: &mut Ui) {
+    pub fn show(&mut self, ui: &mut Ui, vault: &str) {
         if let Some(e) = &self.error_msg {
             ui.colored_label(ui.ctx().style().visuals.error_fg_color, e);
             return;
@@ -291,8 +294,109 @@ tags: [excalidraw]
             });
         });
 
-        let (response, painter) = ui.allocate_painter(ui.available_size(), Sense::click_and_drag());
+        let (response, painter) = ui.allocate_painter(ui.available_size(), Sense::all());
         painter.rect_filled(response.rect, 0.0, ui.ctx().style().visuals.extreme_bg_color);
+
+        if response.clicked() || response.drag_started() {
+            self.error_msg = None;
+        }
+
+        // Detect double-click for Wikilinks
+        if response.double_clicked() {
+            if let Some(mp) = response.interact_pointer_pos() {
+                // Adjust for current pan/scale to get world coordinates
+                let screen_rect_min = response.rect.min;
+                let cp = self.pan;
+                let cs = self.scale;
+                let wp = Pos2::ZERO + (mp - screen_rect_min - cp) / cs;
+                
+                eprintln!("DEBUG: Double-click detected at screen {:?}, world {:?}", mp, wp);
+
+                if let Some(scene) = &self.scene {
+                    for el in scene.elements.iter().rev() {
+                        if el.element_type == "text" {
+                            // Use a very generous hit box for text
+                            let hit_margin = 20.0 / cs;
+                            let rect = Rect::from_min_size(Pos2::new(el.x, el.y), Vec2::new(el.width, el.height)).expand(hit_margin);
+                            
+                            if rect.contains(wp) {
+                                eprintln!("DEBUG: Hit text element: '{}' at [{:?}]", el.text, rect);
+                                
+                                let mut link_target: Option<String> = None;
+
+                                // Helper to extract from [[ ]]
+                                let extract_wiki = |s: &str| -> Option<String> {
+                                    let re_wiki = Regex::new(r"\[\[([^\]|]+)(?:\|([^\]]+))?\]\]").unwrap();
+                                    re_wiki.captures(s).map(|caps| caps[1].trim().to_string())
+                                };
+
+                                // 1. Try explicit 'link' property (might be [[Link]] or a URL)
+                                if let Some(l) = &el.link {
+                                    if !l.is_empty() {
+                                        if let Some(w) = extract_wiki(l) {
+                                            link_target = Some(w);
+                                        } else {
+                                            link_target = Some(l.trim().to_string());
+                                        }
+                                    }
+                                }
+
+                                // 2. Try raw_text (Obsidian often puts the clean link here)
+                                if link_target.is_none() {
+                                    if let Some(rt) = &el.raw_text {
+                                        if let Some(w) = extract_wiki(rt) {
+                                            link_target = Some(w);
+                                        }
+                                    }
+                                }
+
+                                // 3. Try text or original_text
+                                if link_target.is_none() {
+                                    for t in &[Some(&el.text), el.original_text.as_ref()] {
+                                        if let Some(text_val) = t {
+                                            if let Some(w) = extract_wiki(text_val) {
+                                                link_target = Some(w);
+                                                break;
+                                            }
+                                        }
+                                    }
+                                }
+
+                                // 4. Fallback: Cleaned text
+                                if link_target.is_none() {
+                                    let cleaned: String = el.text.chars()
+                                        .filter(|c| !c.is_ascii_punctuation() && (c.is_alphanumeric() || c.is_whitespace()))
+                                        .collect();
+                                    let cleaned = cleaned.trim();
+                                    if !cleaned.is_empty() {
+                                        link_target = Some(cleaned.to_string());
+                                    }
+                                }
+
+                                if let Some(target) = link_target {
+                                    // Remove any remaining wikilink brackets if present (defensive)
+                                    let clean_target = target.trim_start_matches("[[").trim_end_matches("]]");
+                                    
+                                    eprintln!("DEBUG: Attempting to resolve link target: '{}'", clean_target);
+                                    let resolved = crate::files::resolve_path(vault, &self.path, clean_target);
+                                    eprintln!("DEBUG: Resolved path: {:?}", resolved);
+
+                                    if let Some(path) = resolved {
+                                        ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("global_nav_request"), Some(path)));
+                                        return; 
+                                    } else {
+                                        self.error_msg = Some(format!("Could not find file: {}", clean_target));
+                                    }
+                                } else {
+                                    eprintln!("DEBUG: No link target found in element");
+                                }
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+        }
 
         let panel_width = 220.0;
         let panel_rect = Rect::from_min_size(
