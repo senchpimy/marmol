@@ -107,11 +107,13 @@ pub fn file_options(
                 .fill(ui.ctx().style().visuals.error_fg_color);
 
                 if ui.add(btn_yes).clicked() {
+                    let path_to_delete = s.to_string();
                     let delete = fs::remove_file(s);
                     match delete {
                         Ok(_) => {
                             *error = String::new();
                             ui.data_mut(|d| d.remove_temp::<bool>(id));
+                            ui.data_mut(|d| d.insert_temp(egui::Id::new("file_deleted_signal"), Some(path_to_delete)));
                             ui.close();
                         }
                         Err(r) => {

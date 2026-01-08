@@ -49,7 +49,7 @@ Cuando se esta en un archivo hay una vizualizacion del archivo y sus enlaces
   - ~Disaparicion del texto~
   - ~Tamaño del nodo~
   - ~Grosor de la linea~
-  - ~Cuando se pone onhover en un nodo se fadeout opacity ~30% los demas y los que no
+  - ~~Cuando se pone onhover en un nodo se fadeout opacity ~30% los demas y los que no
   estan conectados~
   - fuerzas
   - filtros exclusivos

@@ -14,6 +14,7 @@ extern crate log;
 
 pub mod command_palette;
 pub mod configuraciones;
+pub mod canvas;
 pub mod easy_mark;
 pub mod egui_commonmark;
 pub mod egui_commonmark_backend;
@@ -41,6 +42,7 @@ pub enum NewFileType {
     Income,
     Tasks,
     Excalidraw,
+    Canvas,
 }
 pub struct MShape {
     pub height: f32,
@@ -273,8 +275,19 @@ impl eframe::App for Marmol {
                 &mut self.vault_changed,
             );
         } else if self.current_window == screens::Screen::Main {
+            // Check for file deletion signal
+            let deleted_file: Option<String> = ctx.data_mut(|d| d.get_temp(egui::Id::new("file_deleted_signal")).flatten());
+            if let Some(path) = deleted_file {
+                self.tabs.close_tab_by_path(&path);
+                ctx.data_mut(|d| d.insert_temp(egui::Id::new("file_deleted_signal"), None::<String>));
+            }
+
             if ctx.input(|i| i.modifiers.command && i.key_pressed(egui::Key::O)) {
                 self.switcher.open(&self.vault);
+            }
+
+            if ctx.input(|i| i.modifiers.command && i.key_pressed(egui::Key::P)) {
+                self.command_palette.open();
             }
 
             self.icon_selector
@@ -300,6 +313,7 @@ impl eframe::App for Marmol {
                         let _ = file.write_all(content.as_bytes());
                         self.current_file = path;
                         self.content = main_area::content_enum::Content::View;
+                        self.tabs.file_changed(&self.current_file);
                     }
                 }
                 CommandAction::CreateExcalidraw => {
@@ -337,9 +351,48 @@ tags: [excalidraw]
                         let _ = file.write_all(full_content.as_bytes());
                         self.current_file = path;
                         self.content = main_area::content_enum::Content::View;
+                        self.tabs.file_changed(&self.current_file);
                     }
                 }
-                CommandAction::None => {} // Do nothing
+                CommandAction::CreateCanvas => {
+                    let mut name = "untitledCanvas.canvas".to_string();
+                    let mut path = format!("{}/{}", self.vault, name);
+                    let mut count = 1;
+                    while Path::new(&path).exists() {
+                        name = format!("untitledCanvas {}.canvas", count);
+                        path = format!("{}/{}", self.vault, name);
+                        count += 1;
+                    }
+
+                    if let Ok(mut file) = File::create(&path) {
+                        let content = "{\"nodes\":[],\"edges\":[]}";
+                        let _ = file.write_all(content.as_bytes());
+                        self.current_file = path;
+                        self.content = main_area::content_enum::Content::View;
+                        self.tabs.file_changed(&self.current_file);
+                    }
+                }
+                CommandAction::CloseTab => {
+                    self.tabs.close_current_tab();
+                }
+                CommandAction::ToggleLeftMenu => {
+                    self.left_collpased = !self.left_collpased;
+                }
+                CommandAction::Quit => {
+                    ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+                }
+                CommandAction::CreateFile(mut name) => {
+                    if !name.ends_with(".md") {
+                        name.push_str(".md");
+                    }
+                    let path = format!("{}/{}", self.vault, name);
+                    if !Path::new(&path).exists() {
+                        let _ = File::create(&path);
+                    }
+                    self.current_file = path;
+                    self.tabs.file_changed(&self.current_file);
+                }
+                CommandAction::None => {}
             }
 
             // Render Icon Pack Installer
@@ -549,6 +602,7 @@ impl Marmol {
                 ui.selectable_value(&mut self.new_file_type, NewFileType::Tasks, "Tasks");
                 ui.selectable_value(&mut self.new_file_type, NewFileType::Income, "Income");
                 ui.selectable_value(&mut self.new_file_type, NewFileType::Excalidraw, "Excalidraw");
+                ui.selectable_value(&mut self.new_file_type, NewFileType::Canvas, "Canvas");
             });
         let path = if self.new_file_type == NewFileType::Tasks {
             format!("{}.graph", new_path)
@@ -556,6 +610,8 @@ impl Marmol {
             format!("{}.inc", new_path)
         } else if self.new_file_type == NewFileType::Excalidraw {
             format!("{}.excalidraw.md", new_path)
+        } else if self.new_file_type == NewFileType::Canvas {
+            format!("{}.canvas", new_path)
         } else {
             String::new()
         };
@@ -605,6 +661,10 @@ tags: [excalidraw]
 {}
 ```", compressed);
                             re.write_all(full_content.as_bytes()).unwrap();
+                            re.write_all(full_content.as_bytes()).unwrap();
+                        } else if self.new_file_type == NewFileType::Canvas {
+                            let contents = String::from("{\"nodes\":[],\"edges\":[]}");
+                            re.write_all(contents.as_bytes()).unwrap();
                         }
                         self.current_file = String::from(new_file.to_str().unwrap());
                     }

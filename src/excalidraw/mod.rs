@@ -6,7 +6,7 @@ use std::path::Path;
 use walkdir::WalkDir;
 
 use egui::{
-    ColorImage, Context, PointerButton, Pos2, Rect,
+    Color32, ColorImage, Context, PointerButton, Pos2, Rect,
     Sense, Stroke, TextureHandle, TextureOptions, Ui, Vec2,
 };
 use image::imageops::FilterType;
@@ -55,6 +55,10 @@ pub struct ExcalidrawGui {
     texture_cache: HashMap<String, TextureHandle>,
     #[serde(skip)]
     failed_textures: HashSet<String>,
+    #[serde(skip)]
+    selection_rect: Option<Rect>,
+    #[serde(skip)]
+    selected_indices: HashSet<usize>,
 }
 
 impl Default for ExcalidrawGui {
@@ -76,6 +80,8 @@ impl Default for ExcalidrawGui {
             is_panning: false,
             texture_cache: HashMap::new(),
             failed_textures: HashSet::new(),
+            selection_rect: None,
+            selected_indices: HashSet::new(),
         }
     }
 }
@@ -242,13 +248,34 @@ tags: [excalidraw]
         }
 
         ui.horizontal(|ui| {
+            let color = ui.ctx().style().visuals.widgets.noninteractive.fg_stroke.color;
+            let btn_size = Vec2::splat(20.0);
+
             ui.label("Tools:");
             if ui
-                .selectable_label(self.active_tool == Some(Tool::Selection), "✋")
+                .add(egui::Button::image(
+                    egui::Image::new(egui::include_image!("../../resources/pointer.svg"))
+                        .tint(color)
+                        .fit_to_exact_size(btn_size),
+                ).selected(self.active_tool == Some(Tool::Selection)))
+                .on_hover_text("Selection (S)")
                 .clicked()
             {
                 self.active_tool = Some(Tool::Selection);
             }
+
+            if ui
+                .add(egui::Button::image(
+                    egui::Image::new(egui::include_image!("../../resources/hand.svg"))
+                        .tint(color)
+                        .fit_to_exact_size(btn_size),
+                ).selected(self.active_tool == Some(Tool::Hand)))
+                .on_hover_text("Hand (H)")
+                .clicked()
+            {
+                self.active_tool = Some(Tool::Hand);
+            }
+
             ui.separator();
             if ui
                 .selectable_label(self.active_tool == Some(Tool::Rectangle), "⬜")
@@ -294,8 +321,20 @@ tags: [excalidraw]
             });
         });
 
+        let mut bg_color = Color32::WHITE;
+        if let Some(scene) = &self.scene {
+            if let Some(app_state) = scene.extra.get("appState").and_then(|v| v.as_object()) {
+                if let Some(view_bg) = app_state.get("viewBackgroundColor").and_then(|v| v.as_str()) {
+                    let color = utils::hex_to_color(view_bg);
+                    if color != Color32::TRANSPARENT {
+                        bg_color = color;
+                    }
+                }
+            }
+        }
+
         let (response, painter) = ui.allocate_painter(ui.available_size(), Sense::all());
-        painter.rect_filled(response.rect, 0.0, ui.ctx().style().visuals.extreme_bg_color);
+        painter.rect_filled(response.rect, 0.0, bg_color);
 
         if response.clicked() || response.drag_started() {
             self.error_msg = None;
@@ -423,6 +462,7 @@ tags: [excalidraw]
 
         if response.dragged_by(PointerButton::Middle)
             || (ui.input(|i| i.modifiers.alt) && response.dragged_by(PointerButton::Primary))
+            || (self.active_tool == Some(Tool::Hand) && response.dragged_by(PointerButton::Primary))
         {
             self.pan += response.drag_delta();
             self.is_panning = true;
@@ -460,17 +500,43 @@ tags: [excalidraw]
                                 for (i, el) in scene.elements.iter().enumerate().rev() {
                                     if is_point_inside(el, wp) {
                                         self.dragged_element_idx = Some(i);
-                                        self.selected_element_idx = Some(i);
+                                        if !self.selected_indices.contains(&i) {
+                                            self.selected_indices.clear();
+                                            self.selected_indices.insert(i);
+                                            self.selected_element_idx = Some(i);
+                                        }
                                         self.last_mouse_pos_world = Some(wp);
                                         f = true;
                                         break;
                                     }
                                 }
                                 if !f {
+                                    self.selected_indices.clear();
                                     self.selected_element_idx = None;
+                                    self.selection_rect = Some(Rect::from_min_max(wp, wp));
                                 }
                             }
                         }
+
+                        if let Some(rect) = &mut self.selection_rect {
+                            if response.dragged_by(PointerButton::Primary) {
+                                if let Some(mp) = response.interact_pointer_pos() {
+                                    let wp = to_world(mp);
+                                    rect.max = wp;
+                                    
+                                    // Update selection
+                                    self.selected_indices.clear();
+                                    let norm_rect = Rect::from_two_pos(rect.min, rect.max);
+                                    for (i, el) in scene.elements.iter().enumerate() {
+                                        let el_rect = Rect::from_min_size(Pos2::new(el.x, el.y), Vec2::new(el.width, el.height));
+                                        if norm_rect.intersects(el_rect) {
+                                            self.selected_indices.insert(i);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
                         if let Some(idx) = self.dragged_element_idx {
                             if response.dragged_by(PointerButton::Primary) {
                                 if let Some(mp) = response.interact_pointer_pos() {
@@ -478,7 +544,13 @@ tags: [excalidraw]
                                     if let Some(lp) = self.last_mouse_pos_world {
                                         let d = cwp - lp;
                                         if d.length_sq() > 0.0001 {
-                                            move_element_group(&mut scene.elements, idx, d);
+                                            // Move all selected elements if we are dragging one of them
+                                            for &s_idx in &self.selected_indices {
+                                                if let Some(el) = scene.elements.get_mut(s_idx) {
+                                                    el.x += d.x;
+                                                    el.y += d.y;
+                                                }
+                                            }
                                             dirty = true;
                                         }
                                     }
@@ -587,16 +659,23 @@ tags: [excalidraw]
             if response.drag_stopped() {
                 self.dragged_element_idx = None;
                 self.last_mouse_pos_world = None;
+                self.selection_rect = None;
+                
+                // If we have multiple selected, pick one for the properties panel (or just use the first)
+                self.selected_element_idx = self.selected_indices.iter().next().copied();
+
                 if let Some(el) = self.drawing_element.take() {
                     if el.width > 2.0 || el.height > 2.0 {
                         scene.elements.push(el);
+                        self.selected_indices.clear();
+                        self.selected_indices.insert(scene.elements.len() - 1);
                         self.selected_element_idx = Some(scene.elements.len() - 1);
                         dirty = true;
                         save = true;
                     }
                     self.active_tool = Some(Tool::Selection);
                 }
-                if dirty && self.dragged_element_idx.is_some() {
+                if dirty && !self.selected_indices.is_empty() {
                     save = true;
                 }
                 self.drawing_start_pos = None;
@@ -617,10 +696,26 @@ tags: [excalidraw]
                     None
                 };
                 draw_element(&painter, el, tex, &to_screen, cs);
-                if self.selected_element_idx == Some(i) {
+                if self.selected_indices.contains(&i) {
                     draw_selection_border(&painter, el, &to_screen, cs, ui);
                 }
             }
+
+            if let Some(rect) = self.selection_rect {
+                let screen_rect = Rect::from_min_max(to_screen(rect.min), to_screen(rect.max));
+                painter.rect_stroke(
+                    screen_rect,
+                    0.0,
+                    Stroke::new(1.0, Color32::from_rgb(100, 100, 255)),
+                    egui::StrokeKind::Outside,
+                );
+                painter.rect_filled(
+                    screen_rect,
+                    0.0,
+                    Color32::from_rgba_unmultiplied(100, 100, 255, 20),
+                );
+            }
+
             if let Some(el) = &self.drawing_element {
                 draw_element(&painter, el, None, &to_screen, cs);
             }

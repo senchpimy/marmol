@@ -4,6 +4,7 @@ use std::collections::HashMap;
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub enum Tool {
     Selection,
+    Hand,
     Rectangle,
     Ellipse,
     Diamond,

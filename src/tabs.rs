@@ -1,4 +1,5 @@
 use crate::excalidraw;
+use crate::canvas;
 use crate::easy_mark;
 use crate::files;
 use crate::iconize::{IconManager, IconSource};
@@ -45,6 +46,11 @@ pub enum TabContent {
         path: String,
         #[serde(skip, default)]
         gui: kanban::KanbanGui,
+    },
+    Canvas {
+        path: String,
+        #[serde(skip, default)]
+        gui: canvas::CanvasGui,
     },
     Markdown {
         #[serde(skip, default)]
@@ -97,6 +103,14 @@ impl Clone for TabContent {
                 let mut gui = kanban::KanbanGui::default();
                 gui.set_path(path);
                 TabContent::Kanban {
+                    path: path.clone(),
+                    gui,
+                }
+            }
+            TabContent::Canvas { path, .. } => {
+                let mut gui = canvas::CanvasGui::default();
+                gui.set_path(path);
+                TabContent::Canvas {
                     path: path.clone(),
                     gui,
                 }
@@ -157,6 +171,13 @@ impl Tabe {
             let mut gui = excalidraw::ExcalidrawGui::default();
             gui.set_path(&path);
             TabContent::Excalidraw {
+                path: path.clone(),
+                gui,
+            }
+        } else if path.ends_with(".canvas") {
+            let mut gui = canvas::CanvasGui::default();
+            gui.set_path(&path);
+            TabContent::Canvas {
                 path: path.clone(),
                 gui,
             }
@@ -392,6 +413,10 @@ impl TabViewer for MTabViewer<'_> {
                 gui.set_path(path);
                 gui.show(ui);
             }
+            TabContent::Canvas { path, gui } => {
+                gui.set_path(path);
+                gui.show(ui, self.vault);
+            }
             TabContent::Kanban { path, gui } => {
                 gui.set_path(path);
                 if let Some(new_path) = gui.show(ui, self.vault) {
@@ -414,11 +439,6 @@ impl TabViewer for MTabViewer<'_> {
                                 let inner_response = frame.show(ui, |ui| {
                                     let (markdown_content, metadata) = files::contents(&editor.code);
                                     
-                                    // Debug prints
-                                    // println!("DEBUG: icon_in_title_enabled: {}", self.icon_manager.settings.icon_in_title_enabled);
-                                    // println!("DEBUG: tab.path: {}", tab.path);
-                                    // println!("DEBUG: self.vault: {}", self.vault);
-
                                     if self.icon_manager.settings.icon_in_title_enabled {
                                         let relative_path = if tab.path.starts_with(self.vault) {
                                             let p = tab.path.strip_prefix(self.vault).unwrap_or(&tab.path);
@@ -578,6 +598,13 @@ fn update_tab_content(tab: &mut Tabe, path: &String, is_history_nav: bool) {
             path: path.clone(),
             gui,
         }
+    } else if path.ends_with(".canvas") {
+        let mut gui = canvas::CanvasGui::default();
+        gui.set_path(path);
+        TabContent::Canvas {
+            path: path.clone(),
+            gui,
+        }
     } else if path.ends_with(".graph") {
         let mut gui = tasks::TasksGui::default();
         gui.set_path(path);
@@ -629,6 +656,62 @@ impl Tabs {
         }
     }
 
+    pub fn close_current_tab(&mut self) {
+        if let Some((focus_surf, focus_node)) = self.tree.focused_leaf() {
+            let mut to_remove = None;
+
+            for (s_idx, surface) in self.tree.iter_surfaces().enumerate() {
+                if crate::egui_dock::SurfaceIndex(s_idx) == focus_surf {
+                    for (n_idx, node) in surface.iter_nodes().enumerate() {
+                        if crate::egui_dock::NodeIndex(n_idx) == focus_node {
+                            if let crate::egui_dock::Node::Leaf(leaf) = node {
+                                to_remove = Some((focus_surf, focus_node, leaf.active));
+                            }
+                            break;
+                        }
+                    }
+                }
+                if to_remove.is_some() {
+                    break;
+                }
+            }
+
+            if let Some(target) = to_remove {
+                self.tree.remove_tab(target);
+            }
+        }
+    }
+
+    pub fn close_tab_by_path(&mut self, path: &str) {
+        let mut to_remove = None;
+        for (surf_idx, surface) in self.tree.iter_surfaces().enumerate() {
+            for (node_idx, node) in surface.iter_nodes().enumerate() {
+                if let crate::egui_dock::Node::Leaf(leaf) = node {
+                    for (tab_idx, tab) in leaf.tabs.iter().enumerate() {
+                        if tab.path == path {
+                            to_remove = Some((
+                                crate::egui_dock::SurfaceIndex(surf_idx),
+                                crate::egui_dock::NodeIndex(node_idx),
+                                crate::egui_dock::TabIndex(tab_idx),
+                            ));
+                            break;
+                        }
+                    }
+                }
+                if to_remove.is_some() {
+                    break;
+                }
+            }
+            if to_remove.is_some() {
+                break;
+            }
+        }
+
+        if let Some(target) = to_remove {
+            self.tree.remove_tab(target);
+        }
+    }
+
     pub fn ui(
         &mut self,
         ui: &mut Ui,
@@ -640,29 +723,7 @@ impl Tabs {
         dock_style: &Style,
     ) {
         if ui.input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::W)) {
-            if let Some((focus_surf, focus_node)) = self.tree.focused_leaf() {
-                let mut to_remove = None;
-
-                for (s_idx, surface) in self.tree.iter_surfaces().enumerate() {
-                    if crate::egui_dock::SurfaceIndex(s_idx) == focus_surf {
-                        for (n_idx, node) in surface.iter_nodes().enumerate() {
-                            if crate::egui_dock::NodeIndex(n_idx) == focus_node {
-                                if let crate::egui_dock::Node::Leaf(leaf) = node {
-                                    to_remove = Some((focus_surf, focus_node, leaf.active));
-                                }
-                                break;
-                            }
-                        }
-                    }
-                    if to_remove.is_some() {
-                        break;
-                    }
-                }
-
-                if let Some(target) = to_remove {
-                    self.tree.remove_tab(target);
-                }
-            }
+            self.close_current_tab();
         }
 
         let mut added_nodes = Vec::new();
