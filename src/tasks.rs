@@ -200,7 +200,7 @@ impl TasksGui {
         }
     }
 
-    pub fn show(&mut self, ui: &mut egui::Ui) {
+    pub fn show(&mut self, ui: &mut egui::Ui, seed_id: Id) {
         // --- 1. Gráfica ---
         let labels = &self.labels_grafica;
 
@@ -215,7 +215,7 @@ impl TasksGui {
 
         ui.label(RichText::new(format!("Average: {:.1} tasks/day", self.prom)).strong());
 
-        let markers_plot = Plot::new("Graph")
+        let markers_plot = Plot::new(seed_id.with("tasks_graph"))
             .height(200.0)
             .x_axis_formatter(x_fmt)
             .data_aspect(0.5)
@@ -244,9 +244,9 @@ impl TasksGui {
 
         ui.add_space(20.0);
 
-        egui::ScrollArea::vertical().show(ui, |ui| {
+        egui::ScrollArea::vertical().id_salt(seed_id.with("tasks_scroll")).show(ui, |ui| {
             // --- 2. Lista de Tareas Globales ---
-            ui.push_id("global_tasks", |ui| {
+            ui.push_id(seed_id.with("global_tasks"), |ui| {
                 ui.group(|ui| {
                     ui.horizontal(|ui| {
                         ui.label(RichText::new("📋 Active Tasks").heading());
@@ -342,7 +342,7 @@ impl TasksGui {
             let mut del_day_index = None;
 
             for (ind, element) in self.json_content.days.iter_mut().enumerate() {
-                ui.push_id(ind, |ui| {
+                ui.push_id(seed_id.with(ind), |ui| {
                     ui.group(|ui| {
                         ui.horizontal(|ui| {
                             if self.edit_task.index == ind as i32

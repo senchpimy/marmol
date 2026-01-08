@@ -231,52 +231,52 @@ impl IncomeGui {
         }
     }
 
-    pub fn show(&mut self, ui: &mut egui::Ui) {
-        self.header_nav(ui);
+    pub fn show(&mut self, ui: &mut egui::Ui, seed_id: Id) {
+        self.header_nav(ui, seed_id);
 
         egui::CentralPanel::default().show_inside(ui, |ui| match self.ventana {
-            Ventana::Normal => self.view_normal(ui),
-            Ventana::Graficos => self.grafica(ui),
-            Ventana::Categorias => self.canvas(ui),
+            Ventana::Normal => self.view_normal(ui, seed_id),
+            Ventana::Graficos => self.grafica(ui, seed_id),
+            Ventana::Categorias => self.canvas(ui, seed_id),
         });
 
         self.save();
     }
 
-    fn view_normal(&mut self, ui: &mut egui::Ui) {
+    fn view_normal(&mut self, ui: &mut egui::Ui, seed_id: Id) {
         if ui.available_width() > 800.0 {
             ui.columns(2, |cols| {
-                cols[0].vertical(|ui| self.vista_separada(ui));
+                cols[0].vertical(|ui| self.vista_separada(ui, seed_id));
 
                 cols[1].vertical(|ui| {
-                    self.add_record(ui);
+                    self.add_record(ui, seed_id);
                     ui.separator();
-                    self.categorias(ui);
+                    self.categorias(ui, seed_id);
                 });
             });
         } else {
             let available_height = ui.available_height();
 
-            egui::TopBottomPanel::bottom("controls_bottom")
+            egui::TopBottomPanel::bottom(seed_id.with("controls_bottom"))
                 .resizable(true)
                 .default_height(available_height * 0.5)
                 .show_inside(ui, |ui| {
-                    egui::ScrollArea::vertical().show(ui, |ui| {
-                        self.add_record(ui);
+                    egui::ScrollArea::vertical().id_salt(seed_id.with("ctrl_scroll")).show(ui, |ui| {
+                        self.add_record(ui, seed_id);
                         ui.add_space(20.0);
                         ui.separator();
-                        self.categorias(ui);
+                        self.categorias(ui, seed_id);
                     });
                 });
 
             egui::CentralPanel::default().show_inside(ui, |ui| {
-                self.vista_separada(ui);
+                self.vista_separada(ui, seed_id);
             });
         }
     }
 
-    fn header_nav(&mut self, ui: &mut egui::Ui) {
-        egui::TopBottomPanel::top("nav_panel")
+    fn header_nav(&mut self, ui: &mut egui::Ui, seed_id: Id) {
+        egui::TopBottomPanel::top(seed_id.with("nav_panel"))
             .frame(
                 Frame::default()
                     .fill(ui.visuals().window_fill())
@@ -291,12 +291,12 @@ impl IncomeGui {
             });
     }
 
-    fn categorias(&mut self, ui: &mut egui::Ui) {
+    fn categorias(&mut self, ui: &mut egui::Ui, seed_id: Id) {
         ui.heading("Gestión de Categorías");
         egui::Frame::group(ui.style()).show(ui, |ui| {
             ui.horizontal(|ui| {
                 ui.label("Editar:");
-                egui::ComboBox::from_id_salt("cat_edit_combo")
+                egui::ComboBox::from_id_salt(seed_id.with("cat_edit_combo"))
                     .selected_text(
                         self.json_content
                             .categorias
@@ -314,6 +314,7 @@ impl IncomeGui {
                         }
                     });
             });
+            // ... (rest of function remains same, just passing seed_id if called internally)
 
             ui.horizontal(|ui| {
                 egui::widgets::color_picker::color_edit_button_rgb(
@@ -374,10 +375,11 @@ impl IncomeGui {
         filter_type: TipoMovimiento,
         tot: &mut f32,
         remove: &mut i32,
+        seed_id: Id,
     ) {
         ui.heading(RichText::new(title).color(title_color));
         egui::ScrollArea::vertical()
-            .id_salt(format!("{}_scroll", title))
+            .id_salt(seed_id.with(format!("{}_scroll", title)))
             .max_height(ui.available_height() - 30.0)
             .show(ui, |ui| {
                 for (this, elemento) in self.json_content.transacciones.iter_mut().enumerate() {
@@ -394,6 +396,7 @@ impl IncomeGui {
                                 &mut self.edit,
                                 &mut self.cambiar,
                                 &self.json_content.categorias,
+                                seed_id.with(this),
                             );
                         } else {
                             draw_transaction_card(
@@ -411,7 +414,7 @@ impl IncomeGui {
             });
     }
 
-    pub fn vista_separada(&mut self, ui: &mut egui::Ui) {
+    pub fn vista_separada(&mut self, ui: &mut egui::Ui, seed_id: Id) {
         let mut tot = 0.0;
         let mut remove: i32 = -1;
 
@@ -424,6 +427,7 @@ impl IncomeGui {
                     TipoMovimiento::Gasto,
                     &mut tot,
                     &mut remove,
+                    seed_id,
                 );
             });
 
@@ -435,6 +439,7 @@ impl IncomeGui {
                     TipoMovimiento::Ingreso,
                     &mut tot,
                     &mut remove,
+                    seed_id,
                 );
             });
         });
@@ -479,7 +484,7 @@ impl IncomeGui {
         }
     }
 
-    pub fn add_record(&mut self, ui: &mut egui::Ui) {
+    pub fn add_record(&mut self, ui: &mut egui::Ui, seed_id: Id) {
         ui.heading("Nuevo Registro");
 
         Frame::group(ui.style()).inner_margin(8.0).show(ui, |ui| {
@@ -509,12 +514,12 @@ impl IncomeGui {
 
                 ui.add_space(4.0);
 
-                egui::Grid::new("input_grid_compact")
+                egui::Grid::new(seed_id.with("input_grid_compact"))
                     .num_columns(2)
                     .spacing([8.0, 6.0])
                     .show(ui, |ui| {
                         ui.label("Categoría:");
-                        egui::ComboBox::from_id_salt("cat_select_new")
+                        egui::ComboBox::from_id_salt(seed_id.with("cat_select_new"))
                             .selected_text(
                                 self.json_content
                                     .categorias
@@ -580,7 +585,7 @@ impl IncomeGui {
         }
     }
 
-    fn canvas(&mut self, ui: &mut egui::Ui) {
+    fn canvas(&mut self, ui: &mut egui::Ui, seed_id: Id) {
         ui.heading("Distribución por Categorías");
 
         let available_size = ui.available_size();
@@ -609,7 +614,7 @@ impl IncomeGui {
                     ui.add_space(10.0);
 
                     egui::ScrollArea::vertical()
-                        .id_salt("ingresos_scroll")
+                        .id_salt(seed_id.with("ingresos_scroll"))
                         .max_height(200.0)
                         .show(ui, |ui| {
                             for (cat_idx, monto) in &self.ingresos_cat {
@@ -648,7 +653,7 @@ impl IncomeGui {
                     ui.add_space(10.0);
 
                     egui::ScrollArea::vertical()
-                        .id_salt("gastos_scroll")
+                        .id_salt(seed_id.with("gastos_scroll"))
                         .max_height(200.0)
                         .show(ui, |ui| {
                             for (cat_idx, monto) in &self.gastos_cat {
@@ -668,15 +673,15 @@ impl IncomeGui {
         });
     }
 
-    fn grafica(&mut self, ui: &mut egui::Ui) {
+    fn grafica(&mut self, ui: &mut egui::Ui, seed_id: Id) {
         if self.ver_gra == GraficaVer::Grafica {
-            self.render_evolution_plot(ui);
+            self.render_evolution_plot(ui, seed_id);
         } else {
-            self.render_day_details(ui);
+            self.render_day_details(ui, seed_id);
         }
     }
 
-    fn render_evolution_plot(&mut self, ui: &mut egui::Ui) {
+    fn render_evolution_plot(&mut self, ui: &mut egui::Ui, seed_id: Id) {
         ui.horizontal(|ui| {
             ui.heading("Evolución del Balance");
             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
@@ -693,7 +698,7 @@ impl IncomeGui {
             }
         };
 
-        let plot = egui_plot::Plot::new("financial_plot")
+        let plot = egui_plot::Plot::new(seed_id.with("financial_plot"))
             .show_x(false)
             .show_y(true)
             .clamp_grid(true)
@@ -733,7 +738,7 @@ impl IncomeGui {
         );
     }
 
-    fn render_day_details(&mut self, ui: &mut egui::Ui) {
+    fn render_day_details(&mut self, ui: &mut egui::Ui, seed_id: Id) {
         if ui.button("⬅ Regresar a la Gráfica").clicked() {
             self.ver_gra = GraficaVer::Grafica;
         }
@@ -745,7 +750,7 @@ impl IncomeGui {
 
             let mut daily_balance = 0.0;
 
-            egui::ScrollArea::vertical().show(ui, |ui| {
+            egui::ScrollArea::vertical().id_salt(seed_id.with("day_details_scroll")).show(ui, |ui| {
                 for j in &self.json_content.transacciones {
                     if &j.fecha == fecha_actual {
                         let is_income = j.tipo == TipoMovimiento::Ingreso;
@@ -868,11 +873,12 @@ fn draw_edit_card(
     edit_state: &mut (i32, TipoMovimiento),
     cambiar: &mut bool,
     categorias: &[String],
+    seed_id: Id,
 ) {
     Frame::group(ui.style()).show(ui, |ui| {
         ui.label(RichText::new("Editando...").weak().small());
         let mut edit_flag = false;
-        edit_valor(ui, mov, edit_state, &mut edit_flag, categorias);
+        edit_valor(ui, mov, edit_state, &mut edit_flag, categorias, seed_id);
         if edit_flag {
             *cambiar = true;
         }
@@ -886,6 +892,7 @@ fn edit_valor(
     edit: &mut (i32, TipoMovimiento),
     p: &mut bool,
     categorias_i: &[String],
+    seed_id: Id,
 ) {
     ui.horizontal(|ui| {
         ui.label("📅");
@@ -912,7 +919,7 @@ fn edit_valor(
     });
 
     ui.horizontal(|ui| {
-        egui::ComboBox::from_id_salt("edit_combo")
+        egui::ComboBox::from_id_salt(seed_id.with("edit_combo"))
             .selected_text(categorias_i.get(mov.categoria).unwrap_or(&"?".to_string()))
             .width(100.0)
             .show_ui(ui, |ui| {

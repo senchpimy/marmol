@@ -12,11 +12,12 @@ pub fn draw_ui(
     current_file: &mut String,
     content: &mut Content,
     vault: &str,
+    seed_id: Id,
 ) -> Response {
     graph.simulate_physics();
     ui.ctx().request_repaint();
 
-    let markers_plot = Plot::new("Graph")
+    let markers_plot = Plot::new(seed_id.with("markers_plot"))
         .data_aspect(1.0)
         .allow_drag(graph.dragged_node_index.is_none())
         .show_axes([false, false])
@@ -86,7 +87,7 @@ pub fn draw_ui(
                 let mut arrows = Arrows::new("".to_string(), origins, tips).tip_length(25.0);
                 
                 // Animación para el desvanecimiento de las flechas cuando hay un hover
-                let arrows_anim_id = Id::new("arrows_hover_anim");
+                let arrows_anim_id = seed_id.with("arrows_hover_anim");
                 let arrows_t = plot_ui.ctx().animate_bool_with_time(arrows_anim_id, !is_hovering, animation_duration);
                 let arrows_multiplier = 0.2 + 0.8 * arrows_t;
                 
@@ -108,7 +109,7 @@ pub fn draw_ui(
                             false
                         };
 
-                        let edge_anim_id = Id::new("edge_h").with(edge_idx);
+                        let edge_anim_id = seed_id.with("edge_h").with(edge_idx);
                         let edge_t = plot_ui.ctx().animate_bool_with_time(edge_anim_id, is_edge_highlighted, animation_duration);
 
                         if is_hovering {
@@ -158,7 +159,7 @@ pub fn draw_ui(
                     true
                 };
 
-                let node_anim_id = Id::new("node_h").with(index);
+                let node_anim_id = seed_id.with("node_h").with(index);
                 let node_t = plot_ui.ctx().animate_bool_with_time(node_anim_id, is_node_highlighted, animation_duration);
 
                 let mut point_color = graph.get_color_for_node(point);
@@ -269,7 +270,7 @@ pub fn draw_ui(
     let plot_rect = response.rect;
     let mut controls_changed = false;
 
-    egui::Area::new("graph_controls_overlay".into())
+    egui::Area::new(seed_id.with("graph_controls_overlay"))
         .fixed_pos(plot_rect.min + egui::vec2(10.0, 10.0))
         .order(Order::Foreground)
         .show(ui.ctx(), |ui| {
@@ -282,8 +283,8 @@ pub fn draw_ui(
                     ui.set_max_width(220.0);
                     ui.set_max_height(plot_rect.height() - 40.0);
 
-                    egui::ScrollArea::vertical().show(ui, |ui| {
-                        if draw_controls(graph, ui) {
+                    egui::ScrollArea::vertical().id_salt(seed_id.with("graph_ctrl_scroll")).show(ui, |ui| {
+                        if draw_controls(graph, ui, seed_id) {
                             controls_changed = true;
                         }
                     });
@@ -297,134 +298,136 @@ pub fn draw_ui(
     response
 }
 
-fn draw_controls(graph: &mut Graph, ui: &mut Ui) -> bool {
+fn draw_controls(graph: &mut Graph, ui: &mut Ui, seed_id: Id) -> bool {
     let mut changed = false;
 
-    ui.collapsing("Configuración Física", |ui| {
-        ui.add(egui::Slider::new(&mut graph.repel_force, 1.0..=100.0).text("Repulsión"));
-        ui.add(egui::Slider::new(&mut graph.link_force, 0.1..=3.0).text("Links"));
-        ui.add(egui::Slider::new(&mut graph.group_force, 0.0..=5.0).text("Agrupación"));
-        ui.add(egui::Slider::new(&mut graph.center_force, 0.01..=1.0).text("Gravedad"));
-        ui.add(egui::Slider::new(&mut graph.tag_force, 0.1..=10.0).text("Atracción Tags"));
+    ui.push_id(seed_id, |ui| {
+        ui.collapsing("Configuración Física", |ui| {
+            ui.add(egui::Slider::new(&mut graph.repel_force, 1.0..=100.0).text("Repulsión"));
+            ui.add(egui::Slider::new(&mut graph.link_force, 0.1..=3.0).text("Links"));
+            ui.add(egui::Slider::new(&mut graph.group_force, 0.0..=5.0).text("Agrupación"));
+            ui.add(egui::Slider::new(&mut graph.center_force, 0.01..=1.0).text("Gravedad"));
+            ui.add(egui::Slider::new(&mut graph.tag_force, 0.1..=10.0).text("Atracción Tags"));
 
-        ui.horizontal(|ui| {
-            color_picker::color_edit_button_srgba(
-                ui,
-                &mut graph.orphan_color,
-                egui::widgets::color_picker::Alpha::Opaque,
-            );
-            ui.label("Color Huérfanos");
+            ui.horizontal(|ui| {
+                color_picker::color_edit_button_srgba(
+                    ui,
+                    &mut graph.orphan_color,
+                    egui::widgets::color_picker::Alpha::Opaque,
+                );
+                ui.label("Color Huérfanos");
+            });
         });
-    });
 
-    ui.collapsing("Visualización", |ui| {
-        ui.checkbox(&mut graph.show_arrows, "Mostrar Flechas (Dirección)");
+        ui.collapsing("Visualización", |ui| {
+            ui.checkbox(&mut graph.show_arrows, "Mostrar Flechas (Dirección)");
 
-        ui.add(egui::Slider::new(&mut graph.node_size, 2.0..=20.0).text("Tamaño Nodo"));
-        ui.add(egui::Slider::new(&mut graph.line_thickness, 0.5..=10.0).text("Grosor Línea"));
+            ui.add(egui::Slider::new(&mut graph.node_size, 2.0..=20.0).text("Tamaño Nodo"));
+            ui.add(egui::Slider::new(&mut graph.line_thickness, 0.5..=10.0).text("Grosor Línea"));
 
-        ui.label("Visibilidad de Texto (Zoom):");
-        ui.add(
-            egui::Slider::new(&mut graph.text_zoom_threshold, 10.0..=2000.0)
-                .text("Umbral")
-                .logarithmic(true),
-        );
-    });
-
-    ui.collapsing("Crear Grupos", |ui| {
-        ui.horizontal(|ui| {
-            egui::ComboBox::from_id_salt("group_type_combo")
-                .selected_text(match graph.new_group_type {
-                    MatchType::Tag => "Tag",
-                    MatchType::Filename => "Filename",
-                    MatchType::Path => "Path",
-                    MatchType::Content => "Content",
-                    MatchType::Section => "Section",
-                })
-                .show_ui(ui, |ui| {
-                    ui.selectable_value(&mut graph.new_group_type, MatchType::Tag, "Tag");
-                    ui.selectable_value(&mut graph.new_group_type, MatchType::Filename, "Filename");
-                    ui.selectable_value(&mut graph.new_group_type, MatchType::Path, "Path");
-                    ui.selectable_value(&mut graph.new_group_type, MatchType::Content, "Content");
-                    ui.selectable_value(&mut graph.new_group_type, MatchType::Section, "Section");
-                });
-
-            color_picker::color_edit_button_srgba(
-                ui,
-                &mut graph.new_group_col,
-                egui::widgets::color_picker::Alpha::Opaque,
+            ui.label("Visibilidad de Texto (Zoom):");
+            ui.add(
+                egui::Slider::new(&mut graph.text_zoom_threshold, 10.0..=2000.0)
+                    .text("Umbral")
+                    .logarithmic(true),
             );
         });
 
-        ui.text_edit_singleline(&mut graph.new_group_val)
-            .on_hover_text("Valor a buscar");
+        ui.collapsing("Crear Grupos", |ui| {
+            ui.horizontal(|ui| {
+                egui::ComboBox::from_id_salt(seed_id.with("group_type_combo"))
+                    .selected_text(match graph.new_group_type {
+                        MatchType::Tag => "Tag",
+                        MatchType::Filename => "Filename",
+                        MatchType::Path => "Path",
+                        MatchType::Content => "Content",
+                        MatchType::Section => "Section",
+                    })
+                    .show_ui(ui, |ui| {
+                        ui.selectable_value(&mut graph.new_group_type, MatchType::Tag, "Tag");
+                        ui.selectable_value(&mut graph.new_group_type, MatchType::Filename, "Filename");
+                        ui.selectable_value(&mut graph.new_group_type, MatchType::Path, "Path");
+                        ui.selectable_value(&mut graph.new_group_type, MatchType::Content, "Content");
+                        ui.selectable_value(&mut graph.new_group_type, MatchType::Section, "Section");
+                    });
 
-        if ui.button("Agregar Grupo").clicked() {
-            if !graph.new_group_val.is_empty() {
-                graph.custom_groups.push(CustomGroup {
-                    match_type: graph.new_group_type,
-                    value: std::mem::take(&mut graph.new_group_val),
-                    color: graph.new_group_col,
+                color_picker::color_edit_button_srgba(
+                    ui,
+                    &mut graph.new_group_col,
+                    egui::widgets::color_picker::Alpha::Opaque,
+                );
+            });
+
+            ui.text_edit_singleline(&mut graph.new_group_val)
+                .on_hover_text("Valor a buscar");
+
+            if ui.button("Agregar Grupo").clicked() {
+                if !graph.new_group_val.is_empty() {
+                    graph.custom_groups.push(CustomGroup {
+                        match_type: graph.new_group_type,
+                        value: std::mem::take(&mut graph.new_group_val),
+                        color: graph.new_group_col,
+                    });
+                }
+            }
+
+            ui.separator();
+            ui.label("Grupos Activos:");
+            let mut index_to_remove = None;
+            for (i, group) in graph.custom_groups.iter().enumerate() {
+                ui.horizontal(|ui| {
+                    let (rect, _) = ui.allocate_exact_size(egui::vec2(12.0, 12.0), Sense::hover());
+                    ui.painter().rect_filled(rect, 2.0, group.color);
+                    let type_str = match group.match_type {
+                        MatchType::Tag => "Tag",
+                        MatchType::Filename => "File",
+                        MatchType::Path => "Path",
+                        MatchType::Content => "Cont",
+                        MatchType::Section => "Sect",
+                    };
+                    ui.label(format!("{}: '{}'", type_str, group.value));
+                    if ui.button("x").clicked() {
+                        index_to_remove = Some(i);
+                    }
                 });
             }
-        }
+            if let Some(i) = index_to_remove {
+                graph.custom_groups.remove(i);
+            }
+        });
 
-        ui.separator();
-        ui.label("Grupos Activos:");
-        let mut index_to_remove = None;
-        for (i, group) in graph.custom_groups.iter().enumerate() {
-            ui.horizontal(|ui| {
-                let (rect, _) = ui.allocate_exact_size(egui::vec2(12.0, 12.0), Sense::hover());
-                ui.painter().rect_filled(rect, 2.0, group.color);
-                let type_str = match group.match_type {
-                    MatchType::Tag => "Tag",
-                    MatchType::Filename => "File",
-                    MatchType::Path => "Path",
-                    MatchType::Content => "Cont",
-                    MatchType::Section => "Sect",
-                };
-                ui.label(format!("{}: '{}'", type_str, group.value));
-                if ui.button("x").clicked() {
-                    index_to_remove = Some(i);
-                }
-            });
-        }
-        if let Some(i) = index_to_remove {
-            graph.custom_groups.remove(i);
-        }
-    });
+        ui.collapsing("Filtros", |ui| {
+            ui.label("Filename:");
+            ui.text_edit_singleline(&mut graph.filter_filename);
+            ui.label("Tag:");
+            ui.text_edit_singleline(&mut graph.filter_tag);
+            ui.label("Path:");
+            ui.text_edit_singleline(&mut graph.filter_path);
+            ui.label("Line:");
+            ui.text_edit_singleline(&mut graph.filter_line);
+            ui.label("Section:");
+            ui.text_edit_singleline(&mut graph.filter_section);
 
-    ui.collapsing("Filtros", |ui| {
-        ui.label("Filename:");
-        ui.text_edit_singleline(&mut graph.filter_filename);
-        ui.label("Tag:");
-        ui.text_edit_singleline(&mut graph.filter_tag);
-        ui.label("Path:");
-        ui.text_edit_singleline(&mut graph.filter_path);
-        ui.label("Line:");
-        ui.text_edit_singleline(&mut graph.filter_line);
-        ui.label("Section:");
-        ui.text_edit_singleline(&mut graph.filter_section);
+            ui.separator();
+            ui.checkbox(&mut graph.show_attachments, "Mostrar Adjuntos");
+            ui.checkbox(&mut graph.show_existing_only, "Ocultar Nodos Fantasma");
+            ui.checkbox(&mut graph.show_orphans, "Mostrar Huérfanos");
 
-        ui.separator();
-        ui.checkbox(&mut graph.show_attachments, "Mostrar Adjuntos");
-        ui.checkbox(&mut graph.show_existing_only, "Ocultar Nodos Fantasma");
-        ui.checkbox(&mut graph.show_orphans, "Mostrar Huérfanos");
+            if ui
+                .checkbox(&mut graph.show_tags, "Mostrar Nodos de Tags")
+                .changed()
+            {
+                changed = true;
+            }
 
-        if ui
-            .checkbox(&mut graph.show_tags, "Mostrar Nodos de Tags")
-            .changed()
-        {
-            changed = true;
-        }
-
-        if ui.button("Limpiar Todo").clicked() {
-            graph.filter_filename.clear();
-            graph.filter_tag.clear();
-            graph.filter_path.clear();
-            graph.filter_line.clear();
-            graph.filter_section.clear();
-        }
+            if ui.button("Limpiar Todo").clicked() {
+                graph.filter_filename.clear();
+                graph.filter_tag.clear();
+                graph.filter_path.clear();
+                graph.filter_line.clear();
+                graph.filter_section.clear();
+            }
+        });
     });
 
     changed

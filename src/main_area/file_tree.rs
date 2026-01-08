@@ -13,6 +13,7 @@ pub struct FileTree {
     pub menu_error: String,
     pub new_folder_name: String,
     pub creating_folder_in: Option<String>,
+    pub reveal_path: Option<String>,
 }
 
 impl Default for FileTree {
@@ -24,6 +25,7 @@ impl Default for FileTree {
             menu_error: String::new(),
             new_folder_name: String::new(),
             creating_folder_in: None,
+            reveal_path: None,
         }
     }
 }
@@ -142,6 +144,8 @@ impl FileTree {
             }
 
             let is_selected = &file_location == current_file;
+            let is_revealed = self.reveal_path.as_deref() == Some(&file_location);
+            let contains_revealed = self.reveal_path.as_ref().map_or(false, |p| p.starts_with(&file_location) && p != &file_location);
             let row_size = Vec2::new(ui.available_width(), 18.0);
 
             if is_dir {
@@ -151,6 +155,10 @@ impl FileTree {
                     id,
                     false,
                 );
+
+                if is_revealed || contains_revealed {
+                    state.set_open(true);
+                }
 
                 let is_renaming = self
                     .renaming_path
@@ -195,16 +203,18 @@ impl FileTree {
                             let (rect, response) =
                                 ui.allocate_exact_size(row_size, Sense::click());
 
-                            if response.hovered() || is_selected {
-                                ui.painter().rect_filled(
-                                    rect,
-                                    2.0,
-                                    if is_selected {
-                                        ui.style().visuals.selection.bg_fill
-                                    } else {
-                                        ui.style().visuals.widgets.hovered.bg_fill
-                                    },
-                                );
+                            if response.hovered() || is_selected || is_revealed {
+                                let fill_color = if is_revealed {
+                                    ui.style().visuals.selection.bg_fill.gamma_multiply(0.5)
+                                } else if is_selected {
+                                    ui.style().visuals.selection.bg_fill
+                                } else {
+                                    ui.style().visuals.widgets.hovered.bg_fill
+                                };
+                                ui.painter().rect_filled(rect, 2.0, fill_color);
+                                if is_revealed {
+                                    response.scroll_to_me(Some(egui::Align::Center));
+                                }
                             }
 
                             // Flecha
@@ -388,20 +398,23 @@ impl FileTree {
                         }
                     });
                 } else {
+                    let is_revealed = self.reveal_path.as_deref() == Some(&file_location);
                     let dnd_id = Id::new("dnd_file").with(&file_location);
                     let dnd_res = ui.dnd_drag_source(dnd_id, file_location.clone(), |ui| {
                         let (rect, response) = ui.allocate_exact_size(row_size, Sense::click());
 
-                        if is_selected || response.hovered() {
-                            ui.painter().rect_filled(
-                                rect,
-                                2.0,
-                                if is_selected {
-                                    ui.style().visuals.selection.bg_fill
-                                } else {
-                                    ui.style().visuals.widgets.hovered.bg_fill
-                                },
-                            );
+                        if is_selected || response.hovered() || is_revealed {
+                            let fill_color = if is_revealed {
+                                ui.style().visuals.selection.bg_fill.gamma_multiply(0.5)
+                            } else if is_selected {
+                                ui.style().visuals.selection.bg_fill
+                            } else {
+                                ui.style().visuals.widgets.hovered.bg_fill
+                            };
+                            ui.painter().rect_filled(rect, 2.0, fill_color);
+                            if is_revealed {
+                                response.scroll_to_me(Some(egui::Align::Center));
+                            }
                         }
 
                         // Icono (Personalizado o Espacio)

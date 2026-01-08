@@ -292,6 +292,8 @@ impl LeftControls {
                     icon_selector,
                     0,
                 );
+                // Reset reveal signal after rendering
+                self.file_tree.reveal_path = None;
 
                 let available_size = ui.available_size();
                 let min_height = if available_size.y < 50.0 {
@@ -406,7 +408,6 @@ impl LeftControls {
         prev_window: &mut screens::Screen,
         content: &mut Content,
         tabs: &mut crate::tabs::Tabs,
-        tabs_counter: &mut usize,
         window_size: &MShape,
         command_palette: &mut crate::command_palette::CommandPalette,
     ) {
@@ -454,8 +455,7 @@ impl LeftControls {
                     .on_hover_text("Graph")
                     .clicked()
                 {
-                    tabs.add_tab(crate::tabs::Tabe::new_graph(*tabs_counter, vault));
-                    *tabs_counter += 1;
+                    tabs.add_graph_tab(vault);
                 }
                 ui.add_space(space);
                 if ui

@@ -74,7 +74,7 @@ impl KanbanGui {
         }
     }
 
-    pub fn show(&mut self, ui: &mut Ui, vault: &str) -> Option<String> {
+    pub fn show(&mut self, ui: &mut Ui, vault: &str, seed_id: Id) -> Option<String> {
         let mut open_file = None;
         let mut needs_save = false;
         
@@ -100,7 +100,7 @@ impl KanbanGui {
 
         ui.add_space(10.0);
         
-        ScrollArea::both().auto_shrink([false, true]).show(ui, |ui| {
+        ScrollArea::both().auto_shrink([false, true]).id_salt(seed_id.with("scroll")).show(ui, |ui| {
             ui.horizontal_top(|ui| {
                 // Iteramos sobre las columnas
                 for col_idx in 0..self.board.columns.len() {
@@ -153,7 +153,7 @@ impl KanbanGui {
                                         new_task_str = String::new();
                                     }
                                     
-                                    let header_id = Id::new("col_header").with(col_idx);
+                                    let header_id = seed_id.with("col_header").with(col_idx);
                                     let header_res = ui.dnd_drag_source(header_id, ColumnLocation { col: col_idx }, |ui| {
                                         ui.set_width(ui.available_width());
                                         ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
@@ -207,7 +207,7 @@ impl KanbanGui {
                                 }
 
                                 for task_idx in 0..self.board.columns[col_idx].tasks.len() {
-                                    let item_id = Id::new("kanban_item").with(col_idx).with(task_idx);
+                                    let item_id = seed_id.with("kanban_item").with(col_idx).with(task_idx);
                                     let item_location = Location { col: col_idx, row: task_idx };
                                     
                                     let dnd_res = ui.dnd_drag_source(item_id, item_location, |ui| {

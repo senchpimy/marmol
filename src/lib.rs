@@ -57,7 +57,6 @@ impl fmt::Display for NewFileType {
 }
 
 pub struct Marmol {
-    tabs_counter: usize,
     switcher: switcher::QuickSwitcher,
     prev_current_file: String,
     new_vault_str: String,
@@ -123,7 +122,6 @@ impl Marmol {
     fn from_program_state(state: configuraciones::MarmolProgramState, ctx: &egui::Context) -> Self {
         let current_path_str = state.current_file.unwrap_or_default();
         Self {
-            tabs_counter: 0,
             window_size: MShape {
                 height: 0.,
                 width: 0.,
@@ -175,7 +173,6 @@ impl Marmol {
 impl Default for Marmol {
     fn default() -> Self {
         Self {
-            tabs_counter: 0,
             window_size: MShape {
                 height: 0.,
                 width: 0.,
@@ -275,11 +272,34 @@ impl eframe::App for Marmol {
                 &mut self.vault_changed,
             );
         } else if self.current_window == screens::Screen::Main {
-            // Check for file deletion signal
+            // Check for file deletion signal (from file_options)
             let deleted_file: Option<String> = ctx.data_mut(|d| d.get_temp(egui::Id::new("file_deleted_signal")).flatten());
             if let Some(path) = deleted_file {
                 self.tabs.close_tab_by_path(&path);
                 ctx.data_mut(|d| d.insert_temp(egui::Id::new("file_deleted_signal"), None::<String>));
+            }
+
+            // Check for delete file request (from tab menu)
+            let delete_req: Option<String> = ctx.data_mut(|d| d.get_temp(egui::Id::new("delete_file_request")).flatten());
+            if let Some(path) = delete_req {
+                let _ = std::fs::remove_file(&path);
+                self.tabs.close_tab_by_path(&path);
+                ctx.data_mut(|d| d.insert_temp(egui::Id::new("delete_file_request"), None::<String>));
+            }
+
+            // Check for reveal in navigation signal
+            let reveal_req: Option<String> = ctx.data_mut(|d| d.get_temp(egui::Id::new("reveal_in_nav_signal")).flatten());
+            if let Some(path) = reveal_req {
+                self.left_controls.file_tree.reveal_path = Some(path);
+                self.left_collpased = false; // Ensure menu is open
+                ctx.data_mut(|d| d.insert_temp(egui::Id::new("reveal_in_nav_signal"), None::<String>));
+            }
+
+            // Check for open icon selector signal
+            let icon_req: Option<String> = ctx.data_mut(|d| d.get_temp(egui::Id::new("open_icon_selector_signal")).flatten());
+            if let Some(rel_path) = icon_req {
+                self.icon_selector.open(rel_path, &mut self.left_controls.icon_manager);
+                ctx.data_mut(|d| d.insert_temp(egui::Id::new("open_icon_selector_signal"), None::<String>));
             }
 
             if ctx.input(|i| i.modifiers.command && i.key_pressed(egui::Key::O)) {
@@ -288,6 +308,10 @@ impl eframe::App for Marmol {
 
             if ctx.input(|i| i.modifiers.command && i.key_pressed(egui::Key::P)) {
                 self.command_palette.open();
+            }
+
+            if ctx.input(|i| i.modifiers.command && i.key_pressed(egui::Key::F)) {
+                todo!("Find functionality");
             }
 
             self.icon_selector
@@ -409,7 +433,6 @@ tags: [excalidraw]
                 &mut self.prev_window,
                 &mut self.content,
                 &mut self.tabs,
-                &mut self.tabs_counter,
                 &self.window_size,
                 &mut self.command_palette,
             );

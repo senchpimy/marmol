@@ -12,7 +12,7 @@ use crate::tasks;
 use egui::Image;
 use egui::{Frame, Sense, Ui, WidgetText};
 use crate::egui_commonmark::*;
-use crate::egui_dock::{DockArea, DockState, NodeIndex, Style, SurfaceIndex, TabViewer};
+use crate::egui_dock::{DockArea, DockState, NodeIndex, Style, SurfaceIndex, TabViewer, Split, Node};
 use egui_extras::{Size, StripBuilder};
 use serde::{Deserialize, Serialize};
 use std::io::Write;
@@ -139,6 +139,8 @@ pub struct Tabe {
     #[serde(skip)]
     pub is_renaming: bool,
     #[serde(skip)]
+    pub just_started_renaming: bool,
+    #[serde(skip)]
     pub rename_buffer: String,
 }
 
@@ -213,6 +215,7 @@ impl Tabe {
             history: vec![path],
             history_index: 0,
             is_renaming: false,
+            just_started_renaming: false,
             rename_buffer: String::new(),
         }
     }
@@ -230,6 +233,7 @@ impl Tabe {
             history: vec![String::new()],
             history_index: 0,
             is_renaming: false,
+            just_started_renaming: false,
             rename_buffer: String::new(),
         }
     }
@@ -292,6 +296,10 @@ impl TabViewer for MTabViewer<'_> {
         }
     }
 
+    fn id(&mut self, tab: &mut Self::Tab) -> egui::Id {
+        egui::Id::new(tab.id)
+    }
+
     fn ui(&mut self, ui: &mut Ui, tab: &mut Self::Tab) {
         ui.horizontal(|ui| {
             ui.spacing_mut().item_spacing.x = 5.0;
@@ -308,6 +316,10 @@ impl TabViewer for MTabViewer<'_> {
 
             if tab.is_renaming {
                 let res = ui.add(egui::TextEdit::singleline(&mut tab.rename_buffer).frame(false));
+                if tab.just_started_renaming {
+                    res.request_focus();
+                    tab.just_started_renaming = false;
+                }
                 if res.lost_focus() || (res.changed() && ui.input(|i| i.key_pressed(egui::Key::Enter))) {
                     tab.is_renaming = false;
                     let old_path = Path::new(&tab.path);
@@ -369,179 +381,328 @@ impl TabViewer for MTabViewer<'_> {
                     }
                 });
             }
+
+            // Menú de opciones (Tres puntos)
+            if !tab.path.is_empty() {
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    ui.menu_button("⋮", |ui| {
+                        if self.icon_manager.settings.icon_in_title_enabled {
+                            if ui.button("Change icon").clicked() {
+                                let relative_path = if tab.path.starts_with(self.vault) {
+                                    let p = tab.path.strip_prefix(self.vault).unwrap_or(&tab.path);
+                                    p.strip_prefix('/').unwrap_or(p).to_string()
+                                } else {
+                                    tab.path.clone()
+                                };
+                                ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("open_icon_selector_signal"), Some(relative_path)));
+                                ui.close();
+                            }
+                        }
+
+                        if ui.button("Delete file").clicked() {
+                            ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("delete_file_request"), Some(tab.path.clone())));
+                            ui.close();
+                        }
+
+                        if ui.button("Reveal file in navigation").clicked() {
+                            ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("reveal_in_nav_signal"), Some(tab.path.clone())));
+                            ui.close();
+                        }
+
+                        if ui.button("Show in system explorer").clicked() {
+                            let path = Path::new(&tab.path);
+                            #[cfg(target_os = "windows")]
+                            {
+                                std::process::Command::new("explorer")
+                                    .arg(format!("/select,{}", path.to_string_lossy()))
+                                    .spawn()
+                                    .ok();
+                            }
+                            #[cfg(target_os = "macos")]
+                            std::process::Command::new("open").arg("-R").arg(&tab.path).spawn().ok();
+                            #[cfg(target_os = "linux")]
+                            {
+                                let folder = path.parent().unwrap_or(path);
+                                std::process::Command::new("xdg-open").arg(folder).spawn().ok();
+                            }
+                            ui.close();
+                        }
+
+                        if ui.button("Open in default app").clicked() {
+                            #[cfg(target_os = "windows")]
+                            std::process::Command::new("cmd").args(&["/C", "start", "", &tab.path]).spawn().ok();
+                            #[cfg(target_os = "macos")]
+                            std::process::Command::new("open").arg(&tab.path).spawn().ok();
+                            #[cfg(target_os = "linux")]
+                            std::process::Command::new("xdg-open").arg(&tab.path).spawn().ok();
+                            ui.close();
+                        }
+
+                        if ui.button("Open linked view").clicked() {
+                            todo!();
+                        }
+
+                        ui.separator();
+
+                        if ui.button("Copy relative path").clicked() {
+                            let rel = tab.path.strip_prefix(self.vault).unwrap_or(&tab.path);
+                            let rel = rel.strip_prefix('/').unwrap_or(rel);
+                            ui.ctx().copy_text(rel.to_string());
+                            ui.close();
+                        }
+
+                        if ui.button("Copy path").clicked() {
+                            ui.ctx().copy_text(tab.path.clone());
+                            ui.close();
+                        }
+
+                        if ui.button("Copy Obsidian url").clicked() {
+                            todo!();
+                        }
+
+                        ui.separator();
+
+                        if ui.button("Find (Ctrl+F)").clicked() {
+                            todo!("Shortcut Ctrl+F added to main loop");
+                        }
+
+                        if ui.button("Add file property").clicked() {
+                            todo!();
+                        }
+
+                        if ui.button("Bookmark").clicked() {
+                            todo!();
+                        }
+
+                        if ui.button("Rename").clicked() {
+                            tab.is_renaming = true;
+                            tab.just_started_renaming = true;
+                            tab.rename_buffer = tab.title.clone();
+                            ui.close();
+                        }
+
+                        ui.separator();
+
+                        if ui.button("Split down").clicked() {
+                            ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("split_down_signal"), Some(tab.clone())));
+                            ui.close();
+                        }
+
+                        if ui.button("Split right").clicked() {
+                            ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("split_right_signal"), Some(tab.clone())));
+                            ui.close();
+                        }
+
+                        if ui.button("Reading view").clicked() {
+                            if is_kanban_file {
+                                let is_currently_kanban = matches!(tab.content, TabContent::Kanban { .. });
+                                if is_currently_kanban {
+                                    let mut editor = easy_mark::EasyMarkEditor::default();
+                                    editor.code = files::read_file(&tab.path);
+                                    tab.content = TabContent::Markdown {
+                                        editor,
+                                        cache: CommonMarkCache::default(),
+                                    };
+                                    tab.ctype = Content::View;
+                                } else {
+                                    let mut gui = kanban::KanbanGui::default();
+                                    gui.set_path(&tab.path);
+                                    tab.content = TabContent::Kanban {
+                                        path: tab.path.clone(),
+                                        gui,
+                                    };
+                                }
+                            } else {
+                                tab.ctype = match tab.ctype {
+                                    Content::View => Content::Edit,
+                                    _ => Content::View,
+                                };
+                            }
+                            ui.close();
+                        }
+
+                        if ui.button("Mostrar backlinks").clicked() {
+                            todo!();
+                        }
+                    });
+                });
+            }
         });
         ui.separator();
 
-        match &mut tab.content {
-            TabContent::Graph { vault_path, state } => {
-                if state.is_none() {
-                    *state = Some(Box::new(crate::graph::Graph::new(
-                        vault_path,
-                        ui.ctx(),
-                    )));
-                }
+        ui.push_id(tab.id, |ui| {
+            let seed_id = ui.id();
+            match &mut tab.content {
+                TabContent::Graph { vault_path, state } => {
+                    if state.is_none() {
+                        *state = Some(Box::new(crate::graph::Graph::new(
+                            vault_path,
+                            ui.ctx(),
+                        )));
+                    }
 
-                if let Some(graph) = state {
-                    //graph.ui(ui, self.current_file, self.content, vault_path);
-
-                    crate::graph::draw_ui(
-                        graph,
-                        ui,
-                        self.current_file,
-                        self.content,
-                        vault_path,
-                    );
+                    if let Some(graph) = state {
+                        crate::graph::draw_ui(
+                            graph,
+                            ui,
+                            self.current_file,
+                            self.content,
+                            vault_path,
+                            seed_id,
+                        );
+                    }
                 }
-            }
-            TabContent::Excalidraw { path, gui } => {
-                gui.set_path(path);
-                gui.show(ui, self.vault);
-            }
-            TabContent::Image(image_path) => {
-                egui::ScrollArea::vertical()
-                    .id_salt(format!("{}", tab.id))
-                    .show(ui, |ui| {
-                        let img = Image::from_uri(format!("file://{}", image_path));
-                        ui.add(img);
-                    });
-            }
-            TabContent::Income { path, gui } => {
-                gui.set_path(path);
-                gui.show(ui);
-            }
-            TabContent::Tasks { path, gui } => {
-                gui.set_path(path);
-                gui.show(ui);
-            }
-            TabContent::Canvas { path, gui } => {
-                gui.set_path(path);
-                gui.show(ui, self.vault);
-            }
-            TabContent::Kanban { path, gui } => {
-                gui.set_path(path);
-                if let Some(new_path) = gui.show(ui, self.vault) {
-                     *self.current_file = new_path.clone();
-                     update_tab_content(tab, &new_path, false);
+                TabContent::Excalidraw { path, gui } => {
+                    gui.set_path(path);
+                    gui.show(ui, self.vault, seed_id);
                 }
-            }
-            TabContent::Markdown { editor, cache } => {
-                if tab.ctype == Content::View {
-                    let cont = StripBuilder::new(ui)
-                        .size(Size::relative(0.15))
-                        .size(Size::relative(0.65));
-                    cont.horizontal(|mut strip| {
-                        strip.cell(|_| {});
-                        strip.cell(|ui| {
-                            egui::ScrollArea::vertical().show(ui, |ui| {
-                                editor.code = files::read_file(&tab.path);
-                                let frame =
-                                    Frame::NONE.inner_margin(egui::Margin::symmetric(30, 10));
-                                let inner_response = frame.show(ui, |ui| {
-                                    let (markdown_content, metadata) = files::contents(&editor.code);
-                                    
-                                    if self.icon_manager.settings.icon_in_title_enabled {
-                                        let relative_path = if tab.path.starts_with(self.vault) {
-                                            let p = tab.path.strip_prefix(self.vault).unwrap_or(&tab.path);
-                                            p.strip_prefix('/').unwrap_or(p).to_string()
-                                        } else {
-                                            tab.path.clone()
-                                        };
+                TabContent::Image(image_path) => {
+                    egui::ScrollArea::vertical()
+                        .id_salt(seed_id.with("img_scroll"))
+                        .show(ui, |ui| {
+                            let img = Image::from_uri(format!("file://{}", image_path));
+                            ui.add(img);
+                        });
+                }
+                TabContent::Income { path, gui } => {
+                    gui.set_path(path);
+                    gui.show(ui, seed_id);
+                }
+                TabContent::Tasks { path, gui } => {
+                    gui.set_path(path);
+                    gui.show(ui, seed_id);
+                }
+                TabContent::Canvas { path, gui } => {
+                    gui.set_path(path);
+                    gui.show(ui, self.vault);
+                }
+                TabContent::Kanban { path, gui } => {
+                    gui.set_path(path);
+                    if let Some(new_path) = gui.show(ui, self.vault, seed_id) {
+                         *self.current_file = new_path.clone();
+                         update_tab_content(tab, &new_path, false);
+                    }
+                }
+                
+                TabContent::Markdown { editor, cache } => {
+                    if tab.ctype == Content::View {
+                        let cont = StripBuilder::new(ui)
+                            .size(Size::relative(0.15))
+                            .size(Size::relative(0.65));
+                        cont.horizontal(|mut strip| {
+                            strip.cell(|_| {});
+                            strip.cell(|ui| {
+                                egui::ScrollArea::vertical().show(ui, |ui| {
+                                    editor.code = files::read_file(&tab.path);
+                                    let frame =
+                                        Frame::NONE.inner_margin(egui::Margin::symmetric(30, 10));
+                                    let inner_response = frame.show(ui, |ui| {
+                                        let (markdown_content, metadata) = files::contents(&editor.code);
                                         
-                                        let icon_str = self.icon_manager.get_icon(&relative_path);
-                                        
-                                        if let Some(icon_id) = icon_str.filter(|s| !s.is_empty()) {
-                                            ui.horizontal(|ui| {
-                                                 if let Some(IconSource::Bytes(bytes)) = self.icon_manager.get_icon_source(icon_id) {
-                                                     ui.add(egui::Image::from_bytes(
-                                                         format!("bytes://title_{}.svg", icon_id),
-                                                         bytes,
-                                                     ).fit_to_exact_size(egui::vec2(20.0, 20.0)));
-                                                 } else {
-                                                     // Fallback for emojis
-                                                     ui.label(egui::RichText::new(icon_id).size(20.0));
-                                                 }
+                                        if self.icon_manager.settings.icon_in_title_enabled {
+                                            let relative_path = if tab.path.starts_with(self.vault) {
+                                                let p = tab.path.strip_prefix(self.vault).unwrap_or(&tab.path);
+                                                p.strip_prefix('/').unwrap_or(p).to_string()
+                                            } else {
+                                                tab.path.clone()
+                                            };
+                                            
+                                            let icon_str = self.icon_manager.get_icon(&relative_path);
+                                            
+                                            if let Some(icon_id) = icon_str.filter(|s| !s.is_empty()) {
+                                                ui.horizontal(|ui| {
+                                                     if let Some(IconSource::Bytes(bytes)) = self.icon_manager.get_icon_source(icon_id) {
+                                                         ui.add(egui::Image::from_bytes(
+                                                             format!("bytes://title_{}.svg", icon_id),
+                                                             bytes,
+                                                         ).fit_to_exact_size(egui::vec2(20.0, 20.0)));
+                                                     } else {
+                                                         // Fallback for emojis
+                                                         ui.label(egui::RichText::new(icon_id).size(20.0));
+                                                     }
+                                                     ui.heading(&tab.title);
+                                                });
+                                            } else {
                                                  ui.heading(&tab.title);
-                                            });
+                                            }
                                         } else {
-                                             ui.heading(&tab.title);
+                                            ui.heading(&tab.title);
                                         }
-                                    } else {
-                                        ui.heading(&tab.title);
-                                    }
 
-                                    if !metadata.is_empty() {
-                                        create_metadata(metadata, ui);
-                                    }
-                                    
-                                    // Store context for the 'static closure
-                                    let ctx = ui.ctx().clone();
-                                    ctx.data_mut(|d| {
-                                        d.insert_temp(egui::Id::new("nav_vault"), self.vault.to_string());
-                                        d.insert_temp(egui::Id::new("nav_current_path"), tab.path.clone());
+                                        if !metadata.is_empty() {
+                                            create_metadata(metadata, ui);
+                                        }
+                                        
+                                        // Store context for the 'static closure
+                                        let ctx = ui.ctx().clone();
+                                        ctx.data_mut(|d| {
+                                            d.insert_temp(egui::Id::new("nav_vault"), self.vault.to_string());
+                                            d.insert_temp(egui::Id::new("nav_current_path"), tab.path.clone());
+                                        });
+
+                                        CommonMarkViewer::new()
+                                            .process_link(Some(&|ui, url, layout| {
+                                                let response = ui.link(layout);
+                                                if response.clicked() {
+                                                    let ctx = ui.ctx();
+                                                    let vault: String = ctx.data(|d| d.get_temp(egui::Id::new("nav_vault")).unwrap_or_default());
+                                                    let current_path: String = ctx.data(|d| d.get_temp(egui::Id::new("nav_current_path")).unwrap_or_default());
+                                                    
+                                                    let decoded_url = percent_encoding::percent_decode_str(url).decode_utf8_lossy().to_string();
+                                                    let clean_url = decoded_url.split('|').next().unwrap_or(&decoded_url).trim();
+                                                    
+                                                    let resolved = crate::files::resolve_path(&vault, &current_path, clean_url);
+
+                                                    if let Some(path) = resolved {
+                                                        ctx.data_mut(|d| d.insert_temp(egui::Id::new("global_nav_request"), Some(path)));
+                                                    }
+                                                }
+                                                true 
+                                            }))
+                                            .show(ui, cache, &markdown_content);
+                                        
+                                        ui.allocate_space(ui.available_size());
                                     });
 
-                                    CommonMarkViewer::new()
-                                        .process_link(Some(&|ui, url, layout| {
-                                            let response = ui.link(layout);
-                                            if response.clicked() {
-                                                let ctx = ui.ctx();
-                                                let vault: String = ctx.data(|d| d.get_temp(egui::Id::new("nav_vault")).unwrap_or_default());
-                                                let current_path: String = ctx.data(|d| d.get_temp(egui::Id::new("nav_current_path")).unwrap_or_default());
-                                                
-                                                let decoded_url = percent_encoding::percent_decode_str(url).decode_utf8_lossy().to_string();
-                                                let clean_url = decoded_url.split('|').next().unwrap_or(&decoded_url).trim();
-                                                
-                                                let resolved = crate::files::resolve_path(&vault, &current_path, clean_url);
-
-                                                if let Some(path) = resolved {
-                                                    ctx.data_mut(|d| d.insert_temp(egui::Id::new("global_nav_request"), Some(path)));
-                                                }
-                                            }
-                                            true 
-                                        }))
-                                        .show(ui, cache, &markdown_content);
-                                    
-                                    ui.allocate_space(ui.available_size());
-                                });
-
-                                if ui.input(|i| i.pointer.button_double_clicked(egui::PointerButton::Primary)) {
-                                    if ui.rect_contains_pointer(inner_response.response.rect) {
-                                        tab.ctype = Content::Edit;
+                                    if ui.input(|i| i.pointer.button_double_clicked(egui::PointerButton::Primary)) {
+                                        if ui.rect_contains_pointer(inner_response.response.rect) {
+                                            tab.ctype = Content::Edit;
+                                        }
                                     }
-                                }
+                                });
                             });
                         });
-                    });
-                } else if tab.ctype == Content::Edit {
-                    let cont = StripBuilder::new(ui)
-                        .size(Size::relative(0.25))
-                        .size(Size::relative(0.5));
-                    cont.horizontal(|mut strip| {
-                        strip.cell(|_| {});
-                        strip.cell(|ui| {
-                            egui::ScrollArea::vertical().show(ui, |ui| {
-                                let response = editor.ui(ui);
-                                if response.changed() {
-                                    let mut f = std::fs::OpenOptions::new()
-                                        .write(true)
-                                        .truncate(true)
-                                        .open(&tab.path)
-                                        .unwrap();
-                                    f.write_all(editor.code.as_bytes()).unwrap();
-                                    f.flush().unwrap();
-                                }
-                                if ui.input(|i| i.key_pressed(egui::Key::Escape)) {
-                                    tab.ctype = Content::View;
-                                }
+                    } else if tab.ctype == Content::Edit {
+                        let cont = StripBuilder::new(ui)
+                            .size(Size::relative(0.25))
+                            .size(Size::relative(0.5));
+                        cont.horizontal(|mut strip| {
+                            strip.cell(|_| {});
+                            strip.cell(|ui| {
+                                egui::ScrollArea::vertical().show(ui, |ui| {
+                                    let response = editor.ui(ui);
+                                    if response.changed() {
+                                        let mut f = std::fs::OpenOptions::new()
+                                            .write(true)
+                                            .truncate(true)
+                                            .open(&tab.path)
+                                            .unwrap();
+                                        f.write_all(editor.code.as_bytes()).unwrap();
+                                        f.flush().unwrap();
+                                    }
+                                    if ui.input(|i| i.key_pressed(egui::Key::Escape)) {
+                                        tab.ctype = Content::View;
+                                    }
+                                });
                             });
                         });
-                    });
+                    }
+                }
+                TabContent::Empty => {
+                    ui.label("Empty tab content.");
                 }
             }
-            TabContent::Empty => {
-                ui.label("Empty tab content.");
-            }
-        }
+        });
 
         let nav_req: Option<String> = ui.ctx().data_mut(|d| d.get_temp(egui::Id::new("global_nav_request")).flatten());
         if let Some(path) = nav_req {
@@ -726,6 +887,33 @@ impl Tabs {
             self.close_current_tab();
         }
 
+        // Handle Split Signals
+        let split_down: Option<Tabe> = ui.ctx().data_mut(|d| d.get_temp(egui::Id::new("split_down_signal")).flatten());
+        if let Some(mut tab) = split_down {
+            if let Some((surf, node)) = self.tree.focused_leaf() {
+                self.counter += 1;
+                while self.tree.iter_all_tabs().any(|(_, t)| t.id == self.counter) {
+                     self.counter += 1;
+                }
+                tab.id = self.counter;
+                self.tree.split((surf, node), Split::Below, 0.5, Node::leaf(tab));
+            }
+            ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("split_down_signal"), None::<Tabe>));
+        }
+
+        let split_right: Option<Tabe> = ui.ctx().data_mut(|d| d.get_temp(egui::Id::new("split_right_signal")).flatten());
+        if let Some(mut tab) = split_right {
+            if let Some((surf, node)) = self.tree.focused_leaf() {
+                self.counter += 1;
+                while self.tree.iter_all_tabs().any(|(_, t)| t.id == self.counter) {
+                     self.counter += 1;
+                }
+                tab.id = self.counter;
+                self.tree.split((surf, node), Split::Right, 0.5, Node::leaf(tab));
+            }
+            ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("split_right_signal"), None::<Tabe>));
+        }
+
         let mut added_nodes = Vec::new();
         let tab_viewer = &mut MTabViewer {
             added_nodes: &mut added_nodes,
@@ -744,6 +932,9 @@ impl Tabs {
             let last = self.tree.iter_all_tabs().last();
             let cloned_path = last.unwrap().1.path.clone();
             self.counter += 1;
+            while self.tree.iter_all_tabs().any(|(_, t)| t.id == self.counter) {
+                 self.counter += 1;
+            }
             self.tree
                 .push_to_focused_leaf(Tabe::new(self.counter, cloned_path));
         });
@@ -760,6 +951,9 @@ impl Tabs {
             update_tab_content(tab, &path.to_string(), false);
         } else {
             self.counter += 1;
+            while self.tree.iter_all_tabs().any(|(_, t)| t.id == self.counter) {
+                 self.counter += 1;
+            }
             let new_tab = Tabe::new(self.counter, path.to_string());
             self.tree.push_to_first_leaf(new_tab);
         }
@@ -767,6 +961,14 @@ impl Tabs {
 
     pub fn add_tab(&mut self, tab: Tabe) {
         self.tree.push_to_focused_leaf(tab);
+    }
+
+    pub fn add_graph_tab(&mut self, vault: &str) {
+        self.counter += 1;
+        while self.tree.iter_all_tabs().any(|(_, t)| t.id == self.counter) {
+             self.counter += 1;
+        }
+        self.tree.push_to_focused_leaf(Tabe::new_graph(self.counter, vault));
     }
 
     pub fn dock_state(&self) -> &DockState<Tabe> {

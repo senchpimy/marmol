@@ -7,7 +7,7 @@ use walkdir::WalkDir;
 
 use egui::{
     Color32, ColorImage, Context, PointerButton, Pos2, Rect,
-    Sense, Stroke, TextureHandle, TextureOptions, Ui, Vec2,
+    Sense, Stroke, TextureHandle, TextureOptions, Ui, Vec2, Id,
 };
 use image::imageops::FilterType;
 use serde::{Deserialize, Serialize};
@@ -234,7 +234,7 @@ tags: [excalidraw]
         None
     }
 
-    pub fn show(&mut self, ui: &mut Ui, vault: &str) {
+    pub fn show(&mut self, ui: &mut Ui, vault: &str, _seed_id: Id) {
         if let Some(e) = &self.error_msg {
             ui.colored_label(ui.ctx().style().visuals.error_fg_color, e);
             return;
