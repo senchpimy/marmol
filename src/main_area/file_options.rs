@@ -1,10 +1,8 @@
 use std::fs;
-use std::fs::File;
-use std::io::Write;
 use std::path::Path;
 
+use crate::files;
 use eframe::egui::{Button, RichText};
-use json::{object, JsonValue};
 
 pub fn file_options(
     ui: &mut egui::Ui,
@@ -15,8 +13,6 @@ pub fn file_options(
     error: &mut String,
     vault: &str,
 ) {
-    let stared_path = format!("{}/.obsidian/starred.json", vault);
-
     ui.label(RichText::new(&*error).color(ui.ctx().style().visuals.error_fg_color));
     let copy = egui::Button::new("Copy file").frame(false);
     let star = egui::Button::new("Star this file").frame(false);
@@ -24,53 +20,16 @@ pub fn file_options(
 
     if ui.add(copy).clicked() {
         let tmp = s.to_owned() + ".copy";
-        let s_copy = Path::new(&tmp);
-        let copy = fs::copy(s, &s_copy);
-        match copy {
-            Ok(_) => {
-                *error = String::new();
-                ui.close();
-            }
-            Err(r) => *error = r.to_string(),
-        }
+        files::copy_file(s, &tmp);
     }
 
     if ui.add(star).clicked() {
-        let nw_json = object! {
-            "type":"file",
-            "title":Path::new(path_s).file_stem().unwrap().to_str().unwrap(),
-            "path":"testi"
-        };
-        if Path::new(&stared_path).exists() {
-            let contents =
-                fs::read_to_string(&stared_path).expect("Should have been able to read the file");
-            let mut parsed = json::parse(&contents).unwrap();
-            let json_arr: &mut JsonValue = &mut parsed["items"];
-            json_arr.push(nw_json).unwrap();
-            let mut f = std::fs::OpenOptions::new()
-                .write(true)
-                .truncate(true)
-                .open(stared_path)
-                .unwrap();
-            f.write_all(parsed.pretty(2).as_bytes()).unwrap();
-            f.flush().unwrap();
-        } else {
-            let file = File::create(stared_path);
-            match file {
-                Ok(mut w) => {
-                    let text = format!("{{ items:[{}] }}", nw_json.dump());
-                    match w.write(text.as_bytes()) {
-                        Ok(_) => *error = String::new(),
-                        Err(r) => *error = r.to_string(),
-                    }
-                }
-                Err(r) => *error = r.to_string(),
-            }
-        }
+        files::add_starred(vault, s);
         ui.close();
     }
 
     if ui.button("Rename").clicked() {
+        //TODO Test Funtionality
         *renaming_path = Some(s.to_string());
         *rename = Path::new(s)
             .file_name()
@@ -107,19 +66,7 @@ pub fn file_options(
                 .fill(ui.ctx().style().visuals.error_fg_color);
 
                 if ui.add(btn_yes).clicked() {
-                    let path_to_delete = s.to_string();
-                    let delete = fs::remove_file(s);
-                    match delete {
-                        Ok(_) => {
-                            *error = String::new();
-                            ui.data_mut(|d| d.remove_temp::<bool>(id));
-                            ui.data_mut(|d| d.insert_temp(egui::Id::new("file_deleted_signal"), Some(path_to_delete)));
-                            ui.close();
-                        }
-                        Err(r) => {
-                            *error = r.to_string();
-                        }
-                    }
+                    files::delete_file(s);
                 }
             });
         });
