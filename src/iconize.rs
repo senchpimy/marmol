@@ -132,6 +132,10 @@ impl IconPackInstaller {
             .fixed_size([400.0, 500.0])
             .collapsible(false)
             .show(ctx, |ui| {
+                if ui.input(|i| i.key_pressed(egui::Key::Escape)) {
+                    self.is_open = false;
+                }
+
                 ui.label("Select an icon pack to download and install:");
                 ui.add_space(10.0);
 
@@ -140,12 +144,24 @@ impl IconPackInstaller {
                     ui.label("Downloading and installing...");
                 } else {
                     egui::ScrollArea::vertical().max_height(350.0).show(ui, |ui| {
+                        let icons_base_path = Path::new(vault_path).join(".obsidian/icons");
+                        
                         for pack in &self.packs {
+                            let pack_path = icons_base_path.join(pack.name);
+                            let is_installed = pack_path.exists();
+
                             ui.horizontal(|ui| {
                                 ui.label(egui::RichText::new(pack.display_name).strong());
                                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                                    if ui.button("Install").clicked() {
-                                        pack_to_install = Some(pack.clone());
+                                    if is_installed {
+                                        ui.label(egui::RichText::new("✔ Installed").color(egui::Color32::GREEN));
+                                        if ui.button("Reinstall").clicked() {
+                                            pack_to_install = Some(pack.clone());
+                                        }
+                                    } else {
+                                        if ui.button("Install").clicked() {
+                                            pack_to_install = Some(pack.clone());
+                                        }
                                     }
                                 });
                             });

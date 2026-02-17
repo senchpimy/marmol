@@ -2,9 +2,24 @@ use crate::iconize::{IconManager, IconSelector, IconSource};
 use crate::main_area::file_options::file_options;
 use crate::main_area::left_controls::enums::SortOrder;
 use eframe::egui::{self, Id, Popup, PopupCloseBehavior, Sense, Vec2};
+use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
-use std::time::SystemTime;
+use std::time::{Duration, SystemTime};
+
+#[derive(Clone)]
+struct FileEntry {
+    path: String,
+    is_dir: bool,
+    modified: SystemTime,
+    created: SystemTime,
+    file_name: String,
+}
+
+struct CachedDir {
+    entries: Vec<FileEntry>,
+    last_updated: SystemTime,
+}
 
 pub struct FileTree {
     pub sort_order: SortOrder,
@@ -14,6 +29,7 @@ pub struct FileTree {
     pub new_folder_name: String,
     pub creating_folder_in: Option<String>,
     pub reveal_path: Option<String>,
+    cache: HashMap<String, CachedDir>,
 }
 
 impl Default for FileTree {
@@ -26,6 +42,7 @@ impl Default for FileTree {
             new_folder_name: String::new(),
             creating_folder_in: None,
             reveal_path: None,
+            cache: HashMap::new(),
         }
     }
 }
@@ -46,55 +63,83 @@ impl FileTree {
         let indent_step = 12.0;
         let current_indent = depth as f32 * indent_step;
 
-        let read_d = fs::read_dir(path);
-        let entrys = match read_d {
-            Ok(t) => t,
-            Err(r) => {
-                ui.label("Nothing to see here");
-                ui.label(egui::RichText::new(r.to_string()).strong());
-                return;
-            }
+        // Caching Logic
+        let now = SystemTime::now();
+        let should_update = if let Some(cached) = self.cache.get(path) {
+            now.duration_since(cached.last_updated)
+                .unwrap_or(Duration::from_secs(0))
+                > Duration::from_secs(2) // Refresh every 2 seconds
+        } else {
+            true
         };
 
-        let mut entrys_vec: Vec<String> = Vec::new();
-        for entry in entrys {
-            if let Ok(e) = entry {
-                entrys_vec.push(e.path().to_str().unwrap().to_string());
+        if should_update {
+            if let Ok(read_d) = fs::read_dir(path) {
+                let mut entries = Vec::new();
+                for entry in read_d.flatten() {
+                    let path_buf = entry.path();
+                    let metadata = fs::metadata(&path_buf).ok();
+                    let modified = metadata
+                        .as_ref() 
+                        .and_then(|m| m.modified().ok())
+                        .unwrap_or(SystemTime::UNIX_EPOCH);
+                    let created = metadata
+                        .as_ref()
+                        .and_then(|m| m.created().ok())
+                        .unwrap_or(SystemTime::UNIX_EPOCH);
+                    let is_dir = path_buf.is_dir();
+                    let file_name = path_buf
+                        .file_name()
+                        .and_then(|n| n.to_str())
+                        .unwrap_or("unknown")
+                        .to_string();
+
+                    entries.push(FileEntry {
+                        path: path_buf.to_string_lossy().to_string(),
+                        is_dir,
+                        modified,
+                        created,
+                        file_name,
+                    });
+                }
+                self.cache.insert(
+                    path.to_string(),
+                    CachedDir {
+                        entries,
+                        last_updated: now,
+                    },
+                );
+            } else {
+                // If reading fails and we have no cache, show error (or just nothing)
+                if !self.cache.contains_key(path) {
+                     ui.label("Unable to read directory");
+                     return;
+                }
             }
         }
 
-        entrys_vec.sort_by(|a, b| {
-            let path_a = Path::new(a);
-            let path_b = Path::new(b);
-            let get_modified = |p: &Path| {
-                fs::metadata(p)
-                    .and_then(|m| m.modified())
-                    .unwrap_or(SystemTime::UNIX_EPOCH)
-            };
-            let get_created = |p: &Path| {
-                fs::metadata(p)
-                    .and_then(|m| m.created())
-                    .unwrap_or(SystemTime::UNIX_EPOCH)
-            };
+        let mut entrys_vec = if let Some(cached) = self.cache.get(path) {
+            cached.entries.clone()
+        } else {
+            Vec::new()
+        };
 
-            match self.sort_order {
-                SortOrder::NameAZ => {
-                    let a_is_dir = path_a.is_dir();
-                    let b_is_dir = path_b.is_dir();
-                    if a_is_dir && !b_is_dir {
-                        std::cmp::Ordering::Less
-                    } else if !a_is_dir && b_is_dir {
-                        std::cmp::Ordering::Greater
-                    } else {
-                        path_a.file_name().cmp(&path_b.file_name())
-                    }
+        // Sorting (now in memory, fast)
+        entrys_vec.sort_by(|a, b| match self.sort_order {
+            SortOrder::NameAZ => {
+                if a.is_dir && !b.is_dir {
+                    std::cmp::Ordering::Less
+                } else if !a.is_dir && b.is_dir {
+                    std::cmp::Ordering::Greater
+                } else {
+                    a.file_name.cmp(&b.file_name)
                 }
-                SortOrder::NameZA => path_b.file_name().cmp(&path_a.file_name()),
-                SortOrder::ModifiedNewOld => get_modified(path_b).cmp(&get_modified(path_a)),
-                SortOrder::ModifiedOldNew => get_modified(path_a).cmp(&get_modified(path_b)),
-                SortOrder::CreatedNewOld => get_created(path_b).cmp(&get_created(path_a)),
-                SortOrder::CreatedOldNew => get_created(path_a).cmp(&get_created(path_b)),
             }
+            SortOrder::NameZA => b.file_name.cmp(&a.file_name),
+            SortOrder::ModifiedNewOld => b.modified.cmp(&a.modified),
+            SortOrder::ModifiedOldNew => a.modified.cmp(&b.modified),
+            SortOrder::CreatedNewOld => b.created.cmp(&a.created),
+            SortOrder::CreatedOldNew => a.created.cmp(&b.created),
         });
 
         if self.creating_folder_in.as_deref() == Some(path) {
@@ -109,6 +154,8 @@ impl FileTree {
                         if fs::create_dir(&new_path).is_ok() {
                             self.creating_folder_in = None;
                             self.new_folder_name.clear();
+                            // Invalidate cache for this directory immediately
+                            self.cache.remove(path);
                         } else {
                             self.menu_error = "Failed to create folder".to_string();
                         }
@@ -122,18 +169,16 @@ impl FileTree {
             });
         }
 
-        for file_location in entrys_vec {
-            let path_obj = Path::new(&file_location);
-            let is_dir = path_obj.is_dir();
-            let file_name = path_obj
-                .file_name()
-                .and_then(|n| n.to_str())
-                .unwrap_or("unknown");
+        for file_entry in entrys_vec {
+            let file_location = file_entry.path;
+            let is_dir = file_entry.is_dir;
+            let file_name = file_entry.file_name;
 
-            let relative_path = if let Ok(rel) = path_obj.strip_prefix(vault) {
+            // Reuse path logic...
+            let relative_path = if let Ok(rel) = Path::new(&file_location).strip_prefix(vault) {
                 rel.to_string_lossy().replace('\\', "/")
             } else {
-                file_name.to_string()
+                file_name.clone()
             };
 
             let mut icon_id: Option<String> = None;
@@ -171,7 +216,7 @@ impl FileTree {
                         let res = ui.text_edit_singleline(&mut self.rename);
                         res.request_focus();
                         if ui.input(|i| i.key_pressed(egui::Key::Enter)) {
-                            let new_path = path_obj.parent().unwrap().join(&self.rename);
+                            let new_path = Path::new(&file_location).parent().unwrap().join(&self.rename);
                             if fs::rename(&file_location, &new_path).is_ok() {
                                 // Update icons
                                 let old_rel = Path::new(&file_location)
@@ -188,6 +233,10 @@ impl FileTree {
                                     *current_file = new_path.to_str().unwrap().to_string();
                                 }
                                 self.renaming_path = None;
+                                // Invalidate cache of parent
+                                if let Some(parent) = Path::new(&file_location).parent() {
+                                    self.cache.remove(parent.to_str().unwrap());
+                                }
                             } else {
                                 self.menu_error = "Failed to rename folder".to_string();
                             }
@@ -273,17 +322,14 @@ impl FileTree {
                                 }
                             }
 
-                                                    // Nombre
-
-                                                    let has_icon = icon_id.as_ref().map_or(false, |s| !s.is_empty());
-
-                                                    let text_offset = if has_icon { 34.0 } else { 18.0 };
-
-                                                    let text_pos = rect.left_center() + egui::vec2(current_indent + text_offset, 0.0);
+                            // Nombre
+                            let has_icon = icon_id.as_ref().map_or(false, |s| !s.is_empty());
+                            let text_offset = if has_icon { 34.0 } else { 18.0 };
+                            let text_pos = rect.left_center() + egui::vec2(current_indent + text_offset, 0.0);
                             ui.painter().text(
                                 text_pos,
                                 egui::Align2::LEFT_CENTER,
-                                file_name,
+                                file_name.clone(),
                                 egui::FontId::proportional(14.0),
                                 ui.style().visuals.text_color(),
                             );
@@ -298,13 +344,13 @@ impl FileTree {
                     }
                     if response.double_clicked() {
                         self.renaming_path = Some(file_location.clone());
-                        self.rename = file_name.to_string();
+                        self.rename = file_name.clone();
                     }
 
-                                    Popup::context_menu(&response)
-                                        .close_behavior(PopupCloseBehavior::CloseOnClickOutside)
-                                        .id(Id::new("ctx_dir").with(&file_location))
-                                        .show(|ui| {                            if ui.button("New Folder").clicked() {
+                    Popup::context_menu(&response)
+                        .close_behavior(PopupCloseBehavior::CloseOnClickOutside)
+                        .id(Id::new("ctx_dir").with(&file_location))
+                        .show(|ui| {                            if ui.button("New Folder").clicked() {
                                 self.creating_folder_in = Some(file_location.clone());
                                 self.new_folder_name = "New Folder".to_string();
                                 ui.close();
@@ -352,6 +398,9 @@ impl FileTree {
                                 if *current_file == source_str {
                                     *current_file = target_path.to_str().unwrap().to_string();
                                 }
+                                // Invalidate caches
+                                if let Some(p) = Path::new(source_str).parent() { self.cache.remove(p.to_str().unwrap()); }
+                                self.cache.remove(&file_location);
                             }
                         }
                     }
@@ -381,7 +430,7 @@ impl FileTree {
                         let res = ui.text_edit_singleline(&mut self.rename);
                         res.request_focus();
                         if ui.input(|i| i.key_pressed(egui::Key::Enter)) {
-                            let new_path = path_obj.parent().unwrap().join(&self.rename);
+                            let new_path = Path::new(&file_location).parent().unwrap().join(&self.rename);
                             if fs::rename(&file_location, &new_path).is_ok() {
                                 // Update icons
                                 let old_rel = Path::new(&file_location).strip_prefix(vault).map(|p| p.to_string_lossy().replace('\\', "/")).unwrap_or_else(|_| file_location.clone());
@@ -392,6 +441,10 @@ impl FileTree {
                                     *current_file = new_path.to_str().unwrap().to_string();
                                 }
                                 self.renaming_path = None;
+                                // Invalidate parent cache
+                                if let Some(parent) = Path::new(&file_location).parent() {
+                                    self.cache.remove(parent.to_str().unwrap());
+                                }
                             }
                         } else if ui.input(|i| i.key_pressed(egui::Key::Escape)) {
                             self.renaming_path = None;
@@ -453,7 +506,7 @@ impl FileTree {
                         ui.painter().text(
                             rect.left_center() + egui::vec2(current_indent + text_offset, 0.0),
                             egui::Align2::LEFT_CENTER,
-                            file_name,
+                            file_name.clone(),
                             egui::FontId::proportional(14.0),
                             text_color,
                         );
@@ -468,7 +521,7 @@ impl FileTree {
                     }
                     if response.double_clicked() {
                         self.renaming_path = Some(file_location.clone());
-                        self.rename = file_name.to_string();
+                        self.rename = file_name.clone();
                     }
 
                     Popup::context_menu(&response)

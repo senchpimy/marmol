@@ -1,8 +1,11 @@
-use serde::{Deserialize, Serialize};
-use egui::{Color32, Id, Image, Pos2, Rect, Scene, Sense, Stroke, Ui, Vec2, PointerButton, StrokeKind, DragPanButtons};
-use std::fs;
-use std::collections::{HashMap, HashSet};
 use crate::egui_commonmark::{CommonMarkCache, CommonMarkViewer};
+use egui::{
+    Color32, DragPanButtons, Id, Image, PointerButton, Pos2, Rect, Scene, Sense, Stroke,
+    StrokeKind, Ui, Vec2,
+};
+use serde::{Deserialize, Serialize};
+use std::collections::{HashMap, HashSet};
+use std::fs;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(tag = "type")]
@@ -42,6 +45,83 @@ pub enum CanvasNode {
     },
 }
 
+impl CanvasNode {
+    #[inline]
+    fn id(&self) -> &str {
+        match self {
+            Self::File { id, .. } | Self::Text { id, .. } | Self::Group { id, .. } => id,
+        }
+    }
+
+    #[inline]
+    fn rect(&self) -> Rect {
+        let (x, y, w, h) = match self {
+            Self::File {
+                x,
+                y,
+                width,
+                height,
+                ..
+            }
+            | Self::Text {
+                x,
+                y,
+                width,
+                height,
+                ..
+            }
+            | Self::Group {
+                x,
+                y,
+                width,
+                height,
+                ..
+            } => (*x, *y, *width, *height),
+        };
+        Rect::from_min_size(Pos2::new(x, y), Vec2::new(w, h))
+    }
+
+    #[inline]
+    fn color(&self) -> Option<&str> {
+        match self {
+            Self::File { color, .. } | Self::Text { color, .. } | Self::Group { color, .. } => {
+                color.as_deref()
+            }
+        }
+    }
+
+    #[inline]
+    fn set_color(&mut self, c: Option<String>) {
+        match self {
+            Self::File { color, .. } | Self::Text { color, .. } | Self::Group { color, .. } => {
+                *color = c;
+            }
+        }
+    }
+
+    #[inline]
+    fn translate(&mut self, delta: Vec2) {
+        match self {
+            Self::File { x, y, .. } | Self::Text { x, y, .. } | Self::Group { x, y, .. } => {
+                *x += delta.x;
+                *y += delta.y;
+            }
+        }
+    }
+
+    #[inline]
+    fn side_pos(&self, side: &str) -> Pos2 {
+        let rect = self.rect();
+        match side {
+            "top" => Pos2::new(rect.center().x, rect.top()),
+            "bottom" => Pos2::new(rect.center().x, rect.bottom()),
+            "left" => Pos2::new(rect.left(), rect.center().y),
+            "right" => Pos2::new(rect.right(), rect.center().y),
+            _ => rect.center(),
+        }
+    }
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct CanvasEdge {
@@ -62,10 +142,54 @@ pub struct CanvasData {
     pub edges: Vec<CanvasEdge>,
 }
 
+impl CanvasData {
+    fn find_node(&self, id: &str) -> Option<&CanvasNode> {
+        self.nodes.iter().find(|n| n.id() == id)
+    }
+
+    fn find_node_mut(&mut self, id: &str) -> Option<&mut CanvasNode> {
+        self.nodes.iter_mut().find(|n| n.id() == id)
+    }
+}
+
 #[derive(PartialEq, Clone)]
 pub enum PickerType {
     Markdown,
     Media,
+}
+
+// Cache para colores parseados
+struct ColorCache {
+    cache: HashMap<String, Color32>,
+}
+
+impl ColorCache {
+    fn new() -> Self {
+        let mut cache = HashMap::new();
+        cache.insert("1".to_string(), Color32::from_rgb(255, 0, 0));
+        cache.insert("2".to_string(), Color32::from_rgb(0, 255, 0));
+        cache.insert("3".to_string(), Color32::from_rgb(0, 0, 255));
+        Self { cache }
+    }
+
+    fn get(&mut self, color: &str) -> Option<Color32> {
+        if let Some(&c) = self.cache.get(color) {
+            return Some(c);
+        }
+
+        if color.starts_with('#') && color.len() == 7 {
+            if let (Ok(r), Ok(g), Ok(b)) = (
+                u8::from_str_radix(&color[1..3], 16),
+                u8::from_str_radix(&color[3..5], 16),
+                u8::from_str_radix(&color[5..7], 16),
+            ) {
+                let parsed = Color32::from_rgb(r, g, b);
+                self.cache.insert(color.to_string(), parsed);
+                return Some(parsed);
+            }
+        }
+        None
+    }
 }
 
 pub struct CanvasGui {
@@ -75,14 +199,17 @@ pub struct CanvasGui {
     pub is_dirty: bool,
     pub commonmark_cache: CommonMarkCache,
     pub file_cache: HashMap<String, String>,
-    
+
     pub drag_edge_start: Option<(String, String)>,
     pub selected_node_ids: HashSet<String>,
     pub editing_node_id: Option<String>,
     pub show_file_picker: Option<PickerType>,
-    
-    // Selection marquee
     pub selection_start: Option<Pos2>,
+
+    // Caches adicionales
+    color_cache: ColorCache,
+    node_index: HashMap<String, usize>, // Para búsquedas O(1)
+    visible_nodes: Vec<usize>,          // Nodos visibles en el viewport
 }
 
 impl Default for CanvasGui {
@@ -99,6 +226,9 @@ impl Default for CanvasGui {
             editing_node_id: None,
             show_file_picker: None,
             selection_start: None,
+            color_cache: ColorCache::new(),
+            node_index: HashMap::new(),
+            visible_nodes: Vec::new(),
         }
     }
 }
@@ -115,6 +245,7 @@ impl CanvasGui {
         if let Ok(content) = fs::read_to_string(&self.path) {
             if let Ok(data) = serde_json::from_str::<CanvasData>(&content) {
                 self.data = data;
+                self.rebuild_node_index();
                 self.is_dirty = false;
             }
         }
@@ -127,230 +258,556 @@ impl CanvasGui {
         }
     }
 
+    fn rebuild_node_index(&mut self) {
+        self.node_index.clear();
+        for (idx, node) in self.data.nodes.iter().enumerate() {
+            self.node_index.insert(node.id().to_string(), idx);
+        }
+    }
+
+    // Culling: solo procesar nodos visibles
+    fn update_visible_nodes(&mut self, viewport: Rect) {
+        self.visible_nodes.clear();
+        let expanded = viewport.expand(100.0); // Margen para suavizar
+
+        for (idx, node) in self.data.nodes.iter().enumerate() {
+            if node.rect().intersects(expanded) {
+                self.visible_nodes.push(idx);
+            }
+        }
+    }
+
     pub fn show(&mut self, ui: &mut Ui, vault: &str) {
         let unique_id = ui.id();
         let scene = Scene::new()
             .zoom_range(0.01..=10.0)
             .drag_pan_buttons(DragPanButtons::MIDDLE);
+
         let mut scene_rect = self.scene_rect;
-        
-        let mut data = std::mem::take(&mut self.data);
-        let mut commonmark_cache = std::mem::take(&mut self.commonmark_cache);
-        let mut file_cache = std::mem::take(&mut self.file_cache);
-        let mut drag_edge_start = self.drag_edge_start.clone();
-        let mut selected_node_ids = std::mem::take(&mut self.selected_node_ids);
-        let mut editing_node_id = self.editing_node_id.clone();
-        let mut selection_start = self.selection_start;
-
         let mut moved = false;
-        let mut node_to_delete = None;
+        let mut node_to_delete = false;
         let mut zoom_to_node = None;
-
-        let canvas_path = self.path.clone();
 
         ui.push_id(unique_id.with("canvas_scene_scope"), |ui| {
             scene.show(ui, &mut scene_rect, |ui| {
+                // Actualizar nodos visibles basado en viewport
+                self.update_visible_nodes(ui.max_rect());
+
                 let pointer_pos = ui.input(|i| i.pointer.interact_pos());
 
-                // 1. BACKGROUND INTERACTION (Drawn first to be behind nodes)
-                let bg_resp = ui.interact(ui.max_rect(), ui.id().with("bg"), Sense::click_and_drag());
-                
-                // Start marquee selection
+                // 1. BACKGROUND
+                let bg_resp =
+                    ui.interact(ui.max_rect(), ui.id().with("bg"), Sense::click_and_drag());
+
                 if bg_resp.drag_started_by(PointerButton::Primary) {
-                    selection_start = pointer_pos;
+                    self.selection_start = pointer_pos;
                     if !ui.input(|i| i.modifiers.shift) {
-                        selected_node_ids.clear();
+                        self.selected_node_ids.clear();
                     }
-                    editing_node_id = None;
+                    self.editing_node_id = None;
                 }
 
-                // Deselect on simple click
                 if bg_resp.clicked_by(PointerButton::Primary) {
-                    selected_node_ids.clear();
-                    editing_node_id = None;
+                    self.selected_node_ids.clear();
+                    self.editing_node_id = None;
                 }
 
-                // Selection marquee logic
-                let mut marquee_to_draw = None;
-                if let Some(start) = selection_start {
-                    if let Some(mwp) = pointer_pos {
-                        let marquee_rect = Rect::from_two_pos(start, mwp);
-                        marquee_to_draw = Some(marquee_rect);
+                // Marquee selection
+                let mut marquee_rect = None;
+                if let Some(start) = self.selection_start {
+                    if let Some(current) = pointer_pos {
+                        let rect = Rect::from_two_pos(start, current);
+                        marquee_rect = Some(rect);
 
-                        // Multi-select nodes inside
-                        if !ui.input(|i| i.modifiers.shift) { selected_node_ids.clear(); }
-                        for node in &data.nodes {
-                            let (nx, ny, nw, nh) = get_node_geom(node);
-                            let nr = Rect::from_min_size(Pos2::new(nx, ny), Vec2::new(nw, nh));
-                            if marquee_rect.intersects(nr) {
-                                selected_node_ids.insert(get_node_id(node));
+                        if !ui.input(|i| i.modifiers.shift) {
+                            self.selected_node_ids.clear();
+                        }
+
+                        // Solo verificar nodos visibles
+                        for &idx in &self.visible_nodes {
+                            let node = &self.data.nodes[idx];
+                            if rect.intersects(node.rect()) {
+                                self.selected_node_ids.insert(node.id().to_string());
                             }
                         }
                     }
+
                     if ui.input(|i| i.pointer.any_released()) {
-                        selection_start = None;
+                        self.selection_start = None;
                     }
                 }
 
-                Self::draw_edges_static(ui, &data);
-                
-                // 2. DRAW NODES
-                let (m, d, s, e, delta) = Self::draw_nodes_static(
-                    ui, vault, &mut data, &canvas_path, 
-                    &mut commonmark_cache, &mut file_cache, 
-                    &drag_edge_start, &selected_node_ids, &editing_node_id
-                );
-                
-                if m { moved = true; }
-                if d.is_some() { drag_edge_start = d; }
-                
-                if let Some(new_sel_id) = s {
+                // 2. EDGES (solo las conectadas a nodos visibles)
+                self.draw_edges_optimized(ui);
+
+                // 3. NODES (solo los visibles)
+                let interactions = self.draw_nodes_optimized(ui, vault);
+
+                if interactions.moved {
+                    moved = true;
+                }
+                if interactions.new_drag.is_some() {
+                    self.drag_edge_start = interactions.new_drag;
+                }
+
+                if let Some(new_sel_id) = interactions.new_selection {
                     if ui.input(|i| i.modifiers.shift) {
-                        if selected_node_ids.contains(&new_sel_id) { selected_node_ids.remove(&new_sel_id); }
-                        else { selected_node_ids.insert(new_sel_id); }
+                        if self.selected_node_ids.contains(&new_sel_id) {
+                            self.selected_node_ids.remove(&new_sel_id);
+                        } else {
+                            self.selected_node_ids.insert(new_sel_id);
+                        }
                     } else {
-                        // Always update selection on click unless shift is held
-                        if !selected_node_ids.contains(&new_sel_id) || selected_node_ids.len() > 1 {
-                            selected_node_ids.clear();
-                            selected_node_ids.insert(new_sel_id);
+                        if !self.selected_node_ids.contains(&new_sel_id)
+                            || self.selected_node_ids.len() > 1
+                        {
+                            self.selected_node_ids.clear();
+                            self.selected_node_ids.insert(new_sel_id);
                         }
                     }
-                    editing_node_id = None;
+                    self.editing_node_id = None;
                 }
 
                 // Bulk move
-                if let Some(d) = delta {
-                    for nid in &selected_node_ids {
-                        if let Some(n) = find_node_mut_static(&mut data, nid) {
-                            move_node(n, d);
+                if let Some(delta) = interactions.drag_delta {
+                    for id in &self.selected_node_ids {
+                        if let Some(node) = self.data.find_node_mut(id) {
+                            node.translate(delta);
+                            moved = true;
                         }
                     }
-                    moved = true;
                 }
 
-                if e.is_some() { editing_node_id = e; }
-                if ui.input(|i| i.key_pressed(egui::Key::Escape)) { editing_node_id = None; }
+                if interactions.new_editing.is_some() {
+                    self.editing_node_id = interactions.new_editing;
+                }
 
-                // 3. CONTEXT MENU
-                if let Some(id) = selected_node_ids.iter().next() {
-                    if let Some(node) = find_node_static(&data, id) {
-                        let node_info = (get_node_geom(node), matches!(node, CanvasNode::Text { .. }), get_node_color(node));
-                        let ((nx, ny, nw, nh), is_text, current_color_str) = node_info;
-                        let menu_pos = Pos2::new(nx + nw / 2.0, ny - 35.0);
-                        
-                        ui.put(Rect::from_center_size(menu_pos, Vec2::new(250.0, 40.0)), |ui: &mut Ui| {
-                            ui.horizontal(|ui| {
-                                if ui.button("🗑").clicked() { node_to_delete = Some(id.clone()); }
-                                for c in &["1", "2", "3"] {
-                                    let color_val = parse_color(c).unwrap_or(Color32::WHITE);
-                                    if ui.button(egui::RichText::new("■").color(color_val)).clicked() {
-                                        for sid in &selected_node_ids {
-                                            if let Some(n) = find_node_mut_static(&mut data, sid) { set_node_color(n, Some(c.to_string())); }
-                                        }
-                                        moved = true;
-                                    }
-                                }
-                                
-                                let current_c = current_color_str.and_then(|cs| parse_color(&cs)).unwrap_or(Color32::WHITE);
-                                let mut color_rgba = current_c;
-                                if ui.color_edit_button_srgba(&mut color_rgba).changed() {
-                                    let hex = format!("#{:02x}{:02x}{:02x}", color_rgba.r(), color_rgba.g(), color_rgba.b());
-                                    for sid in &selected_node_ids {
-                                        if let Some(n) = find_node_mut_static(&mut data, sid) { set_node_color(n, Some(hex.clone())); }
-                                    }
-                                    moved = true;
-                                }
+                if ui.input(|i| i.key_pressed(egui::Key::Escape)) {
+                    self.editing_node_id = None;
+                }
 
-                                if ui.button("🔍").clicked() { zoom_to_node = Some(id.clone()); }
-                                if ui.button("📝").clicked() {
-                                    if is_text { editing_node_id = Some(id.clone()); }
-                                    else {
-                                        if let Some(n) = data.nodes.iter().find(|n| get_node_id(n) == *id) {
-                                            if let CanvasNode::File { file, .. } = n {
-                                                if let Some(p) = crate::files::resolve_path(vault, &canvas_path, file) {
-                                                    ui.ctx().data_mut(|d| d.insert_temp(Id::new("global_nav_request"), Some(p)));
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            }).response
-                        });
+                // 4. CONTEXT MENU
+                if let Some(id) = self.selected_node_ids.iter().next().cloned() {
+                    let result = self.draw_context_menu(ui, &id, vault);
+                    if result.delete {
+                        node_to_delete = true;
+                    }
+                    if result.zoom {
+                        zoom_to_node = Some(id.clone());
+                    }
+                    if result.moved {
+                        moved = true;
                     }
                 }
 
-                // 4. EDGE PREVIEW
-                if let Some((sid, s_side)) = &drag_edge_start {
-                    if let Some(sn) = find_node_static(&data, sid) {
-                        let sp = get_side_pos_static(sn, s_side);
+                // 5. EDGE PREVIEW
+                if let Some((sid, s_side)) = &self.drag_edge_start {
+                    if let Some(sn) = self.data.find_node(sid) {
+                        let sp = sn.side_pos(s_side);
                         if let Some(mwp) = ui.input(|i| i.pointer.interact_pos()) {
-                            let mut ep = mwp;
-                            let mut target = None;
-                            for node in &data.nodes {
-                                let (nid, nx, ny, nw, nh) = get_node_info(node);
-                                if nid == *sid { continue; }
-                                let r = Rect::from_min_size(Pos2::new(nx, ny), Vec2::new(nw, nh));
-                                if r.expand(25.0).contains(mwp) {
-                                    let side = get_closest_side(mwp, r);
-                                    ep = get_side_pos_static(node, &side);
-                                    target = Some((nid.clone(), side));
-                                    break;
-                                }
-                            }
-                            ui.painter().line_segment([sp, ep], Stroke::new(2.0, ui.visuals().widgets.active.fg_stroke.color));
+                            let (ep, target) = self.find_edge_target(mwp, sid);
+
+                            ui.painter().line_segment(
+                                [sp, ep],
+                                Stroke::new(2.0, ui.visuals().widgets.active.fg_stroke.color),
+                            );
+
                             if ui.input(|i| i.pointer.any_released()) {
                                 if let Some((to_id, to_s)) = target {
-                                    data.edges.push(CanvasEdge {
+                                    self.data.edges.push(CanvasEdge {
                                         id: format!("{:x}", rand::random::<u64>()),
-                                        from_node: sid.clone(), from_side: s_side.clone(),
-                                        to_node: to_id, to_side: to_s, label: None, color: None,
+                                        from_node: sid.clone(),
+                                        from_side: s_side.clone(),
+                                        to_node: to_id,
+                                        to_side: to_s,
+                                        label: None,
+                                        color: None,
                                     });
                                     moved = true;
                                 }
-                                drag_edge_start = None;
+                                self.drag_edge_start = None;
                             }
                         }
                     }
                 }
 
-                // 5. DRAW SELECTION MARQUEE (on top)
-                if let Some(marquee_rect) = marquee_to_draw {
-                    ui.painter().rect_stroke(marquee_rect, 0.0, Stroke::new(1.0, Color32::from_rgb(100, 150, 255)), StrokeKind::Outside);
-                    ui.painter().rect_filled(marquee_rect, 0.0, Color32::from_rgba_unmultiplied(100, 150, 255, 30));
+                // 6. DRAW MARQUEE
+                if let Some(rect) = marquee_rect {
+                    ui.painter().rect_stroke(
+                        rect,
+                        0.0,
+                        Stroke::new(1.0, Color32::from_rgb(100, 150, 255)),
+                        StrokeKind::Outside,
+                    );
+                    ui.painter().rect_filled(
+                        rect,
+                        0.0,
+                        Color32::from_rgba_unmultiplied(100, 150, 255, 30),
+                    );
                 }
             });
         });
 
-        if let Some(_) = node_to_delete {
-            data.nodes.retain(|n| !selected_node_ids.contains(&get_node_id(n)));
-            data.edges.retain(|e| !selected_node_ids.contains(&e.from_node) && !selected_node_ids.contains(&e.to_node));
-            selected_node_ids.clear();
+        // Cleanup
+        if node_to_delete {
+            self.data
+                .nodes
+                .retain(|n| !self.selected_node_ids.contains(n.id()));
+            self.data.edges.retain(|e| {
+                !self.selected_node_ids.contains(&e.from_node)
+                    && !self.selected_node_ids.contains(&e.to_node)
+            });
+            self.selected_node_ids.clear();
+            self.rebuild_node_index();
             moved = true;
         }
 
         if let Some(id) = zoom_to_node {
-            if let Some(node) = find_node_static(&data, &id) {
-                let (nx, ny, nw, nh) = get_node_geom(node);
-                scene_rect.set_center(Pos2::new(nx + nw/2.0, ny + nh/2.0));
+            if let Some(node) = self.data.find_node(&id) {
+                scene_rect.set_center(node.rect().center());
             }
         }
 
-        self.data = data;
-        self.commonmark_cache = commonmark_cache;
-        self.file_cache = file_cache;
         self.scene_rect = scene_rect;
-        self.drag_edge_start = drag_edge_start;
-        self.selected_node_ids = selected_node_ids;
-        self.editing_node_id = editing_node_id;
-        self.selection_start = selection_start;
 
-        if moved { self.is_dirty = true; self.save(); }
+        if moved {
+            self.is_dirty = true;
+            self.save();
+        }
+
         self.draw_toolbar(ui, vault);
+    }
+
+    fn draw_edges_optimized(&mut self, ui: &mut Ui) {
+        let visible_set: HashSet<&str> = self
+            .visible_nodes
+            .iter()
+            .map(|&idx| self.data.nodes[idx].id())
+            .collect();
+
+        for edge in &self.data.edges {
+            // Solo dibujar si ambos nodos son visibles
+            if !visible_set.contains(edge.from_node.as_str())
+                && !visible_set.contains(edge.to_node.as_str())
+            {
+                continue;
+            }
+
+            if let (Some(from), Some(to)) = (
+                self.data.find_node(&edge.from_node),
+                self.data.find_node(&edge.to_node),
+            ) {
+                let fp = from.side_pos(&edge.from_side);
+                let tp = to.side_pos(&edge.to_side);
+
+                let color = edge
+                    .color
+                    .as_ref()
+                    .and_then(|c| self.color_cache.get(c))
+                    .unwrap_or(ui.visuals().widgets.active.fg_stroke.color);
+
+                ui.painter().line_segment([fp, tp], Stroke::new(2.0, color));
+
+                // Flecha
+                let dir = (tp - fp).normalized();
+                let angle = 30.0f32.to_radians();
+                let arrow_len = 10.0;
+
+                ui.painter().line_segment(
+                    [tp, tp - Vec2::angled(dir.angle() + angle) * arrow_len],
+                    Stroke::new(2.0, color),
+                );
+                ui.painter().line_segment(
+                    [tp, tp - Vec2::angled(dir.angle() - angle) * arrow_len],
+                    Stroke::new(2.0, color),
+                );
+            }
+        }
+    }
+
+    fn draw_nodes_optimized(&mut self, ui: &mut Ui, vault: &str) -> NodeInteractions {
+        let mut result = NodeInteractions::default();
+
+        let is_editing = self.editing_node_id.is_some();
+        let curr_drag = self.drag_edge_start.is_some();
+
+        // Clonamos para evitar borrow conflict con self
+        let visible_nodes = self.visible_nodes.clone();
+
+        // Solo procesar nodos visibles
+        for &idx in &visible_nodes {
+            let node = &mut self.data.nodes[idx];
+            let nid = node.id().to_string();
+            let rect = node.rect();
+            let is_selected = self.selected_node_ids.contains(&nid);
+            let is_edit = self.editing_node_id.as_ref() == Some(&nid);
+
+            let path = &self.path;
+            let file_cache = &mut self.file_cache;
+            let commonmark_cache = &mut self.commonmark_cache;
+            let color_cache = &mut self.color_cache;
+            let result_ptr = &mut result as *mut NodeInteractions;
+
+            ui.put(rect, |ui: &mut Ui| {
+                let mut frame = egui::Frame::NONE
+                    .fill(ui.visuals().window_fill())
+                    .stroke(ui.visuals().window_stroke())
+                    .corner_radius(ui.visuals().window_corner_radius);
+
+                if is_selected {
+                    frame = frame.stroke(Stroke::new(2.0, ui.visuals().selection.stroke.color));
+                } else if let Some(c) = node.color().and_then(|c| color_cache.get(c)) {
+                    frame = frame.stroke(Stroke::new(2.0, c));
+                }
+
+                // SAFETY: ui.put ejecuta el closure inmediatamente, y no guardamos result_ptr.
+                // Sin embargo, para evitar unsafe, tratamos de capturar result directamente si es posible.
+                // Pero como estamos en un loop y el closure es FnOnce, capturar result directamente
+                // lo movería. Así que usamos una referencia mutable.
+                let result_ref = unsafe { &mut *result_ptr };
+
+                let resp = frame
+                    .show(ui, |ui| {
+                        ui.set_min_size(rect.size());
+                        Self::draw_node_content(
+                            path,
+                            file_cache,
+                            commonmark_cache,
+                            ui,
+                            node,
+                            vault,
+                            &nid,
+                            is_edit,
+                            result_ref,
+                        );
+                    })
+                    .response;
+
+                if !is_edit {
+                    let interact =
+                        ui.interact(resp.rect, ui.id().with(&nid), Sense::click_and_drag());
+
+                    if interact.clicked_by(PointerButton::Primary)
+                        || interact.drag_started_by(PointerButton::Primary)
+                    {
+                        result_ref.new_selection = Some(nid.clone());
+                    }
+
+                    if interact.double_clicked() {
+                        if matches!(node, CanvasNode::Text { .. }) {
+                            result_ref.new_editing = Some(nid.clone());
+                        }
+                    }
+
+                    if interact.dragged_by(PointerButton::Primary) && !curr_drag {
+                        let delta = interact.drag_delta();
+                        if is_selected {
+                            result_ref.drag_delta = Some(delta);
+                        } else {
+                            node.translate(delta);
+                            result_ref.moved = true;
+                        }
+                    }
+                }
+
+                resp
+            });
+
+            // Handles (solo si no está editando)
+            if !is_editing {
+                for side in ["top", "bottom", "left", "right"] {
+                    let sp = node.side_pos(side);
+                    let handle_id = ui.id().with(&nid).with(side);
+                    let handle_rect = Rect::from_center_size(sp, Vec2::splat(20.0));
+                    let handle = ui.interact(handle_rect, handle_id, Sense::click_and_drag());
+
+                    if handle.hovered() || handle.dragged() {
+                        ui.painter()
+                            .circle_filled(sp, 8.0, ui.visuals().widgets.active.bg_fill);
+                    } else {
+                        ui.painter().circle_filled(
+                            sp,
+                            4.0,
+                            ui.visuals().widgets.inactive.bg_fill.linear_multiply(0.5),
+                        );
+                    }
+
+                    if handle.drag_started() {
+                        result.new_drag = Some((nid.clone(), side.to_string()));
+                    }
+                }
+            }
+        }
+
+        result
+    }
+
+    fn draw_node_content(
+        path: &str,
+        file_cache: &mut HashMap<String, String>,
+        commonmark_cache: &mut CommonMarkCache,
+        ui: &mut Ui,
+        node: &mut CanvasNode,
+        vault: &str,
+        nid: &str,
+        is_edit: bool,
+        result: &mut NodeInteractions,
+    ) {
+        match node {
+            CanvasNode::File { file, .. } => {
+                if let Some(p) = crate::files::resolve_path(vault, path, file) {
+                    if p.ends_with(".md") {
+                        let content = file_cache
+                            .entry(p.clone())
+                            .or_insert_with(|| fs::read_to_string(&p).unwrap_or_default());
+
+                        egui::ScrollArea::vertical().id_salt(nid).show(ui, |ui| {
+                            CommonMarkViewer::new().show(ui, commonmark_cache, content);
+                        });
+                    } else {
+                        ui.add(Image::from_uri(format!("file://{}", p)).shrink_to_fit());
+                    }
+                }
+            }
+            CanvasNode::Text { text, .. } => {
+                if is_edit {
+                    let edit_resp =
+                        ui.add_sized(ui.available_size(), egui::TextEdit::multiline(text));
+                    if edit_resp.changed() {
+                        result.moved = true;
+                    }
+                    if edit_resp.lost_focus() {
+                        result.new_editing = None;
+                    }
+                    if !edit_resp.has_focus() {
+                        edit_resp.request_focus();
+                    }
+                } else {
+                    egui::ScrollArea::vertical().id_salt(nid).show(ui, |ui| {
+                        CommonMarkViewer::new().show(ui, commonmark_cache, text);
+                    });
+                }
+            }
+            CanvasNode::Group { label, .. } => {
+                if let Some(l) = label {
+                    ui.heading(l);
+                }
+            }
+        }
+    }
+
+    fn draw_context_menu(
+        &mut self,
+        ui: &mut Ui,
+        node_id: &str,
+        vault: &str,
+    ) -> ContextMenuResult {
+        let mut result = ContextMenuResult::default();
+        let (rect, is_text, current_color) = if let Some(node) = self.data.find_node(node_id) {
+            (
+                node.rect(),
+                matches!(node, CanvasNode::Text { .. }),
+                node.color().map(|s| s.to_string()),
+            )
+        } else {
+            return result;
+        };
+        let menu_pos = Pos2::new(rect.center().x, rect.top() - 35.0);
+
+        ui.put(
+            Rect::from_center_size(menu_pos, Vec2::new(250.0, 40.0)),
+            |ui: &mut Ui| {
+                ui.horizontal(|ui| {
+                    if ui.button("🗑").clicked() {
+                        result.delete = true;
+                    }
+
+                    for c in &["1", "2", "3"] {
+                        let color_val = self.color_cache.get(c).unwrap_or(Color32::WHITE);
+                        if ui
+                            .button(egui::RichText::new("■").color(color_val))
+                            .clicked()
+                        {
+                            for sid in &self.selected_node_ids {
+                                if let Some(n) = self.data.find_node_mut(sid) {
+                                    n.set_color(Some(c.to_string()));
+                                }
+                            }
+                            result.moved = true;
+                        }
+                    }
+
+                    let mut color_rgba = current_color
+                        .as_ref()
+                        .and_then(|cs| self.color_cache.get(cs))
+                        .unwrap_or(Color32::WHITE);
+
+                    if ui.color_edit_button_srgba(&mut color_rgba).changed() {
+                        let hex = format!(
+                            "#{:02x}{:02x}{:02x}",
+                            color_rgba.r(),
+                            color_rgba.g(),
+                            color_rgba.b()
+                        );
+                        for sid in &self.selected_node_ids {
+                            if let Some(n) = self.data.find_node_mut(sid) {
+                                n.set_color(Some(hex.clone()));
+                            }
+                        }
+                        result.moved = true;
+                    }
+
+                    if ui.button("🔍").clicked() {
+                        result.zoom = true;
+                    }
+
+                    if ui.button("📝").clicked() {
+                        if is_text {
+                            result.edit = true;
+                        } else {
+                            // Re-obtener el nodo para evitar problemas de borrow
+                            if let Some(CanvasNode::File { file, .. }) = self.data.find_node(node_id)
+                            {
+                                if let Some(p) = crate::files::resolve_path(vault, &self.path, file)
+                                {
+                                    ui.ctx().data_mut(|d| {
+                                        d.insert_temp(Id::new("global_nav_request"), Some(p));
+                                    });
+                                }
+                            }
+                        }
+                    }
+                })
+                .response
+            },
+        );
+
+        result
+    }
+
+    fn find_edge_target(&self, pos: Pos2, exclude_id: &str) -> (Pos2, Option<(String, String)>) {
+        for &idx in &self.visible_nodes {
+            let node = &self.data.nodes[idx];
+            if node.id() == exclude_id {
+                continue;
+            }
+
+            let rect = node.rect();
+            if rect.expand(25.0).contains(pos) {
+                let side = get_closest_side(pos, rect);
+                let ep = node.side_pos(&side);
+                return (ep, Some((node.id().to_string(), side)));
+            }
+        }
+        (pos, None)
     }
 
     fn draw_toolbar(&mut self, ui: &mut Ui, vault: &str) {
         let unique_id = ui.id();
-        let transform = ui.ctx().layer_transform_to_global(ui.layer_id()).unwrap_or_default();
+        let transform = ui
+            .ctx()
+            .layer_transform_to_global(ui.layer_id())
+            .unwrap_or_default();
         let world_center = transform.inverse() * ui.max_rect().center();
 
         egui::Area::new(unique_id.with("canvas_toolbar"))
@@ -359,184 +816,150 @@ impl CanvasGui {
                 egui::Frame::window(ui.style()).show(ui, |ui| {
                     ui.horizontal(|ui| {
                         if ui.button("📝 Card").clicked() {
-                            self.data.nodes.push(CanvasNode::Text {
+                            let new_node = CanvasNode::Text {
                                 id: format!("{:x}", rand::random::<u64>()),
                                 text: "New Card".into(),
-                                x: world_center.x - 100.0, y: world_center.y - 50.0,
-                                width: 200.0, height: 100.0, color: None,
-                            });
-                            self.is_dirty = true; self.save();
+                                x: world_center.x - 100.0,
+                                y: world_center.y - 50.0,
+                                width: 200.0,
+                                height: 100.0,
+                                color: None,
+                            };
+                            self.data.nodes.push(new_node);
+                            self.rebuild_node_index();
+                            self.is_dirty = true;
+                            self.save();
                         }
-                        if ui.button("📄 Markdown").clicked() { self.show_file_picker = Some(PickerType::Markdown); }
-                        if ui.button("🖼 Media").clicked() { self.show_file_picker = Some(PickerType::Media); }
+                        if ui.button("📄 Markdown").clicked() {
+                            self.show_file_picker = Some(PickerType::Markdown);
+                        }
+                        if ui.button("🖼 Media").clicked() {
+                            self.show_file_picker = Some(PickerType::Media);
+                        }
                     });
                 });
             });
 
         if let Some(picker) = self.show_file_picker.clone() {
-            let mut close = false;
-            let mut selected = None;
-            egui::Window::new("Select File")
-                .id(unique_id.with("file_picker_window"))
-                .show(ui.ctx(), |ui| {
+            self.show_file_picker_window(ui, vault, &picker, world_center);
+        }
+    }
+
+    fn show_file_picker_window(
+        &mut self,
+        ui: &mut Ui,
+        vault: &str,
+        picker: &PickerType,
+        world_center: Pos2,
+    ) {
+        let unique_id = ui.id();
+        let mut close = false;
+        let mut selected = None;
+
+        egui::Window::new("Select File")
+            .id(unique_id.with("file_picker_window"))
+            .show(ui.ctx(), |ui| {
                 egui::ScrollArea::vertical().show(ui, |ui| {
-                    use walkdir::WalkDir;
                     let extensions: &[&str] = match picker {
                         PickerType::Markdown => &[".md"],
                         PickerType::Media => &[".png", ".jpg", ".jpeg", ".svg"],
                     };
+
+                    use walkdir::WalkDir;
                     for entry in WalkDir::new(vault).into_iter().filter_map(|e| e.ok()) {
                         if entry.file_type().is_file() {
                             let path = entry.path();
-                            let ext = path.extension().and_then(|e| e.to_str()).unwrap_or_default();
+                            let ext = path
+                                .extension()
+                                .and_then(|e| e.to_str())
+                                .unwrap_or_default();
                             let ext_dot = format!(".{}", ext.to_lowercase());
+
                             if extensions.iter().any(|&e| e == ext_dot) {
-                                let rel = path.strip_prefix(vault).unwrap_or(path).to_string_lossy().to_string();
-                                if ui.selectable_label(false, &rel).clicked() { selected = Some(rel); close = true; }
+                                let rel = path
+                                    .strip_prefix(vault)
+                                    .unwrap_or(path)
+                                    .to_string_lossy()
+                                    .to_string();
+
+                                if ui.selectable_label(false, &rel).clicked() {
+                                    selected = Some(rel);
+                                    close = true;
+                                }
                             }
                         }
                     }
                 });
-                if ui.button("Cancel").clicked() { close = true; }
-            });
-            if let Some(f) = selected {
-                self.data.nodes.push(CanvasNode::File {
-                    id: format!("{:x}", rand::random::<u64>()), file: f,
-                    x: world_center.x - 150.0, y: world_center.y - 150.0,
-                    width: 300.0, height: 300.0, color: None,
-                });
-                self.is_dirty = true; self.save();
-            }
-            if close { self.show_file_picker = None; }
-        }
-    }
 
-    fn draw_nodes_static(
-        ui: &mut Ui, vault: &str, data: &mut CanvasData, canvas_path: &str,
-        cm_cache: &mut CommonMarkCache, f_cache: &mut HashMap<String, String>,
-        curr_drag: &Option<(String, String)>, sel_ids: &HashSet<String>, edit_id: &Option<String>
-    ) -> (bool, Option<(String, String)>, Option<String>, Option<String>, Option<Vec2>) {
-        let mut moved = false;
-        let mut new_drag = None;
-        let mut new_sel = None;
-        let mut new_edit = edit_id.clone();
-        let mut delta = None;
-
-        for node in data.nodes.iter_mut() {
-            let nid = get_node_id(node);
-            let (nx, ny, nw, nh) = get_node_geom(node);
-            let is_sel = sel_ids.contains(&nid);
-            let is_edit = edit_id.as_ref() == Some(&nid);
-            
-            ui.put(Rect::from_min_size(Pos2::new(nx, ny), Vec2::new(nw, nh)), |ui: &mut Ui| {
-                let mut frame = egui::Frame::NONE.fill(ui.visuals().window_fill())
-                    .stroke(ui.visuals().window_stroke())
-                    .corner_radius(ui.visuals().window_corner_radius);
-                
-                if is_sel { frame = frame.stroke(Stroke::new(2.0, ui.visuals().selection.stroke.color)); }
-                else if let Some(c) = get_node_color(node).and_then(|c| parse_color(&c)) { frame = frame.stroke(Stroke::new(2.0, c)); }
-
-                let resp = frame.show(ui, |ui| {
-                    ui.set_min_size(Vec2::new(nw, nh));
-                    match node {
-                        CanvasNode::File { file, .. } => {
-                            if let Some(p) = crate::files::resolve_path(vault, canvas_path, file) {
-                                if p.ends_with(".md") {
-                                    let content = f_cache.entry(p.clone()).or_insert_with(|| fs::read_to_string(&p).unwrap_or_default());
-                                    egui::ScrollArea::vertical().id_salt(&nid).show(ui, |ui| { CommonMarkViewer::new().show(ui, cm_cache, content); });
-                                } else { ui.add(Image::from_uri(format!("file://{}", p)).shrink_to_fit()); }
-                            }
-                        }
-                        CanvasNode::Text { text, .. } => {
-                            if is_edit {
-                                let edit_resp = ui.add_sized(ui.available_size(), egui::TextEdit::multiline(text));
-                                if edit_resp.changed() { moved = true; }
-                                if edit_resp.lost_focus() { new_edit = None; }
-                                if !edit_resp.has_focus() { edit_resp.request_focus(); }
-                            } else {
-                                egui::ScrollArea::vertical().id_salt(&nid).show(ui, |ui| { CommonMarkViewer::new().show(ui, cm_cache, text); });
-                            }
-                        }
-                        CanvasNode::Group { label, .. } => { if let Some(l) = label { ui.heading(&*l); } }
-                    }
-                }).response;
-
-                if !is_edit {
-                    let r = ui.interact(resp.rect, ui.id().with(&nid), Sense::click_and_drag());
-                    if r.clicked_by(PointerButton::Primary) || r.drag_started_by(PointerButton::Primary) { new_sel = Some(nid.clone()); }
-                    if r.double_clicked() {
-                        if let CanvasNode::Text { .. } = node { new_edit = Some(nid.clone()); }
-                    }
-                    if r.dragged_by(PointerButton::Primary) && curr_drag.is_none() {
-                        let d = r.drag_delta();
-                        if is_sel { delta = Some(d); }
-                        else { move_node(node, d); moved = true; }
-                    }
+                if ui.button("Cancel").clicked() {
+                    close = true;
                 }
-                resp
             });
 
-            // Handles
-            let sides = ["top", "bottom", "left", "right"];
-            for s in sides {
-                let sp = get_side_pos_static(node, s);
-                let r = ui.interact(Rect::from_center_size(sp, Vec2::splat(20.0)), ui.id().with(&nid).with(s), Sense::click_and_drag());
-                if r.hovered() || r.dragged() {
-                    ui.painter().circle_filled(sp, 8.0, ui.visuals().widgets.active.bg_fill);
-                } else {
-                    ui.painter().circle_filled(sp, 4.0, ui.visuals().widgets.inactive.bg_fill.linear_multiply(0.5));
-                }
-                if r.drag_started() { new_drag = Some((nid.clone(), s.to_string())); }
-            }
+        if let Some(file) = selected {
+            let new_node = CanvasNode::File {
+                id: format!("{:x}", rand::random::<u64>()),
+                file,
+                x: world_center.x - 150.0,
+                y: world_center.y - 150.0,
+                width: 300.0,
+                height: 300.0,
+                color: None,
+            };
+            self.data.nodes.push(new_node);
+            self.rebuild_node_index();
+            self.is_dirty = true;
+            self.save();
         }
-        (moved, new_drag, new_sel, new_edit, delta)
-    }
 
-    fn draw_edges_static(ui: &mut Ui, data: &CanvasData) {
-        for e in &data.edges {
-            if let (Some(f), Some(t)) = (find_node_static(data, &e.from_node), find_node_static(data, &e.to_node)) {
-                let fp = get_side_pos_static(f, &e.from_side);
-                let tp = get_side_pos_static(t, &e.to_side);
-                let c = e.color.as_ref().and_then(|c| parse_color(c)).unwrap_or(ui.visuals().widgets.active.fg_stroke.color);
-                ui.painter().line_segment([fp, tp], Stroke::new(2.0, c));
-                let dir = (tp - fp).normalized();
-                let angle = 30.0f32.to_radians();
-                ui.painter().line_segment([tp, tp - egui::Vec2::angled(dir.angle() + angle) * 10.0], Stroke::new(2.0, c));
-                ui.painter().line_segment([tp, tp - egui::Vec2::angled(dir.angle() - angle) * 10.0], Stroke::new(2.0, c));
-            }
+        if close {
+            self.show_file_picker = None;
         }
     }
 }
 
-// Helpers
-fn get_node_id(n: &CanvasNode) -> String { match n { CanvasNode::File { id, .. } | CanvasNode::Text { id, .. } | CanvasNode::Group { id, .. } => id.clone() } }
-fn get_node_geom(n: &CanvasNode) -> (f32, f32, f32, f32) { match n { CanvasNode::File { x, y, width, height, .. } | CanvasNode::Text { x, y, width, height, .. } | CanvasNode::Group { x, y, width, height, .. } => (*x, *y, *width, *height) } }
-fn get_node_info(n: &CanvasNode) -> (String, f32, f32, f32, f32) { match n { CanvasNode::File { id, x, y, width, height, .. } | CanvasNode::Text { id, x, y, width, height, .. } | CanvasNode::Group { id, x, y, width, height, .. } => (id.clone(), *x, *y, *width, *height) } }
-fn get_node_color(n: &CanvasNode) -> Option<String> { match n { CanvasNode::File { color, .. } | CanvasNode::Text { color, .. } | CanvasNode::Group { color, .. } => color.clone() } }
-fn set_node_color(n: &mut CanvasNode, c: Option<String>) { match n { CanvasNode::File { color, .. } => { *color = c; } CanvasNode::Text { color, .. } => { *color = c; } CanvasNode::Group { color, .. } => { *color = c; } } }
-fn move_node(n: &mut CanvasNode, d: Vec2) { match n { CanvasNode::File { x, y, .. } | CanvasNode::Text { x, y, .. } | CanvasNode::Group { x, y, .. } => { *x += d.x; *y += d.y; } } }
-
-fn find_node_static<'a>(data: &'a CanvasData, id: &str) -> Option<&'a CanvasNode> { data.nodes.iter().find(|n| get_node_id(n) == id) }
-fn find_node_mut_static<'a>(data: &'a mut CanvasData, id: &str) -> Option<&'a mut CanvasNode> { data.nodes.iter_mut().find(|n| get_node_id(n) == id) }
-
-fn get_side_pos_static(n: &CanvasNode, side: &str) -> Pos2 {
-    let (x, y, w, h) = get_node_geom(n);
-    match side { "top" => Pos2::new(x + w/2.0, y), "bottom" => Pos2::new(x + w/2.0, y + h), "left" => Pos2::new(x, y + h / 2.0), "right" => Pos2::new(x + w, y + h / 2.0), _ => Pos2::new(x + w / 2.0, y + h / 2.0) }
+// Structs para retornar múltiples valores
+#[derive(Default)]
+struct NodeInteractions {
+    moved: bool,
+    new_drag: Option<(String, String)>,
+    new_selection: Option<String>,
+    new_editing: Option<String>,
+    drag_delta: Option<Vec2>,
 }
 
+#[derive(Default)]
+struct ContextMenuResult {
+    delete: bool,
+    zoom: bool,
+    edit: bool,
+    moved: bool,
+}
+
+// Helper functions
 fn get_closest_side(pos: Pos2, rect: Rect) -> String {
-    let mut min = pos.distance_sq(Pos2::new(rect.center().x, rect.top())); let mut side = "top";
-    let b = pos.distance_sq(Pos2::new(rect.center().x, rect.bottom())); if b < min { min = b; side = "bottom"; }
-    let l = pos.distance_sq(Pos2::new(rect.left(), rect.center().y)); if l < min { min = l; side = "left"; }
-    let r = pos.distance_sq(Pos2::new(rect.right(), rect.center().y)); if r < min { side = "right"; }
-    side.to_string()
-}
+    let distances = [
+        (
+            pos.distance_sq(Pos2::new(rect.center().x, rect.top())),
+            "top",
+        ),
+        (
+            pos.distance_sq(Pos2::new(rect.center().x, rect.bottom())),
+            "bottom",
+        ),
+        (
+            pos.distance_sq(Pos2::new(rect.left(), rect.center().y)),
+            "left",
+        ),
+        (
+            pos.distance_sq(Pos2::new(rect.right(), rect.center().y)),
+            "right",
+        ),
+    ];
 
-fn parse_color(color: &str) -> Option<Color32> {
-    if color.starts_with('#') && color.len() == 7 {
-        if let (Ok(r), Ok(g), Ok(b)) = (u8::from_str_radix(&color[1..3], 16), u8::from_str_radix(&color[3..5], 16), u8::from_str_radix(&color[5..7], 16)) {
-            return Some(Color32::from_rgb(r, g, b));
-        }
-    }
-    match color { "1" => Some(Color32::from_rgb(255, 0, 0)), "2" => Some(Color32::from_rgb(0, 255, 0)), "3" => Some(Color32::from_rgb(0, 0, 255)), _ => None }
+    distances
+        .iter()
+        .min_by(|a, b| a.0.partial_cmp(&b.0).unwrap())
+        .map(|(_, side)| side.to_string())
+        .unwrap_or_else(|| "top".to_string())
 }

@@ -40,9 +40,13 @@ pulldown-cmark = "0.13"
 percent-encoding = "2.3"
 
 [features]
-default = ["serde", "pulldown_cmark"]
+default = ["serde", "pulldown_cmark", "better_syntax_highlighting"]
 serde = []
 pulldown_cmark = []
+better_syntax_highlighting = []
+macros = []
+document-features = []
+embedded_image = []
 
 [target.'cfg(not(target_os = "android"))'.dependencies]
 font-loader = "0.11"
@@ -64,7 +68,7 @@ lto = true
 strip = true
 codegen-units = 1
 incremental = false
-opt-level = "z"
+opt-level = 3
 
 
 [package.metadata.android]

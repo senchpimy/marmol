@@ -1049,21 +1049,19 @@ impl<Tab> DockArea<'_, Tab> {
         let center = text_rect.center();
         let start_x = center.x - content_width / 2.0;
 
-        if let Some(img) = icon {
-            let img_rect = Rect::from_min_size(
-                pos2(start_x, center.y - icon_size / 2.0),
-                Vec2::splat(icon_size)
-            );
-            // ui.put(img_rect, img); // This might cause issues if ui cursor is somewhere else?
-            // ui.put places widget at rect.
-            ui.put(img_rect, img);
-        }
-
         let text_pos_x = start_x + if has_icon { icon_size + icon_spacing } else { 0.0 };
         let text_pos = pos2(text_pos_x, center.y - galley.size().y / 2.0);
 
         ui.painter()
             .add(TextShape::new(text_pos, galley, tab_style.text_color));
+
+        if let Some(img) = icon {
+            let img_rect = Rect::from_min_size(
+                pos2(start_x, center.y - icon_size / 2.0),
+                Vec2::splat(icon_size)
+            );
+            img.paint_at(ui, img_rect);
+        }
 
         let close_response = show_close_button.then(|| {
             let mut close_button_rect = tab_rect;

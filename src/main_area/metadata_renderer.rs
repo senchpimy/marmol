@@ -16,6 +16,11 @@ pub fn create_metadata(metadata: String, ui: &mut egui::Ui) {
         ui.add_space(5.0);
         return;
     };
+
+    if docs.is_empty() {
+        return;
+    }
+
     let metadata_parsed = &docs[0];
     let mut job = LayoutJob::default();
 
@@ -23,7 +28,10 @@ pub fn create_metadata(metadata: String, ui: &mut egui::Ui) {
     let mut emitter = YamlEmitter::new(&mut out_str);
     emitter.dump(metadata_parsed).unwrap();
     out_str.split("\n").skip(1).for_each(|s| {
-        if s.as_bytes()[s.len() - 1] == 58 {
+        if s.is_empty() {
+            return;
+        }
+        if s.ends_with(':') {
             job.append(
                 &(s.to_owned() + "\n"),
                 0.0,
@@ -32,7 +40,7 @@ pub fn create_metadata(metadata: String, ui: &mut egui::Ui) {
                     ..Default::default()
                 },
             )
-        } else if s.as_bytes()[0] == 32 {
+        } else if s.starts_with(' ') {
             job.append(
                 &(s.to_owned() + "\n"),
                 0.0,
