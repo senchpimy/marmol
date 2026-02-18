@@ -282,6 +282,52 @@ impl CodeBlock {
         options: &CommonMarkOptions,
         max_width: f32,
     ) {
+        if let Some(lang) = &self.lang {
+            if lang == "mermaid" {
+                let svg = if let Some(svg) = cache.mermaid_cache.get(&self.content) {
+                    Some(svg.clone())
+                } else {
+                    let opts = mermaid_rs_renderer::RenderOptions::modern();
+                    match mermaid_rs_renderer::render_with_options(&self.content, opts) {
+                        Ok(svg) => {
+                            let mut svg = svg.trim().to_string();
+                            // TODO: Remove this manual fix once it's merged into mermaid-rs-renderer
+                            // Fix unescaped double quotes in font-family which causes SVG parsing errors
+                            svg = svg.replace("\"Segoe UI\"", "'Segoe UI'");
+                            
+                            // Ensure we start directly with the svg tag to avoid header parsing issues
+                            if let Some(start) = svg.find("<svg") {
+                                svg = svg[start..].to_string();
+                            }
+                            cache.mermaid_cache.insert(self.content.clone(), svg.clone());
+                            Some(svg)
+                        }
+                        Err(err) => {
+                            ui.label(
+                                RichText::new(format!("Mermaid error: {}", err))
+                                    .color(egui::Color32::RED),
+                            );
+                            None
+                        }
+                    }
+                };
+
+                if let Some(svg) = svg {
+                    let uri = format!(
+                        "bytes://mermaid_{}.svg",
+                        egui::Id::new(&self.content).value()
+                    );
+                    let bytes = svg.as_bytes().to_vec();
+                    ui.add(
+                        egui::Image::from_bytes(uri, bytes)
+                            .fit_to_original_size(2.0)
+                            .max_width(ui.available_width()),
+                    );
+                    return;
+                }
+            }
+        }
+
         ui.scope(|ui| {
             Self::pre_syntax_highlighting(cache, options, ui);
 
@@ -296,7 +342,12 @@ impl CodeBlock {
                 ui.fonts_mut(|f| f.layout_job(job))
             };
 
-            crate::egui_commonmark_backend::elements::code_block(ui, max_width, &self.content, &mut layout);
+            crate::egui_commonmark_backend::elements::code_block(
+                ui,
+                max_width,
+                &self.content,
+                &mut layout,
+            );
         });
     }
 }
@@ -430,6 +481,7 @@ pub struct CommonMarkCache {
 
     scroll: HashMap<egui::Id, ScrollableCache>,
     pub(self) has_installed_loaders: bool,
+    pub mermaid_cache: HashMap<String, String>,
 }
 
 #[allow(clippy::derivable_impls)]
@@ -443,6 +495,7 @@ impl Default for CommonMarkCache {
             link_hooks: HashMap::new(),
             scroll: Default::default(),
             has_installed_loaders: false,
+            mermaid_cache: HashMap::new(),
         }
     }
 }

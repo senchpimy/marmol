@@ -8,6 +8,7 @@ resolver = "2"
 crate-type = ["cdylib", "lib"]
 
 [dependencies]
+mermaid-rs-renderer = { git = "https://github.com/1jehuang/mermaid-rs-renderer", tag = "v0.2.0" }
 egui = { version = "0.33", features = ["serde"] }
 egui_plot = "0.34"
 chrono = "0.4.23"
@@ -15,7 +16,7 @@ syntect = "5.0"
 base64 = "0.21"
 serde_json = "1.0"
 serde = { version = "1.0.228", features = ["derive"] }
-egui_extras = { version = "0.33", features = ["image","file","svg","http"] }
+egui_extras = { version = "0.33", features = ["image","file","svg","http","svg_text"] }
 filebuffer = "0.4.0"
 image = { version = "0.25", default-features = false, features = [
   "png",
