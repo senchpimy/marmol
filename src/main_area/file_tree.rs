@@ -1,5 +1,5 @@
 use crate::iconize::{IconManager, IconSelector, IconSource};
-use crate::main_area::file_options::file_options;
+use crate::main_area::file_options::{file_options, folder_options};
 use crate::main_area::left_controls::enums::SortOrder;
 use eframe::egui::{self, Id, Popup, PopupCloseBehavior, Sense, Vec2};
 use std::collections::HashMap;
@@ -350,7 +350,8 @@ impl FileTree {
                     Popup::context_menu(&response)
                         .close_behavior(PopupCloseBehavior::CloseOnClickOutside)
                         .id(Id::new("ctx_dir").with(&file_location))
-                        .show(|ui| {                            if ui.button("New Folder").clicked() {
+                        .show(|ui| {
+                            if ui.button("New Folder").clicked() {
                                 self.creating_folder_in = Some(file_location.clone());
                                 self.new_folder_name = "New Folder".to_string();
                                 ui.close();
@@ -363,6 +364,12 @@ impl FileTree {
                                 }
                                 ui.separator();
                             }
+                            folder_options(
+                                ui,
+                                &file_location,
+                                path,
+                                &mut self.menu_error,
+                            );
                         });
 
                     if response.dnd_hover_payload::<String>().is_some() {

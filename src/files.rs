@@ -6,11 +6,14 @@ use std::io::Write;
 use std::path::Path;
 use walkdir::WalkDir;
 
-pub fn delete_file(trgt: &str) {
+pub fn delete_file(trgt: &str) -> bool {
     //let path_to_delete = trgt.to_string();
     let delete = fs::remove_file(trgt);
+    dbg!("Eliminado archivo:");
+    dbg!(trgt);
     match delete {
         Ok(_) => {
+            true
             // Solo es necesario para mandar la senal de eliminado pero desaparece cuando se lee el
             // dir otra vez
             // *error = String::new();
@@ -21,7 +24,18 @@ pub fn delete_file(trgt: &str) {
             // ui.close();
         }
         Err(r) => {
-            println!("Error eliminando {}: {}", trgt, r)
+            println!("Error eliminando {}: {}", trgt, r);
+            false
+        }
+    }
+}
+
+pub fn delete_folder(trgt: &str) {
+    let delete = fs::remove_dir_all(trgt);
+    match delete {
+        Ok(_) => {}
+        Err(r) => {
+            println!("Error eliminando folder {}: {}", trgt, r)
         }
     }
 }

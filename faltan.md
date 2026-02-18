@@ -104,3 +104,5 @@ Abre una template segun que pagina web se abrio [[https://www.youtube.com/watch?
 ### completr
 
 ### ~~kanban~~
+
+### COlores por folder

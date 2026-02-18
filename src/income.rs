@@ -473,7 +473,7 @@ impl IncomeGui {
     }
 
     pub fn save(&self) {
-        if self.path.is_empty() {
+        if self.path.is_empty() || !Path::new(&self.path).exists() {
             return;
         }
         let file = String::from(&self.path);
