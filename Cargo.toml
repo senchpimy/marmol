@@ -39,6 +39,12 @@ duplicate = "2.0"
 paste = "1.0"
 pulldown-cmark = "0.13"
 percent-encoding = "2.3"
+typst = "0.12"
+tex2typst-rs = "0.4"
+comemo = "0.4"
+typst-svg = "0.12"
+typst-render = "0.12"
+time = "0.3"
 
 [features]
 default = ["serde", "pulldown_cmark", "better_syntax_highlighting"]

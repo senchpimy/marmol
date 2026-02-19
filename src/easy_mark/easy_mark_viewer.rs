@@ -153,6 +153,7 @@ fn rich_text_from_style(text: &str, style: &easy_mark::Style) -> RichText {
         italics,
         small,
         raised,
+        math,
     } = *style;
 
     let small = small || raised; // Raised text is also smaller
@@ -174,7 +175,7 @@ fn rich_text_from_style(text: &str, style: &easy_mark::Style) -> RichText {
     if code {
         rich_text = rich_text.code();
     }
-    if strong {
+    if strong || math {
         rich_text = rich_text.strong();
     } else if quoted {
         rich_text = rich_text.weak();

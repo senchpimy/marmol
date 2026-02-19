@@ -65,6 +65,9 @@ pub struct Style {
     /// `code` (monospace, some other color)
     pub code: bool,
 
+    /// $$math$$
+    pub math: bool,
+
     /// **bold**
     pub strong: bool,
 
@@ -164,6 +167,28 @@ impl<'a> Parser<'a> {
                 let item = Item::Text(self.style, rest_of_line);
                 self.s = &self.s[end..];
                 self.style.code = false;
+                return Some(item);
+            }
+        }
+        None
+    }
+
+    // $$math$$
+    fn inline_math(&mut self) -> Option<Item<'a>> {
+        if let Some(rest) = self.s.strip_prefix("$$") {
+            self.s = rest;
+            self.start_of_line = false;
+            self.style.math = true;
+            if let Some(end) = self.s.find("$$") {
+                let item = Item::Text(self.style, &self.s[..end]);
+                self.s = &self.s[end + 2..];
+                self.style.math = false;
+                return Some(item);
+            } else {
+                let end = self.s.len();
+                let item = Item::Text(self.style, &self.s[..end]);
+                self.s = &self.s[end..];
+                self.style.math = false;
                 return Some(item);
             }
         }
@@ -354,6 +379,11 @@ impl<'a> Iterator for Parser<'a> {
                 return Some(item);
             }
 
+            // $$math$$
+            if let Some(item) = self.inline_math() {
+                return Some(item);
+            }
+
             if let Some(rest) = self.s.strip_prefix("**") {
                 self.s = rest;
                 self.start_of_line = false;
@@ -366,7 +396,7 @@ impl<'a> Iterator for Parser<'a> {
                 self.style.italics = !self.style.italics;
                 continue;
             }
-            if let Some(rest) = self.s.strip_prefix('_') {
+            if let Some(rest) = self.s.strip_prefix("__") {
                 self.s = rest;
                 self.start_of_line = false;
                 self.style.underline = !self.style.underline;

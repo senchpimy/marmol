@@ -110,12 +110,8 @@ impl CommonMarkViewerInternal {
     }
 }
 
-fn parser_options_math(is_math_enabled: bool) -> pulldown_cmark::Options {
-    if is_math_enabled {
-        parser_options() | pulldown_cmark::Options::ENABLE_MATH
-    } else {
-        parser_options()
-    }
+fn parser_options_math(_is_math_enabled: bool) -> pulldown_cmark::Options {
+    parser_options() | pulldown_cmark::Options::ENABLE_MATH
 }
 
 impl CommonMarkViewerInternal {
@@ -564,11 +560,15 @@ impl CommonMarkViewerInternal {
             pulldown_cmark::Event::InlineMath(tex) => {
                 if let Some(math_fn) = options.math_fn {
                     math_fn(ui, &tex, true);
+                } else {
+                    crate::egui_commonmark_backend::latex::render(ui, cache, &tex, true);
                 }
             }
             pulldown_cmark::Event::DisplayMath(tex) => {
                 if let Some(math_fn) = options.math_fn {
                     math_fn(ui, &tex, false);
+                } else {
+                    crate::egui_commonmark_backend::latex::render(ui, cache, &tex, false);
                 }
             }
         }

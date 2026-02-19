@@ -65,6 +65,18 @@ pub fn highlight_easymark(
             continue;
         }
 
+        if text.starts_with("$$") {
+            style.math = true;
+            let end = text[2..]
+                .find("$$")
+                .map_or_else(|| text.len(), |i| i + 4);
+            job.append(&text[..end], 0.0, format_from_style(egui_style, &style));
+            text = &text[end..];
+            current_index += end;
+            style.math = false;
+            continue;
+        }
+
         let mut skip;
 
         if text.starts_with('\\') && text.len() >= 2 {
@@ -188,8 +200,8 @@ pub fn highlight_easymark(
                 skip = 0;
             }
             style.strikethrough ^= true;
-        } else if text.starts_with('_') {
-            skip = 1;
+        } else if text.starts_with("__") {
+            skip = 2;
             if style.underline {
                 job.append(&text[..skip], 0.0, format_from_style(egui_style, &style));
                 text = &text[skip..];
@@ -256,7 +268,7 @@ fn format_from_style(
 ) -> egui::text::TextFormat {
     use egui::{Align, Color32, Stroke, TextStyle};
 
-    let color = if emark_style.heading != Heading::None || emark_style.strong {
+    let color = if emark_style.math || emark_style.heading != Heading::None || emark_style.strong {
         egui_style.visuals.strong_text_color()
     } else if emark_style.quoted {
         egui_style.visuals.weak_text_color()

@@ -482,6 +482,7 @@ pub struct CommonMarkCache {
     scroll: HashMap<egui::Id, ScrollableCache>,
     pub(self) has_installed_loaders: bool,
     pub mermaid_cache: HashMap<String, String>,
+    pub latex_cache: HashMap<String, String>,
 }
 
 #[allow(clippy::derivable_impls)]
@@ -496,6 +497,7 @@ impl Default for CommonMarkCache {
             scroll: Default::default(),
             has_installed_loaders: false,
             mermaid_cache: HashMap::new(),
+            latex_cache: HashMap::new(),
         }
     }
 }

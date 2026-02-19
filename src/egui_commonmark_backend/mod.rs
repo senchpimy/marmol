@@ -10,6 +10,8 @@ pub mod elements;
 pub mod misc;
 #[doc(hidden)]
 pub mod pulldown;
+#[doc(hidden)]
+pub mod latex;
 
 #[cfg(feature = "embedded_image")]
 mod data_url_loader;
