@@ -97,14 +97,16 @@ pub fn render(ui: &mut Ui, cache: &mut CommonMarkCache, latex: &str, inline: boo
         let mut img = egui::Image::from_bytes(uri, svg.as_bytes().to_vec());
 
         if inline || (latex.len() < 50 && !latex.contains('\n')) {
-            let row_height = ui.text_style_height(&egui::TextStyle::Body);
-            // Increased multiplier to 2.2 for even better visibility
-            img = img.fit_to_original_size(1.0).max_height(row_height * 2.2);
-        } else {
-            img = img.fit_to_original_size(1.0);
-        }
+            img = img.fit_to_original_size(1.3);
 
-        ui.add(img.max_width(ui.available_width()));
+            ui.vertical(|ui| {
+                ui.add_space(1.0);
+                ui.add(img);
+            });
+        } else {
+            img = img.fit_to_original_size(2.0);
+            ui.add(img.max_width(ui.available_width()));
+        }
     }
 }
 
@@ -121,9 +123,9 @@ fn render_to_svg(latex_input: &str, inline: bool, color_hex: &str) -> Result<Str
     let font_family = font.info().family.clone();
 
     let (margin, size) = if inline {
-        ("0.5pt", "32pt")
+        ("0.5pt", "10pt")
     } else {
-        ("10pt", "24pt")
+        ("0pt", "10pt")
     };
 
     let typst_code = format!(

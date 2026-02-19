@@ -674,13 +674,18 @@ impl TabViewer for MTabViewer<'_> {
                         });
                     } else if tab.ctype == Content::Edit {
                         let cont = StripBuilder::new(ui)
-                            .size(Size::relative(0.25))
-                            .size(Size::relative(0.5));
+                            .size(Size::relative(0.15))
+                            .size(Size::relative(0.65));
                         cont.horizontal(|mut strip| {
                             strip.cell(|_| {});
                             strip.cell(|ui| {
                                 egui::ScrollArea::vertical().show(ui, |ui| {
-                                    let response = editor.ui(ui);
+                                    let frame =
+                                        Frame::NONE.inner_margin(egui::Margin::symmetric(30, 10));
+                                    let response = frame.show(ui, |ui| {
+                                        editor.ui(ui)
+                                    }).inner;
+
                                     if response.changed() {
                                         let mut f = std::fs::OpenOptions::new()
                                             .write(true)
