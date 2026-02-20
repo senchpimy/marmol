@@ -5,26 +5,41 @@ use egui::{
 use super::data::ExcalidrawElement;
 use super::utils::hex_to_color;
 
-pub fn draw_selection_border<F>(painter: &egui::Painter, el: &ExcalidrawElement, to_screen: &F, _s: f32, ui: &egui::Ui)
+pub fn draw_selection_border<F>(painter: &egui::Painter, el: &ExcalidrawElement, to_screen: &F, sc: f32, ui: &egui::Ui)
 where
     F: Fn(Pos2) -> Pos2,
 {
+    let padding = 4.0;
     let c = Pos2::new(el.x + el.width / 2.0, el.y + el.height / 2.0);
     let cl = Pos2::new(el.width / 2.0, el.height / 2.0);
     let r = Rot2::from_angle(el.angle);
+    
+    // Bounding box points with padding
     let pts: Vec<Pos2> = [
-        Pos2::new(0.0, 0.0),
-        Pos2::new(el.width, 0.0),
-        Pos2::new(el.width, el.height),
-        Pos2::new(0.0, el.height),
+        Pos2::new(-padding, -padding),
+        Pos2::new(el.width + padding, -padding),
+        Pos2::new(el.width + padding, el.height + padding),
+        Pos2::new(-padding, el.height + padding),
     ]
     .iter()
     .map(|&p| to_screen(c + r * (p - cl)))
     .collect();
+
+    let stroke_color = ui.ctx().style().visuals.selection.stroke.color;
     painter.add(Shape::closed_line(
-        pts,
-        Stroke::new(1.0, ui.ctx().style().visuals.selection.stroke.color),
+        pts.clone(),
+        Stroke::new(1.0, stroke_color),
     ));
+
+    // Draw handles at corners
+    let handle_size = 6.0 * sc.max(0.5).min(1.5);
+    for p in pts {
+        painter.rect_filled(
+            Rect::from_center_size(p, Vec2::splat(handle_size)),
+            1.0,
+            stroke_color,
+        );
+    }
 }
 
 fn draw_stroke(painter: &egui::Painter, pts: Vec<Pos2>, s: Stroke, st: &str, sc: f32, cl: bool) {

@@ -20,7 +20,7 @@ pub mod render;
 pub mod ui_panel;
 
 use data::{ExcalidrawElement, ExcalidrawFile, ExcalidrawScene, Tool};
-use utils::{is_point_inside, move_element_group};
+use utils::{is_point_inside, move_element_group, normalize_element};
 use render::{draw_element, draw_selection_border};
 use ui_panel::show_properties_panel;
 
@@ -59,6 +59,12 @@ pub struct ExcalidrawGui {
     selection_rect: Option<Rect>,
     #[serde(skip)]
     selected_indices: HashSet<usize>,
+    #[serde(skip)]
+    undo_stack: Vec<ExcalidrawScene>,
+    #[serde(skip)]
+    redo_stack: Vec<ExcalidrawScene>,
+    #[serde(skip)]
+    clipboard: Vec<ExcalidrawElement>,
 }
 
 impl Default for ExcalidrawGui {
@@ -82,6 +88,9 @@ impl Default for ExcalidrawGui {
             failed_textures: HashSet::new(),
             selection_rect: None,
             selected_indices: HashSet::new(),
+            undo_stack: vec![],
+            redo_stack: vec![],
+            clipboard: vec![],
         }
     }
 }
@@ -90,6 +99,8 @@ impl ExcalidrawGui {
     pub fn set_path(&mut self, path: &str) {
         if self.path != path || self.scene.is_none() {
             self.path = path.to_string();
+            self.undo_stack.clear();
+            self.redo_stack.clear();
             self.reload();
         }
     }
@@ -137,6 +148,7 @@ impl ExcalidrawGui {
                                 if el.id.is_empty() {
                                     el.id = format!("gen_{}", i);
                                 }
+                                normalize_element(el);
                             }
                             self.scene = Some(sc);
                             self.error_msg = None;
@@ -162,12 +174,45 @@ impl ExcalidrawGui {
         }
     }
 
+    fn push_undo(&mut self, scene: &ExcalidrawScene) {
+        self.undo_stack.push(scene.clone());
+        if self.undo_stack.len() > 50 {
+            self.undo_stack.remove(0);
+        }
+        self.redo_stack.clear();
+    }
+
+    fn undo(&mut self) {
+        if let Some(prev) = self.undo_stack.pop() {
+            if let Some(current) = self.scene.take() {
+                self.redo_stack.push(current);
+            }
+            self.scene = Some(prev);
+            self.is_dirty = true;
+            self.save_file();
+        }
+    }
+
+    fn redo(&mut self) {
+        if let Some(next) = self.redo_stack.pop() {
+            if let Some(current) = self.scene.take() {
+                self.undo_stack.push(current);
+            }
+            self.scene = Some(next);
+            self.is_dirty = true;
+            self.save_file();
+        }
+    }
+
     fn save_file(&mut self) {
         if let Some(scene) = &self.scene {
             if let Ok(json) = serde_json::to_string(scene) {
                 let compressed = lz_str::compress_to_base64(&json);
                 let mut text_elements = String::new();
                 for el in &scene.elements {
+                    if el.is_deleted {
+                        continue;
+                    }
                     if el.element_type == "text" && !el.text.is_empty() {
                         text_elements.push_str(&format!("{} ^{}\n\n", el.text, el.id));
                     }
@@ -256,6 +301,32 @@ tags: [excalidraw]
             }
         }
 
+        // Capture keyboard shortcuts at the very beginning
+        let mut do_copy = false;
+        let mut do_paste = false;
+
+        ui.input(|i| {
+            for event in &i.events {
+                match event {
+                    egui::Event::Copy => do_copy = true,
+                    egui::Event::Paste(_) => do_paste = true,
+                    egui::Event::Key {
+                        key: egui::Key::C,
+                        pressed: true,
+                        modifiers: egui::Modifiers { command: true, .. },
+                        ..
+                    } => do_copy = true,
+                    egui::Event::Key {
+                        key: egui::Key::V,
+                        pressed: true,
+                        modifiers: egui::Modifiers { command: true, .. },
+                        ..
+                    } => do_paste = true,
+                    _ => {}
+                }
+            }
+        });
+
         ui.horizontal(|ui| {
             let color = ui.ctx().style().visuals.widgets.noninteractive.fg_stroke.color;
             let btn_size = Vec2::splat(20.0);
@@ -323,9 +394,25 @@ tags: [excalidraw]
             {
                 self.active_tool = Some(Tool::Freedraw);
             }
+
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                if ui.button("💾").clicked() {
+                if ui.button("💾").on_hover_text("Save (Manual)").clicked() {
                     self.save_file();
+                }
+                ui.separator();
+                if ui
+                    .add_enabled(!self.redo_stack.is_empty(), egui::Button::new("↪"))
+                    .on_hover_text("Redo (Ctrl+Shift+Z)")
+                    .clicked()
+                {
+                    self.redo();
+                }
+                if ui
+                    .add_enabled(!self.undo_stack.is_empty(), egui::Button::new("↩"))
+                    .on_hover_text("Undo (Ctrl+Z)")
+                    .clicked()
+                {
+                    self.undo();
                 }
             });
         });
@@ -345,6 +432,10 @@ tags: [excalidraw]
         let (response, painter) = ui.allocate_painter(ui.available_size(), Sense::all());
         painter.rect_filled(response.rect, 0.0, bg_color);
 
+        if response.clicked() {
+            response.request_focus();
+        }
+
         if response.clicked() || response.drag_started() {
             self.error_msg = None;
         }
@@ -362,6 +453,9 @@ tags: [excalidraw]
 
                 if let Some(scene) = &self.scene {
                     for el in scene.elements.iter().rev() {
+                        if el.is_deleted {
+                            continue;
+                        }
                         if el.element_type == "text" {
                             // Use a very generous hit box for text
                             let hit_margin = 20.0 / cs;
@@ -485,9 +579,59 @@ tags: [excalidraw]
         let to_world = move |ps: Pos2| Pos2::ZERO + (ps - screen_rect_min - cp) / cs;
         let vis_rect = Rect::from_min_max(to_world(response.rect.min), to_world(response.rect.max));
 
+        // Keyboard shortcuts for Undo/Redo
+        if ui.input(|i| i.modifiers.ctrl && i.key_pressed(egui::Key::Z)) {
+            if ui.input(|i| i.modifiers.shift) {
+                self.redo();
+            } else {
+                self.undo();
+            }
+        } else if ui.input(|i| i.modifiers.ctrl && i.key_pressed(egui::Key::Y)) {
+            self.redo();
+        }
+
         if let Some(mut scene) = self.scene.take() {
             let mut dirty = self.is_dirty;
             let mut save = false;
+
+            // Better Copy (Ctrl+C)
+            if do_copy && !self.selected_indices.is_empty() {
+                self.clipboard.clear();
+                for &idx in &self.selected_indices {
+                    if let Some(el) = scene.elements.get(idx) {
+                        if !el.is_deleted {
+                            self.clipboard.push(el.clone());
+                        }
+                    }
+                }
+            }
+
+            // Better Paste (Ctrl+V)
+            if do_paste && !self.clipboard.is_empty() {
+                self.push_undo(&scene);
+                let offset = 20.0;
+                let mut new_selected = HashSet::new();
+                let timestamp = std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap_or_default()
+                    .as_millis();
+
+                for (i, el) in self.clipboard.clone().into_iter().enumerate() {
+                    let mut new_el = el;
+                    new_el.id = format!("copy_{}_{}", timestamp, i);
+                    new_el.x += offset;
+                    new_el.y += offset;
+                    new_el.is_deleted = false;
+                    scene.elements.push(new_el);
+                    new_selected.insert(scene.elements.len() - 1);
+                }
+                
+                self.selected_indices = new_selected;
+                self.selected_element_idx = self.selected_indices.iter().next().copied();
+                dirty = true;
+                save = true;
+            }
+
             let tool = self.active_tool.unwrap_or(Tool::Selection);
 
             let mouse_over_panel = if let Some(mp) = response.hover_pos() {
@@ -507,7 +651,11 @@ tags: [excalidraw]
                                 let wp = to_world(mp);
                                 let mut f = false;
                                 for (i, el) in scene.elements.iter().enumerate().rev() {
+                                    if el.is_deleted {
+                                        continue;
+                                    }
                                     if is_point_inside(el, wp) {
+                                        self.push_undo(&scene); // Push before moving
                                         self.dragged_element_idx = Some(i);
                                         if !self.selected_indices.contains(&i) {
                                             self.selected_indices.clear();
@@ -537,6 +685,9 @@ tags: [excalidraw]
                                     self.selected_indices.clear();
                                     let norm_rect = Rect::from_two_pos(rect.min, rect.max);
                                     for (i, el) in scene.elements.iter().enumerate() {
+                                        if el.is_deleted {
+                                            continue;
+                                        }
                                         let el_rect = Rect::from_min_size(Pos2::new(el.x, el.y), Vec2::new(el.width, el.height));
                                         if norm_rect.intersects(el_rect) {
                                             self.selected_indices.insert(i);
@@ -575,6 +726,7 @@ tags: [excalidraw]
                             && !ui.input(|i| i.modifiers.alt)
                         {
                             if let Some(mp) = response.interact_pointer_pos() {
+                                self.push_undo(&scene); // Push before adding new element
                                 let sw = to_world(mp);
                                 self.drawing_start_pos = Some(sw);
                                 self.selected_element_idx = None;
@@ -617,40 +769,15 @@ tags: [excalidraw]
                                         if tool == Tool::Line || tool == Tool::Arrow {
                                             let dx = cw.x - sp.x;
                                             let dy = cw.y - sp.y;
+                                            el.x = sp.x;
+                                            el.y = sp.y;
                                             el.points = vec![[0.0, 0.0], [dx, dy]];
-                                            el.width = dx.abs();
-                                            el.height = dy.abs();
+                                            normalize_element(el);
                                         } else if tool == Tool::Freedraw {
                                             let dx = cw.x - sp.x;
                                             let dy = cw.y - sp.y;
                                             el.points.push([dx, dy]);
-
-                                            // Recalculate bounding box
-                                            let mut min_x = 0.0f32;
-                                            let mut min_y = 0.0f32;
-                                            let mut max_x = 0.0f32;
-                                            let mut max_y = 0.0f32;
-
-                                            for p in &el.points {
-                                                min_x = min_x.min(p[0]);
-                                                min_y = min_y.min(p[1]);
-                                                max_x = max_x.max(p[0]);
-                                                max_y = max_y.max(p[1]);
-                                            }
-
-                                            if min_x != 0.0 || min_y != 0.0 {
-                                                el.x += min_x;
-                                                el.y += min_y;
-                                                for p in &mut el.points {
-                                                    p[0] -= min_x;
-                                                    p[1] -= min_y;
-                                                }
-                                                // Adjust start pos as well to keep logic consistent
-                                                self.drawing_start_pos =
-                                                    Some(Pos2::new(sp.x + min_x, sp.y + min_y));
-                                            }
-                                            el.width = max_x - min_x;
-                                            el.height = max_y - min_y;
+                                            normalize_element(el);
                                         } else {
                                             el.x = sp.x.min(cw.x);
                                             el.y = sp.y.min(cw.y);
@@ -690,9 +817,27 @@ tags: [excalidraw]
                 self.drawing_start_pos = None;
             }
 
+            if ui.input(|i| i.key_pressed(egui::Key::Delete) || i.key_pressed(egui::Key::Backspace))
+                && !self.selected_indices.is_empty()
+            {
+                self.push_undo(&scene); // Push before deleting
+                for &idx in &self.selected_indices {
+                    if let Some(el) = scene.elements.get_mut(idx) {
+                        el.is_deleted = true;
+                    }
+                }
+                self.selected_indices.clear();
+                self.selected_element_idx = None;
+                dirty = true;
+                save = true;
+            }
+
             let ctx = ui.ctx().clone();
             let files = &scene.files;
             for (i, el) in scene.elements.iter().enumerate() {
+                if el.is_deleted {
+                    continue;
+                }
                 let rect =
                     Rect::from_min_size(Pos2::new(el.x, el.y), Vec2::new(el.width, el.height))
                         .expand(100.0);
@@ -711,7 +856,7 @@ tags: [excalidraw]
             }
 
             if let Some(rect) = self.selection_rect {
-                let screen_rect = Rect::from_min_max(to_screen(rect.min), to_screen(rect.max));
+                let screen_rect = Rect::from_two_pos(to_screen(rect.min), to_screen(rect.max));
                 painter.rect_stroke(
                     screen_rect,
                     0.0,
@@ -738,6 +883,11 @@ tags: [excalidraw]
                     .show(ui, |ui| {
                         ui.set_width(panel_rect.width() - 32.0);
                         
+                        // Capture undo state when starting to interact with the properties panel
+                        if ui.input(|i| i.pointer.any_pressed()) && ui.rect_contains_pointer(ui.max_rect()) {
+                             self.push_undo(&scene);
+                        }
+
                         let selected_element = if let Some(idx) = self.selected_element_idx {
                             if idx < scene.elements.len() {
                                 Some(&mut scene.elements[idx])

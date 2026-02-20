@@ -300,6 +300,13 @@ impl TabViewer for MTabViewer<'_> {
         egui::Id::new(tab.id)
     }
 
+    fn scroll_bars(&self, tab: &Self::Tab) -> [bool; 2] {
+        match tab.content {
+            TabContent::Excalidraw { .. } | TabContent::Canvas { .. } | TabContent::Graph { .. } => [false, false],
+            _ => [true, true],
+        }
+    }
+
     fn ui(&mut self, ui: &mut Ui, tab: &mut Self::Tab) {
         ui.horizontal(|ui| {
             ui.spacing_mut().item_spacing.x = 5.0;
@@ -585,6 +592,9 @@ impl TabViewer for MTabViewer<'_> {
                 }
                 
                 TabContent::Markdown { editor, cache } => {
+                    if editor.code.is_empty() && !tab.path.is_empty() {
+                        editor.code = files::read_file(&tab.path);
+                    }
                     let width = ui.available_width();
                     let height = ui.available_height();
                     let margin_ratio = (0.15 * (width / 1500.0).min(height / 1000.0)).clamp(0.005, 0.15);
