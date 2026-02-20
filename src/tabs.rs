@@ -685,7 +685,7 @@ impl TabViewer for MTabViewer<'_> {
                                         }
                                     }
 
-                                    ui.add_space(ui.available_height() * 0.5);
+                                    ui.add_space(height * 0.5);
                                 });
                             });
                         });
@@ -716,7 +716,7 @@ impl TabViewer for MTabViewer<'_> {
                                         tab.ctype = Content::View;
                                     }
 
-                                    ui.add_space(ui.available_height() * 0.5);
+                                    ui.add_space(height * 0.5);
                                 });
                             });
                         });
