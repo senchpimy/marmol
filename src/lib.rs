@@ -302,15 +302,15 @@ impl eframe::App for Marmol {
                 ctx.data_mut(|d| d.insert_temp(egui::Id::new("open_icon_selector_signal"), None::<String>));
             }
 
-            if ctx.input(|i| i.modifiers.command && i.key_pressed(egui::Key::O)) {
+            if ctx.input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::O)) {
                 self.switcher.open(&self.vault);
             }
 
-            if ctx.input(|i| i.modifiers.command && i.key_pressed(egui::Key::P)) {
+            if ctx.input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::P)) {
                 self.command_palette.open();
             }
 
-            if ctx.input(|i| i.modifiers.command && i.key_pressed(egui::Key::F)) {
+            if ctx.input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::F)) {
                 todo!("Find functionality");
             }
 

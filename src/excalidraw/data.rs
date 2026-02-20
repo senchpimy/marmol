@@ -37,7 +37,6 @@ pub struct ExcalidrawFile {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ExcalidrawElement {
-    #[serde(default)]
     pub id: String,
     #[serde(rename = "type")]
     pub element_type: String,
@@ -47,44 +46,57 @@ pub struct ExcalidrawElement {
     pub height: f32,
     #[serde(default)]
     pub angle: f32,
-    #[serde(default, rename = "strokeColor")]
+    #[serde(rename = "strokeColor")]
     pub stroke_color: String,
-    #[serde(default, rename = "backgroundColor")]
+    #[serde(rename = "backgroundColor")]
     pub background_color: String,
-    #[serde(default, rename = "fillStyle")]
+    #[serde(rename = "fillStyle")]
     pub fill_style: String,
-    #[serde(default, rename = "strokeWidth")]
-    pub stroke_width: f32,
-    #[serde(default, rename = "strokeStyle")]
+    #[serde(rename = "strokeWidth")]
+    pub stroke_width: i32,
+    #[serde(rename = "strokeStyle")]
     pub stroke_style: String,
-    #[serde(default)]
-    pub opacity: f32,
-    #[serde(default)]
-    pub roughness: f32,
-    #[serde(default)]
+    pub opacity: i32,
+    pub roughness: i32,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub points: Vec<[f32; 2]>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "String::is_empty")]
     pub text: String,
-    #[serde(default, rename = "rawText")]
+    #[serde(default, rename = "rawText", skip_serializing_if = "Option::is_none")]
     pub raw_text: Option<String>,
-    #[serde(default, rename = "originalText")]
+    #[serde(default, rename = "originalText", skip_serializing_if = "Option::is_none")]
     pub original_text: Option<String>,
-    #[serde(default, rename = "fontSize")]
-    pub font_size: f32,
-    #[serde(default)]
+    #[serde(default, rename = "fontSize", skip_serializing_if = "Option::is_none")]
+    pub font_size: Option<f32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub roundness: Option<ExcalidrawRoundness>,
-    #[serde(default, rename = "endArrowhead")]
+    #[serde(default, rename = "endArrowhead", skip_serializing_if = "Option::is_none")]
     pub end_arrowhead: Option<String>,
-    #[serde(default, rename = "boundElements")]
+    #[serde(default, rename = "boundElements", skip_serializing_if = "Option::is_none")]
     pub bound_elements: Option<Vec<BoundElement>>,
-    #[serde(default, rename = "containerId")]
+    #[serde(default, rename = "containerId", skip_serializing_if = "Option::is_none")]
     pub container_id: Option<String>,
-    #[serde(default, rename = "fileId")]
+    #[serde(default, rename = "fileId", skip_serializing_if = "Option::is_none")]
     pub file_id: Option<String>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub link: Option<String>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub scale: Option<[f32; 2]>,
+    pub seed: i32,
+    pub version: i32,
+    #[serde(rename = "versionNonce")]
+    pub version_nonce: i32,
+    #[serde(rename = "isDeleted")]
+    pub is_deleted: bool,
+    #[serde(rename = "groupIds")]
+    pub group_ids: Vec<String>,
+    #[serde(default, rename = "frameId", skip_serializing_if = "Option::is_none")]
+    pub frame_id: Option<String>,
+    pub locked: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub updated: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub index: Option<String>,
 }
 
 impl Default for ExcalidrawElement {
@@ -97,40 +109,82 @@ impl Default for ExcalidrawElement {
             width: 0.0,
             height: 0.0,
             angle: 0.0,
-            stroke_color: "#BBBBBB".to_string(),
+            stroke_color: "#000000".to_string(),
             background_color: "transparent".to_string(),
             fill_style: "solid".to_string(),
-            stroke_width: 1.0,
+            stroke_width: 2,
             stroke_style: "solid".to_string(),
-            opacity: 100.0,
-            roughness: 1.0,
+            opacity: 100,
+            roughness: 1,
             points: vec![],
             text: "".to_string(),
             raw_text: None,
             original_text: None,
-            link: None,
-            font_size: 20.0,
+            font_size: Some(20.0),
             roundness: Some(ExcalidrawRoundness { round_type: 3 }),
             end_arrowhead: None,
             bound_elements: None,
             container_id: None,
             file_id: None,
+            link: None,
             scale: None,
+            seed: 0,
+            version: 1,
+            version_nonce: 0,
+            is_deleted: false,
+            group_ids: vec![],
+            frame_id: None,
+            locked: false,
+            updated: None,
+            index: None,
+        }
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct ExcalidrawAppState {
+    #[serde(rename = "viewBackgroundColor")]
+    pub view_background_color: String,
+    #[serde(flatten)]
+    pub extra: serde_json::Map<String, serde_json::Value>,
+}
+
+impl Default for ExcalidrawAppState {
+    fn default() -> Self {
+        Self {
+            view_background_color: "#ffffff".to_string(),
+            extra: serde_json::Map::new(),
         }
     }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ExcalidrawScene {
-    #[serde(default)]
+    #[serde(default, rename = "type")]
     pub type_: String,
     #[serde(default)]
     pub version: i32,
     #[serde(default)]
     pub source: String,
     pub elements: Vec<ExcalidrawElement>,
+    #[serde(default, rename = "appState")]
+    pub app_state: ExcalidrawAppState,
     #[serde(default)]
     pub files: HashMap<String, ExcalidrawFile>,
     #[serde(flatten)]
     pub extra: serde_json::Map<String, serde_json::Value>,
+}
+
+impl Default for ExcalidrawScene {
+    fn default() -> Self {
+        Self {
+            type_: "excalidraw".to_string(),
+            version: 2,
+            source: "https://excalidraw.com".to_string(),
+            elements: vec![],
+            app_state: ExcalidrawAppState::default(),
+            files: HashMap::new(),
+            extra: serde_json::Map::new(),
+        }
+    }
 }

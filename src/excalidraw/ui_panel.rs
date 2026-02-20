@@ -66,7 +66,7 @@ pub fn show_properties_panel(ui: &mut Ui, selected_element: Option<&mut Excalidr
             ui.label("Grosor:");
             if ui
                 .add(
-                    egui::Slider::new(&mut props.stroke_width, 0.5..=20.0)
+                    egui::Slider::new(&mut props.stroke_width, 1..=20)
                         .show_value(true),
                 )
                 .changed()
@@ -153,7 +153,7 @@ pub fn show_properties_panel(ui: &mut Ui, selected_element: Option<&mut Excalidr
             ui.label("Opacidad:");
             if ui
                 .add(
-                    egui::Slider::new(&mut props.opacity, 0.0..=100.0)
+                    egui::Slider::new(&mut props.opacity, 0..=100)
                         .show_value(true)
                         .suffix("%"),
                 )

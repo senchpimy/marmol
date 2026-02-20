@@ -585,10 +585,15 @@ impl TabViewer for MTabViewer<'_> {
                 }
                 
                 TabContent::Markdown { editor, cache } => {
+                    let width = ui.available_width();
+                    let height = ui.available_height();
+                    let margin_ratio = (0.15 * (width / 1500.0).min(height / 1000.0)).clamp(0.005, 0.15);
+                    let content_ratio = 1.0 - 2.0 * margin_ratio;
+
                     if tab.ctype == Content::View {
                         let cont = StripBuilder::new(ui)
-                            .size(Size::relative(0.15))
-                            .size(Size::relative(0.65));
+                            .size(Size::relative(margin_ratio))
+                            .size(Size::relative(content_ratio));
                         cont.horizontal(|mut strip| {
                             strip.cell(|_| {});
                             strip.cell(|ui| {
@@ -669,13 +674,15 @@ impl TabViewer for MTabViewer<'_> {
                                             tab.ctype = Content::Edit;
                                         }
                                     }
+
+                                    ui.add_space(ui.available_height() * 0.5);
                                 });
                             });
                         });
                     } else if tab.ctype == Content::Edit {
                         let cont = StripBuilder::new(ui)
-                            .size(Size::relative(0.15))
-                            .size(Size::relative(0.65));
+                            .size(Size::relative(margin_ratio))
+                            .size(Size::relative(content_ratio));
                         cont.horizontal(|mut strip| {
                             strip.cell(|_| {});
                             strip.cell(|ui| {
@@ -698,6 +705,8 @@ impl TabViewer for MTabViewer<'_> {
                                     if ui.input(|i| i.key_pressed(egui::Key::Escape)) {
                                         tab.ctype = Content::View;
                                     }
+
+                                    ui.add_space(ui.available_height() * 0.5);
                                 });
                             });
                         });
@@ -878,6 +887,18 @@ impl Tabs {
         }
     }
 
+    pub fn duplicate_current_tab(&mut self) {
+        if let Some((_, tab)) = self.tree.find_active_focused() {
+            let mut new_tab = tab.clone();
+            self.counter += 1;
+            while self.tree.iter_all_tabs().any(|(_, t)| t.id == self.counter) {
+                self.counter += 1;
+            }
+            new_tab.id = self.counter;
+            self.tree.push_to_focused_leaf(new_tab);
+        }
+    }
+
     pub fn ui(
         &mut self,
         ui: &mut Ui,
@@ -890,6 +911,9 @@ impl Tabs {
     ) {
         if ui.input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::W)) {
             self.close_current_tab();
+        }
+        if ui.input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::T)) {
+            self.duplicate_current_tab();
         }
 
         // Handle Split Signals

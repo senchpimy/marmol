@@ -128,6 +128,11 @@ impl ExcalidrawGui {
                 if let Some(json) = json_to_parse {
                     match serde_json::from_str::<ExcalidrawScene>(&json) {
                         Ok(mut sc) => {
+                            // Ensure type is correct and not duplicated in extra
+                            sc.type_ = "excalidraw".to_string();
+                            sc.extra.remove("type");
+                            sc.extra.remove("type_");
+
                             for (i, el) in sc.elements.iter_mut().enumerate() {
                                 if el.id.is_empty() {
                                     el.id = format!("gen_{}", i);
@@ -145,7 +150,9 @@ impl ExcalidrawGui {
                                 self.active_tool = Some(Tool::Selection);
                             }
                         }
-                        Err(e) => self.error_msg = Some(format!("Error parsing: {}", e)),
+                        Err(e) => {
+                            self.error_msg = Some(format!("Error parsing: {}", e));
+                        }
                     }
                 } else {
                     self.error_msg = Some("Could not find valid drawing data in file".to_string());
@@ -180,11 +187,13 @@ tags: [excalidraw]
 
 ## Text Elements
 {}
+
 %%
 ## Drawing
 ```compressed-json
 {}
-```", text_elements, compressed);
+```
+%%", text_elements, compressed);
 
                 let _ = fs::write(&self.path, full_content);
                 self.is_dirty = false;

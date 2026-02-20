@@ -175,15 +175,63 @@ impl QuickSwitcher {
             ui.separator();
 
             egui::ScrollArea::vertical()
-                .max_height(300.0)
+                .max_height(250.0)
                 .show(ui, |ui| {
-                    //let results = self.filtered_results;
                     let mut salir = false;
-                    for (i, path_str) in self.filtered_results.iter().enumerate() {
-                        let file_name = Path::new(path_str).file_name().unwrap().to_str().unwrap();
+                    for (i, path_str) in self.filtered_results.iter().take(100).enumerate() {
+                        let rel_path = path_str.strip_prefix(vault_path).unwrap_or(path_str);
+                        let rel_path = rel_path.strip_prefix('/').unwrap_or(rel_path);
+                        
+                        let path = Path::new(rel_path);
+                        let file_name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
+                        let parent_dir = path.parent().and_then(|p| p.to_str()).unwrap_or("");
+
                         let is_selected = i == self.selected_index;
 
-                        let label = ui.selectable_label(is_selected, file_name);
+                        let mut job = egui::text::LayoutJob::default();
+                        let color = if is_selected {
+                            ui.visuals().strong_text_color()
+                        } else {
+                            ui.visuals().text_color()
+                        };
+
+                        let regular_format = egui::TextFormat {
+                            color,
+                            font_id: egui::FontId::proportional(14.0),
+                            ..Default::default()
+                        };
+                        let bold_format = egui::TextFormat {
+                            color: ui.visuals().strong_text_color(),
+                            font_id: egui::FontId::proportional(14.0),
+                            ..Default::default()
+                        };
+                        let weak_format = egui::TextFormat {
+                            color: ui.visuals().weak_text_color(),
+                            font_id: egui::FontId::proportional(12.0),
+                            ..Default::default()
+                        };
+
+                        // Add parent directory if it exists
+                        if !parent_dir.is_empty() {
+                            job.append(&format!("{}/", parent_dir), 0.0, weak_format);
+                        }
+
+                        if self.query.is_empty() {
+                            job.append(file_name, 0.0, regular_format.clone());
+                        } else {
+                            let q = self.query.to_lowercase();
+                            let name_lower = file_name.to_lowercase();
+                            if let Some(start) = name_lower.find(&q) {
+                                let end = start + q.len();
+                                job.append(&file_name[..start], 0.0, regular_format.clone());
+                                job.append(&file_name[start..end], 0.0, bold_format);
+                                job.append(&file_name[end..], 0.0, regular_format.clone());
+                            } else {
+                                job.append(file_name, 0.0, regular_format.clone());
+                            }
+                        }
+
+                        let label = ui.selectable_label(is_selected, job);
 
                         if is_selected {
                             label.scroll_to_me(Some(egui::Align::Center));

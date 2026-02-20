@@ -76,13 +76,13 @@ pub fn draw_element<F>(
 ) where
     F: Fn(Pos2) -> Pos2,
 {
-    if el.opacity == 0.0 {
+    if el.opacity == 0 {
         return;
     }
-    let a = ((el.opacity / 100.0) * 255.0) as u8;
+    let a = ((el.opacity as f32 / 100.0) * 255.0) as u8;
     let sc_col = hex_to_color(&el.stroke_color).linear_multiply(a as f32 / 255.0); // Simple alpha fix
     let bg_col = hex_to_color(&el.background_color).linear_multiply(a as f32 / 255.0);
-    let s = Stroke::new(el.stroke_width * sc, sc_col);
+    let s = Stroke::new(el.stroke_width as f32 * sc, sc_col);
     let cw = Pos2::new(el.x + el.width / 2.0, el.y + el.height / 2.0);
     let cl = Pos2::new(el.width / 2.0, el.height / 2.0);
     let rot = Rot2::from_angle(el.angle);
@@ -158,7 +158,7 @@ pub fn draw_element<F>(
                 tr(&[Pos2::ZERO])[0],
                 egui::Align2::LEFT_TOP,
                 &el.text,
-                FontId::new(el.font_size * sc, FontFamily::Proportional),
+                FontId::new(el.font_size.unwrap_or(20.0) * sc, FontFamily::Proportional),
                 sc_col,
             );
         }
