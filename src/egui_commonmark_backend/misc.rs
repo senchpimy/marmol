@@ -1,6 +1,10 @@
 use crate::egui_commonmark_backend::alerts::AlertBundle;
-use egui::{RichText, TextBuffer, TextStyle, Ui, text::LayoutJob};
+use base64::{engine::general_purpose, Engine as _};
+use egui::{text::LayoutJob, RichText, TextBuffer, TextStyle, Ui};
+use flate2::write::ZlibEncoder;
+use flate2::Compression;
 use std::collections::HashMap;
+use std::io::Write;
 
 use crate::egui_commonmark_backend::pulldown::ScrollableCache;
 
@@ -18,6 +22,7 @@ const DEFAULT_THEME_LIGHT: &str = "base16-ocean.light";
 const DEFAULT_THEME_DARK: &str = "base16-ocean.dark";
 
 pub type ProcessLinkFn = dyn Fn(&mut Ui, &str, egui::text::LayoutJob) -> bool;
+pub type RenderExcalidrawFn = dyn Fn(&mut Ui, &str, Option<f32>);
 
 pub struct CommonMarkOptions<'f> {
     pub indentation_spaces: usize,
@@ -36,6 +41,7 @@ pub struct CommonMarkOptions<'f> {
     pub math_fn: Option<&'f crate::egui_commonmark_backend::RenderMathFn>,
     pub html_fn: Option<&'f crate::egui_commonmark_backend::RenderHtmlFn>,
     pub process_link: Option<&'f ProcessLinkFn>,
+    pub render_excalidraw_fn: Option<&'f RenderExcalidrawFn>,
 }
 
 impl std::fmt::Debug for CommonMarkOptions<'_> {
@@ -59,6 +65,7 @@ impl std::fmt::Debug for CommonMarkOptions<'_> {
             .field("alerts", &self.alerts)
             .field("mutable", &self.mutable)
             .field("process_link", &self.process_link.map(|_| "ProcessLinkFn"))
+            .field("render_excalidraw_fn", &self.render_excalidraw_fn.map(|_| "RenderExcalidrawFn"))
             .finish()
     }
 }
@@ -81,6 +88,7 @@ impl Default for CommonMarkOptions<'_> {
             math_fn: None,
             html_fn: None,
             process_link: None,
+            render_excalidraw_fn: None,
         }
     }
 }
@@ -238,9 +246,15 @@ pub struct Image {
 impl Image {
     // FIXME: string conversion
     pub fn new(uri: &str, options: &CommonMarkOptions) -> Self {
+        let uri = if uri.starts_with("![[") && uri.ends_with("]]") {
+            uri[3..uri.len() - 2].to_string()
+        } else {
+            uri.to_string()
+        };
+
         let has_scheme = uri.contains("://") || uri.starts_with("data:");
         let uri = if options.use_explicit_uri_scheme || has_scheme {
-            uri.to_string()
+            uri
         } else {
             // Assume file scheme
             format!("{}{uri}", options.default_implicit_uri_scheme)
@@ -283,29 +297,129 @@ impl CodeBlock {
         max_width: f32,
     ) {
         if let Some(lang) = &self.lang {
-            if lang == "mermaid" {
-                let svg = if let Some(svg) = cache.mermaid_cache.get(&self.content) {
-                    Some(svg.clone())
+            if lang == "mermaid" || lang == "vega" || lang == "vega-lite" {
+                let cache_map = if lang == "mermaid" {
+                    &mut cache.mermaid_cache
                 } else {
-                    let opts = mermaid_rs_renderer::RenderOptions::modern();
-                    match mermaid_rs_renderer::render_with_options(&self.content, opts) {
-                        Ok(svg) => {
-                            let mut svg = svg.trim().to_string();
-                            // TODO: Remove this manual fix once it's merged into mermaid-rs-renderer
-                            // Fix unescaped double quotes in font-family which causes SVG parsing errors
-                            svg = svg.replace("\"Segoe UI\"", "'Segoe UI'");
-                            
-                            // Ensure we start directly with the svg tag to avoid header parsing issues
-                            if let Some(start) = svg.find("<svg") {
-                                svg = svg[start..].to_string();
+                    &mut cache.vega_cache
+                };
+
+                let svg = if let Some(svg) = cache_map.get(&self.content) {
+                    if svg == "LOADING" {
+                        ui.horizontal(|ui| {
+                            ui.spinner();
+                            ui.label("Cargando gráfica de Vega...");
+                        });
+                        None
+                    } else if svg.starts_with("ERROR:") {
+                        ui.label(RichText::new(svg).color(egui::Color32::RED));
+                        None
+                    } else {
+                        Some(svg.clone())
+                    }
+                } else {
+                    if lang == "mermaid" {
+                        let opts = mermaid_rs_renderer::RenderOptions::modern();
+                        match mermaid_rs_renderer::render_with_options(&self.content, opts) {
+                            Ok(svg) => {
+                                let mut svg = svg.trim().to_string();
+                                // TODO: Remove this manual fix once it's merged into mermaid-rs-renderer
+                                // Fix unescaped double quotes in font-family which causes SVG parsing errors
+                                svg = svg.replace("\"Segoe UI\"", "'Segoe UI'");
+
+                                // Ensure we start directly with the svg tag to avoid header parsing issues
+                                if let Some(start) = svg.find("<svg") {
+                                    svg = svg[start..].to_string();
+                                }
+                                cache_map.insert(self.content.clone(), svg.clone());
+                                Some(svg)
                             }
-                            cache.mermaid_cache.insert(self.content.clone(), svg.clone());
-                            Some(svg)
+                            Err(err) => {
+                                ui.label(
+                                    RichText::new(format!("Mermaid error: {}", err))
+                                        .color(egui::Color32::RED),
+                                );
+                                None
+                            }
                         }
-                        Err(err) => {
-                            ui.label(
-                                RichText::new(format!("Mermaid error: {}", err))
-                                    .color(egui::Color32::RED),
+                    } else {
+                        // Marcar como cargando para evitar peticiones infinitas cada frame
+                        cache_map.insert(self.content.clone(), "LOADING".to_string());
+
+                        // Vega/Vega-Lite rendering via Kroki
+                        let kroki_lang = if lang == "vega" { "vega" } else { "vegalite" };
+
+                        // Opcional: Validar con vega_lite_4 si es vegalite
+                        if lang == "vega-lite" {
+                            if let Err(e) =
+                                serde_json::from_str::<vega_lite_5::Vegalite>(&self.content)
+                            {
+                                println!(
+                                    "Aviso: Validación de Vega-Lite falló (puede ser v5): {}",
+                                    e
+                                );
+                            }
+                        }
+
+                        let mut encoder = ZlibEncoder::new(Vec::new(), Compression::default());
+                        if let Ok(_) = encoder.write_all(self.content.as_bytes()) {
+                            if let Ok(compressed) = encoder.finish() {
+                                let b64 = general_purpose::STANDARD.encode(&compressed);
+                                let url_safe_b64 = b64.replace('+', "-").replace('/', "_");
+
+                                let url =
+                                    format!("https://kroki.io/{}/svg/{}", kroki_lang, url_safe_b64);
+                                println!("Solicitando Kroki: {}", url);
+
+                                let client = reqwest::blocking::Client::builder()
+                                    .timeout(std::time::Duration::from_secs(10))
+                                    .build()
+                                    .unwrap_or_else(|_| reqwest::blocking::Client::new());
+
+                                match client.get(&url).send() {
+                                    Ok(response) => {
+                                        if response.status().is_success() {
+                                            if let Ok(mut svg) = response.text() {
+                                                // Ensure we start directly with the svg tag
+                                                if let Some(start) = svg.find("<svg") {
+                                                    svg = svg[start..].to_string();
+                                                }
+                                                println!("¡Éxito Kroki! Tamaño SVG: {}", svg.len());
+                                                cache_map.insert(self.content.clone(), svg.clone());
+                                                Some(svg)
+                                            } else {
+                                                cache_map.insert(
+                                                    self.content.clone(),
+                                                    "ERROR: No se pudo leer el cuerpo".to_string(),
+                                                );
+                                                None
+                                            }
+                                        } else {
+                                            let err_msg =
+                                                format!("ERROR: Kroki HTTP {}", response.status());
+                                            println!("{}", err_msg);
+                                            cache_map.insert(self.content.clone(), err_msg);
+                                            None
+                                        }
+                                    }
+                                    Err(err) => {
+                                        let err_msg = format!("ERROR: Red - {}", err);
+                                        println!("{}", err_msg);
+                                        cache_map.insert(self.content.clone(), err_msg);
+                                        None
+                                    }
+                                }
+                            } else {
+                                cache_map.insert(
+                                    self.content.clone(),
+                                    "ERROR: Compresión fallida".to_string(),
+                                );
+                                None
+                            }
+                        } else {
+                            cache_map.insert(
+                                self.content.clone(),
+                                "ERROR: Escritura de buffer fallida".to_string(),
                             );
                             None
                         }
@@ -314,7 +428,8 @@ impl CodeBlock {
 
                 if let Some(svg) = svg {
                     let uri = format!(
-                        "bytes://mermaid_{}.svg",
+                        "bytes://{}_{}.svg",
+                        lang,
                         egui::Id::new(&self.content).value()
                     );
                     let bytes = svg.as_bytes().to_vec();
@@ -482,6 +597,7 @@ pub struct CommonMarkCache {
     scroll: HashMap<egui::Id, ScrollableCache>,
     pub(self) has_installed_loaders: bool,
     pub mermaid_cache: HashMap<String, String>,
+    pub vega_cache: HashMap<String, String>,
     pub latex_cache: HashMap<String, String>,
 }
 
@@ -497,6 +613,7 @@ impl Default for CommonMarkCache {
             scroll: Default::default(),
             has_installed_loaders: false,
             mermaid_cache: HashMap::new(),
+            vega_cache: HashMap::new(),
             latex_cache: HashMap::new(),
         }
     }

@@ -9,14 +9,14 @@ crate-type = ["cdylib", "lib"]
 
 [dependencies]
 mermaid-rs-renderer = { git = "https://github.com/1jehuang/mermaid-rs-renderer", tag = "v0.2.0" }
-egui = { version = "0.33", features = ["serde"] }
-egui_plot = "0.34"
+egui = { version = "0.32", features = ["serde"] }
+egui_plot = "0.32"
 chrono = "0.4.23"
 syntect = "5.0"
 base64 = "0.21"
 serde_json = "1.0"
-serde = { version = "1.0.228", features = ["derive"] }
-egui_extras = { version = "0.33", features = ["image","file","svg","http","svg_text"] }
+serde = { version = "=1.0.210", features = ["derive"] }
+egui_extras = { version = "0.32", features = ["image","file","svg","http","svg_text"] }
 filebuffer = "0.4.0"
 image = { version = "0.25", default-features = false, features = [
   "png",
@@ -33,7 +33,7 @@ fstream = "0.1.2"
 egui-twemoji = "0.8"
 rust-embed = "8.9.0"
 zip = "7.0.0"
-reqwest = { version = "0.12.28", default-features = false, features = ["blocking", "rustls-tls"] }
+reqwest = { version = "0.11", default-features = false, features = ["blocking", "rustls-tls"] }
 log = "0.4"
 duplicate = "2.0"
 paste = "1.0"
@@ -45,6 +45,12 @@ comemo = "0.4"
 typst-svg = "0.12"
 typst-render = "0.12"
 time = "0.3"
+vega_lite_5 = "0.8.0"
+flate2 = "1.1.9"
+tokio = { version = "1.36.0", features = ["rt", "rt-multi-thread"] }
+tokio-util = "=0.7.10"
+tokio-stream = "=0.1.14"
+vl-convert-rs = "1.9.0"
 
 [features]
 default = ["serde", "pulldown_cmark", "better_syntax_highlighting"]
@@ -59,12 +65,12 @@ embedded_image = []
 font-loader = "0.11"
 directories = "2.0"
 rfd = "0.11.3"
-eframe = { version = "0.33", features = ["wgpu"] }
+eframe = { version = "0.32", features = ["wgpu"] }
 
 [target.'cfg(target_os = "android")'.dependencies]
 android_logger = { version = "0.15", default-features = false }
-eframe = { version = "0.33", default-features = false, features = ["glow", "android-native-activity", "default_fonts"] }
-egui-winit = { version = "0.33", default-features = false, features = ["clipboard", "links"] }
+eframe = { version = "0.32", default-features = false, features = ["glow", "android-native-activity", "default_fonts"] }
+egui-winit = { version = "0.32", default-features = false, features = ["clipboard", "links"] }
 egui_keyboard = "0.5"
 jni = "0.21"
 android-activity = "0.6"

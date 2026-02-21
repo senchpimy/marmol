@@ -674,6 +674,19 @@ impl TabViewer for MTabViewer<'_> {
                                                 }
                                                 true 
                                             }))
+                                            .render_excalidraw_fn(Some(&|ui, filename, size| {
+                                                let ctx = ui.ctx();
+                                                let vault: String = ctx.data(|d| d.get_temp(egui::Id::new("nav_vault")).unwrap_or_default());
+                                                let current_path: String = ctx.data(|d| d.get_temp(egui::Id::new("nav_current_path")).unwrap_or_default());
+                                                
+                                                if let Some(path) = crate::files::resolve_path(&vault, &current_path, filename) {
+                                                    let mut gui = crate::excalidraw::ExcalidrawGui::default();
+                                                    gui.set_path(&path);
+                                                    gui.render_static(ui, size);
+                                                } else {
+                                                    ui.colored_label(egui::Color32::RED, format!("Could not find drawing: {}", filename));
+                                                }
+                                            }))
                                             .show(ui, cache, &markdown_content);
                                         
                                         ui.allocate_space(ui.available_size());

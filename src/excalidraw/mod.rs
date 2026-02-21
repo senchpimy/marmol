@@ -288,6 +288,84 @@ tags: [excalidraw]
         None
     }
 
+    pub fn render_static(&mut self, ui: &mut Ui, size: Option<f32>) {
+        if let Some(e) = &self.error_msg {
+            ui.colored_label(ui.ctx().style().visuals.error_fg_color, e);
+            return;
+        }
+        if self.scene.is_none() {
+            self.reload();
+            if self.scene.is_none() {
+                ui.label("Loading drawing...");
+                return;
+            }
+        }
+
+        if let Some(scene) = self.scene.take() {
+            if scene.elements.is_empty() {
+                self.scene = Some(scene);
+                return;
+            }
+
+            // Calculate bounding box of all elements
+            let mut min_x = f32::MAX;
+            let mut min_y = f32::MAX;
+            let mut max_x = f32::MIN;
+            let mut max_y = f32::MIN;
+
+            for el in &scene.elements {
+                if el.is_deleted {
+                    continue;
+                }
+                min_x = min_x.min(el.x);
+                min_y = min_y.min(el.y);
+                max_x = max_x.max(el.x + el.width);
+                max_y = max_y.max(el.y + el.height);
+            }
+
+            let drawing_width = max_x - min_x;
+            let drawing_height = max_y - min_y;
+
+            if drawing_width <= 0.0 || drawing_height <= 0.0 {
+                self.scene = Some(scene);
+                return;
+            }
+
+            let available_width = ui.available_width();
+            let target_width = size.unwrap_or(available_width).min(available_width);
+            let scale = target_width / drawing_width;
+            let padding_y = 10.0;
+            let target_height = drawing_height * scale + padding_y * 2.0;
+
+            let (response, painter) =
+                ui.allocate_painter(Vec2::new(target_width, target_height), Sense::hover());
+
+            let bg_color = crate::excalidraw::utils::hex_to_color(&scene.app_state.view_background_color);
+            if bg_color != Color32::TRANSPARENT {
+                painter.rect_filled(response.rect, 0.0, bg_color);
+            }
+
+            let screen_min = response.rect.min;
+            let to_screen = |pw: Pos2| {
+                screen_min + Vec2::new(0.0, padding_y) + (Vec2::new(pw.x - min_x, pw.y - min_y) * scale)
+            };
+
+            let ctx = ui.ctx().clone();
+            for el in &scene.elements {
+                if el.is_deleted {
+                    continue;
+                }
+                let tex = if let Some(fid) = &el.file_id {
+                    self.get_or_load_texture(&ctx, fid, &scene.files)
+                } else {
+                    None
+                };
+                draw_element(&painter, el, tex, &to_screen, scale);
+            }
+            self.scene = Some(scene);
+        }
+    }
+
     pub fn show(&mut self, ui: &mut Ui, vault: &str, _seed_id: Id) {
         if let Some(e) = &self.error_msg {
             ui.colored_label(ui.ctx().style().visuals.error_fg_color, e);

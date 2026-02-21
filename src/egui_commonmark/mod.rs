@@ -227,6 +227,11 @@ impl<'f> CommonMarkViewer<'f> {
         self
     }
 
+    pub fn render_excalidraw_fn(mut self, func: Option<&'f crate::egui_commonmark_backend::misc::RenderExcalidrawFn>) -> Self {
+        self.options.render_excalidraw_fn = func;
+        self
+    }
+
     /// Shows rendered markdown
     pub fn show(
         self,

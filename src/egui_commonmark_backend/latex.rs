@@ -105,7 +105,9 @@ pub fn render(ui: &mut Ui, cache: &mut CommonMarkCache, latex: &str, inline: boo
             });
         } else {
             img = img.fit_to_original_size(2.0);
-            ui.add(img.max_width(ui.available_width()));
+            ui.vertical_centered(|ui| {
+                ui.add(img.max_width(ui.available_width()));
+            });
         }
     }
 }

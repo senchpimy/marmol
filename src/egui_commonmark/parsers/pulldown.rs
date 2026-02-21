@@ -688,7 +688,19 @@ impl CommonMarkViewerInternal {
                 });
             }
             pulldown_cmark::Tag::Image { dest_url, .. } => {
-                self.image = Some(crate::egui_commonmark::Image::new(&dest_url, options));
+                let dest = dest_url.to_string();
+                if (dest.contains(".excalidraw.md") || dest.contains(".excalidraw")) && options.render_excalidraw_fn.is_some() {
+                    let mut parts = dest.split('|');
+                    let filename = parts.next().unwrap_or(&dest);
+                    let size = parts.next().and_then(|s| s.parse::<f32>().ok());
+                    
+                    if let Some(render_fn) = options.render_excalidraw_fn {
+                        render_fn(ui, filename, size);
+                    }
+                    self.image = None;
+                } else {
+                    self.image = Some(crate::egui_commonmark::Image::new(&dest_url, options));
+                }
             }
             pulldown_cmark::Tag::HtmlBlock => {
                 self.line.try_insert_start(ui);
