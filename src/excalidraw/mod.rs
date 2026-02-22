@@ -332,20 +332,33 @@ tags: [excalidraw]
             }
 
             let available_width = ui.available_width();
-            let target_width = size.unwrap_or(available_width).min(available_width);
-            let scale = target_width / drawing_width;
+            let max_w = 600.0;
+            // Height reduced by 30% means max_height = available_width * 0.7 (if we consider a square as baseline)
+            // but more accurately, it usually means limit growth.
+            let max_h = available_width * 0.7;
+            
+            let mut target_width = size.unwrap_or(available_width).min(available_width).min(max_w);
+            let mut scale = target_width / drawing_width;
+            
+            if drawing_height * scale > max_h {
+                scale = max_h / drawing_height;
+                target_width = drawing_width * scale;
+            }
+
             let padding_y = 10.0;
             let target_height = drawing_height * scale + padding_y * 2.0;
 
+            let x_offset = (available_width - target_width) / 2.0;
             let (response, painter) =
-                ui.allocate_painter(Vec2::new(target_width, target_height), Sense::hover());
+                ui.allocate_painter(Vec2::new(available_width, target_height), Sense::hover());
+            let drawing_rect = Rect::from_min_size(response.rect.min + Vec2::new(x_offset, 0.0), Vec2::new(target_width, target_height));
 
             let bg_color = crate::excalidraw::utils::hex_to_color(&scene.app_state.view_background_color);
             if bg_color != Color32::TRANSPARENT {
-                painter.rect_filled(response.rect, 0.0, bg_color);
+                painter.rect_filled(drawing_rect, 0.0, bg_color);
             }
 
-            let screen_min = response.rect.min;
+            let screen_min = drawing_rect.min;
             let to_screen = |pw: Pos2| {
                 screen_min + Vec2::new(0.0, padding_y) + (Vec2::new(pw.x - min_x, pw.y - min_y) * scale)
             };
@@ -721,34 +734,43 @@ tags: [excalidraw]
             if !mouse_over_panel {
                 match tool {
                     Tool::Selection => {
-                        if response.drag_started_by(PointerButton::Primary)
+                        let click_or_drag_start = response.clicked_by(PointerButton::Primary) || response.drag_started_by(PointerButton::Primary);
+                        
+                        if click_or_drag_start
                             && !self.is_panning
                             && !ui.input(|i| i.modifiers.alt)
                         {
                             if let Some(mp) = response.interact_pointer_pos() {
                                 let wp = to_world(mp);
-                                let mut f = false;
+                                let mut hit_index = None;
                                 for (i, el) in scene.elements.iter().enumerate().rev() {
                                     if el.is_deleted {
                                         continue;
                                     }
                                     if is_point_inside(el, wp) {
-                                        self.push_undo(&scene); // Push before moving
-                                        self.dragged_element_idx = Some(i);
-                                        if !self.selected_indices.contains(&i) {
-                                            self.selected_indices.clear();
-                                            self.selected_indices.insert(i);
-                                            self.selected_element_idx = Some(i);
-                                        }
-                                        self.last_mouse_pos_world = Some(wp);
-                                        f = true;
+                                        hit_index = Some(i);
                                         break;
                                     }
                                 }
-                                if !f {
+
+                                if let Some(i) = hit_index {
+                                    if !self.selected_indices.contains(&i) {
+                                        self.push_undo(&scene); 
+                                        self.selected_indices.clear();
+                                        self.selected_indices.insert(i);
+                                        self.selected_element_idx = Some(i);
+                                    }
+                                    if response.drag_started_by(PointerButton::Primary) {
+                                        self.dragged_element_idx = Some(i);
+                                        self.last_mouse_pos_world = Some(wp);
+                                    }
+                                } else {
+                                    // Hit nothing
                                     self.selected_indices.clear();
                                     self.selected_element_idx = None;
-                                    self.selection_rect = Some(Rect::from_min_max(wp, wp));
+                                    if response.drag_started_by(PointerButton::Primary) {
+                                        self.selection_rect = Some(Rect::from_min_max(wp, wp));
+                                    }
                                 }
                             }
                         }

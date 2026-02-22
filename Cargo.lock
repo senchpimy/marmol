@@ -3233,11 +3233,11 @@ dependencies = [
 
 [[package]]
 name = "egui-twemoji"
-version = "0.8.0"
+version = "0.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bed954a0747231267737ed8e497df3fef34055898d98a995ee4355237ad2a562"
+checksum = "d78aba6af23f75b1b5d5716b07d4aadb72ae3e896f6649a22934c34c95666978"
 dependencies = [
- "egui 0.33.3",
+ "egui 0.31.1",
  "twemoji-assets",
  "unicode-segmentation",
 ]
@@ -3330,13 +3330,13 @@ dependencies = [
 
 [[package]]
 name = "egui_plot"
-version = "0.32.1"
+version = "0.33.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "14ae092b46ea532f6c69d3e71036fb3b688fd00fd09c2a1e43d17051a8ae43e6"
+checksum = "524318041a8ea90c81c738e8985f8ad9e3f9bed636b03c2ff37b218113ed5121"
 dependencies = [
  "ahash",
- "egui 0.31.1",
- "emath 0.31.1",
+ "egui 0.32.3",
+ "emath 0.32.3",
 ]
 
 [[package]]
@@ -3539,6 +3539,19 @@ checksum = "7a1c3cc8e57274ec99de65301228b537f1e4eedc1b8e0f9411c6caac8ae7308f"
 dependencies = [
  "log",
  "regex",
+]
+
+[[package]]
+name = "env_logger"
+version = "0.10.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4cd405aab171cb85d6735e5c8d9db038c17d3ca007a4d2c25f337935c3d90580"
+dependencies = [
+ "humantime",
+ "is-terminal",
+ "log",
+ "regex",
+ "termcolor",
 ]
 
 [[package]]
@@ -4849,6 +4862,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "df3b46402a9d5adb4c86a0cf463f42e19994e3ee891101b1841f30a545cb49a9"
 
 [[package]]
+name = "humantime"
+version = "2.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "135b12329e5e3ce057a9f972339ea52bc954fe1e9358ef27f95e89716fbc5424"
+
+[[package]]
 name = "hyper"
 version = "0.14.32"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5343,6 +5362,17 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.117",
+]
+
+[[package]]
+name = "is-terminal"
+version = "0.4.17"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3640c1c38b8e4e43584d8df18be5fc6b0aa314ce6ebf51b53313d4306cca8e46"
+dependencies = [
+ "hermit-abi 0.5.2",
+ "libc",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -5896,6 +5926,7 @@ dependencies = [
  "egui_extras",
  "egui_keyboard",
  "egui_plot",
+ "env_logger 0.10.2",
  "filebuffer",
  "flate2",
  "font-loader",
@@ -11128,7 +11159,7 @@ dependencies = [
  "deno_emit",
  "deno_graph",
  "deno_runtime",
- "env_logger",
+ "env_logger 0.11.9",
  "fontdb 0.23.0",
  "futures",
  "futures-util",

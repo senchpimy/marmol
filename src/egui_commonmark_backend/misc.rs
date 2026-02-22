@@ -1,12 +1,34 @@
 use crate::egui_commonmark_backend::alerts::AlertBundle;
-use base64::{engine::general_purpose, Engine as _};
 use egui::{text::LayoutJob, RichText, TextBuffer, TextStyle, Ui};
-use flate2::write::ZlibEncoder;
-use flate2::Compression;
 use std::collections::HashMap;
-use std::io::Write;
+use std::sync::{Arc, Mutex, OnceLock};
 
 use crate::egui_commonmark_backend::pulldown::ScrollableCache;
+
+static VEGA_RESULTS: OnceLock<Arc<Mutex<HashMap<String, String>>>> = OnceLock::new();
+static VL_CONVERTER: OnceLock<Arc<tokio::sync::Mutex<vl_convert_rs::VlConverter>>> = OnceLock::new();
+static TOKIO_RUNTIME: OnceLock<tokio::runtime::Runtime> = OnceLock::new();
+
+fn get_vega_results() -> Arc<Mutex<HashMap<String, String>>> {
+    VEGA_RESULTS
+        .get_or_init(|| Arc::new(Mutex::new(HashMap::new())))
+        .clone()
+}
+
+fn get_vl_converter() -> Arc<tokio::sync::Mutex<vl_convert_rs::VlConverter>> {
+    VL_CONVERTER
+        .get_or_init(|| Arc::new(tokio::sync::Mutex::new(vl_convert_rs::VlConverter::new())))
+        .clone()
+}
+
+fn get_tokio_runtime() -> &'static tokio::runtime::Runtime {
+    TOKIO_RUNTIME.get_or_init(|| {
+        tokio::runtime::Builder::new_multi_thread()
+            .enable_all()
+            .build()
+            .expect("Failed to create Tokio runtime")
+    })
+}
 
 #[cfg(feature = "better_syntax_highlighting")]
 use syntect::{
@@ -276,7 +298,7 @@ impl Image {
         if !self.alt_text.is_empty() && options.show_alt_text_on_hover {
             response.on_hover_ui_at_pointer(|ui| {
                 for alt in self.alt_text {
-                    egui_twemoji::EmojiLabel::new(alt).show(ui);
+                    ui.label(alt);
                 }
             });
         }
@@ -304,11 +326,20 @@ impl CodeBlock {
                     &mut cache.vega_cache
                 };
 
+                // Primero revisamos si hay resultados asíncronos pendientes de integrar al cache local
+                if lang != "mermaid" {
+                    let results = get_vega_results();
+                    let mut results_lock = results.lock().unwrap();
+                    if let Some(svg) = results_lock.remove(&self.content) {
+                        cache_map.insert(self.content.clone(), svg);
+                    }
+                }
+
                 let svg = if let Some(svg) = cache_map.get(&self.content) {
                     if svg == "LOADING" {
                         ui.horizontal(|ui| {
                             ui.spinner();
-                            ui.label("Cargando gráfica de Vega...");
+                            ui.label("Generando gráfica de Vega localmente...");
                         });
                         None
                     } else if svg.starts_with("ERROR:") {
@@ -346,83 +377,70 @@ impl CodeBlock {
                         // Marcar como cargando para evitar peticiones infinitas cada frame
                         cache_map.insert(self.content.clone(), "LOADING".to_string());
 
-                        // Vega/Vega-Lite rendering via Kroki
-                        let kroki_lang = if lang == "vega" { "vega" } else { "vegalite" };
+                        // Vega/Vega-Lite rendering local via vl-convert-rs
+                        let content = self.content.clone();
+                        let is_vegalite = lang == "vega-lite";
+                        let results = get_vega_results();
+                        let converter = get_vl_converter();
+                        let rt = get_tokio_runtime();
+                        let ctx = ui.ctx().clone();
 
-                        // Opcional: Validar con vega_lite_4 si es vegalite
-                        if lang == "vega-lite" {
-                            if let Err(e) =
-                                serde_json::from_str::<vega_lite_5::Vegalite>(&self.content)
-                            {
-                                println!(
-                                    "Aviso: Validación de Vega-Lite falló (puede ser v5): {}",
-                                    e
-                                );
-                            }
-                        }
+                        rt.spawn(async move {
+                            let vega_spec: Result<serde_json::Value, _> =
+                                serde_json::from_str(&content);
 
-                        let mut encoder = ZlibEncoder::new(Vec::new(), Compression::default());
-                        if let Ok(_) = encoder.write_all(self.content.as_bytes()) {
-                            if let Ok(compressed) = encoder.finish() {
-                                let b64 = general_purpose::STANDARD.encode(&compressed);
-                                let url_safe_b64 = b64.replace('+', "-").replace('/', "_");
+                            match vega_spec {
+                                Ok(spec) => {
+                                    let mut conv = converter.lock().await;
+                                    let result = if is_vegalite {
+                                        let opts = vl_convert_rs::converter::VlOpts {
+                                            vl_version: vl_convert_rs::VlVersion::v5_21,
+                                            config: None,
+                                            theme: None,
+                                            show_warnings: false,
+                                            allowed_base_urls: None,
+                                            format_locale: None,
+                                            time_format_locale: None,
+                                        };
+                                        conv.vegalite_to_svg(spec, opts).await
+                                    } else {
+                                        let opts = vl_convert_rs::converter::VgOpts {
+                                            allowed_base_urls: None,
+                                            format_locale: None,
+                                            time_format_locale: None,
+                                        };
+                                        conv.vega_to_svg(spec, opts).await
+                                    };
 
-                                let url =
-                                    format!("https://kroki.io/{}/svg/{}", kroki_lang, url_safe_b64);
-                                println!("Solicitando Kroki: {}", url);
-
-                                let client = reqwest::blocking::Client::builder()
-                                    .timeout(std::time::Duration::from_secs(10))
-                                    .build()
-                                    .unwrap_or_else(|_| reqwest::blocking::Client::new());
-
-                                match client.get(&url).send() {
-                                    Ok(response) => {
-                                        if response.status().is_success() {
-                                            if let Ok(mut svg) = response.text() {
-                                                // Ensure we start directly with the svg tag
-                                                if let Some(start) = svg.find("<svg") {
-                                                    svg = svg[start..].to_string();
-                                                }
-                                                println!("¡Éxito Kroki! Tamaño SVG: {}", svg.len());
-                                                cache_map.insert(self.content.clone(), svg.clone());
-                                                Some(svg)
-                                            } else {
-                                                cache_map.insert(
-                                                    self.content.clone(),
-                                                    "ERROR: No se pudo leer el cuerpo".to_string(),
-                                                );
-                                                None
+                                    match result {
+                                        Ok(mut svg) => {
+                                            if let Some(start) = svg.find("<svg") {
+                                                svg = svg[start..].to_string();
                                             }
-                                        } else {
-                                            let err_msg =
-                                                format!("ERROR: Kroki HTTP {}", response.status());
-                                            println!("{}", err_msg);
-                                            cache_map.insert(self.content.clone(), err_msg);
-                                            None
+                                            let mut res_lock = results.lock().unwrap();
+                                            res_lock.insert(content, svg);
+                                        }
+                                        Err(e) => {
+                                            let mut res_lock = results.lock().unwrap();
+                                            res_lock.insert(
+                                                content,
+                                                format!("ERROR: Vega conversion: {}", e),
+                                            );
                                         }
                                     }
-                                    Err(err) => {
-                                        let err_msg = format!("ERROR: Red - {}", err);
-                                        println!("{}", err_msg);
-                                        cache_map.insert(self.content.clone(), err_msg);
-                                        None
-                                    }
                                 }
-                            } else {
-                                cache_map.insert(
-                                    self.content.clone(),
-                                    "ERROR: Compresión fallida".to_string(),
-                                );
-                                None
+                                Err(e) => {
+                                    let mut res_lock = results.lock().unwrap();
+                                    res_lock.insert(
+                                        content,
+                                        format!("ERROR: Invalid JSON for Vega: {}", e),
+                                    );
+                                }
                             }
-                        } else {
-                            cache_map.insert(
-                                self.content.clone(),
-                                "ERROR: Escritura de buffer fallida".to_string(),
-                            );
-                            None
-                        }
+                            ctx.request_repaint();
+                        });
+
+                        None
                     }
                 };
 
@@ -454,7 +472,7 @@ impl CodeBlock {
                 };
 
                 job.wrap.max_width = wrap_width;
-                ui.fonts_mut(|f| f.layout_job(job))
+                ui.fonts(|f| f.layout_job(job))
             };
 
             crate::egui_commonmark_backend::elements::code_block(

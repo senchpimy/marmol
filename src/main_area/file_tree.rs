@@ -316,7 +316,7 @@ impl FileTree {
                                     ui.scope_builder(
                                         egui::UiBuilder::new().max_rect(icon_rect),
                                         |ui| {
-                                            egui_twemoji::EmojiLabel::new(id).show(ui);
+                                            ui.label(id);
                                         },
                                     );
                                 }
@@ -498,7 +498,7 @@ impl FileTree {
                             } else {
                                 // Emoji o texto usando egui-twemoji
                                     ui.scope_builder(egui::UiBuilder::new().max_rect(icon_rect), |ui| {
-                                    egui_twemoji::EmojiLabel::new(id).show(ui);
+                                    ui.label(id);
                                 });
                             }
                         }

@@ -570,7 +570,7 @@ tags: [excalidraw]
         }
 
         /////////////////////////////////////////////////////////////////////////////////
-        let rect = ctx.content_rect();
+        let rect = ctx.screen_rect();
         let btn_size = match rect.width() / 45. {
             20.0..=30.0 => rect.width() / 45.,
             ..=20. => 20.,

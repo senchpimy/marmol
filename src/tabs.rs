@@ -57,6 +57,8 @@ pub enum TabContent {
         editor: easy_mark::EasyMarkEditor,
         #[serde(skip)]
         cache: CommonMarkCache,
+        #[serde(default)]
+        scroll_offset: f32,
     },
 }
 
@@ -115,9 +117,10 @@ impl Clone for TabContent {
                     gui,
                 }
             }
-            TabContent::Markdown { .. } => TabContent::Markdown {
+            TabContent::Markdown { scroll_offset, .. } => TabContent::Markdown {
                 editor: easy_mark::EasyMarkEditor::default(),
                 cache: CommonMarkCache::default(),
+                scroll_offset: *scroll_offset,
             },
         }
     }
@@ -203,6 +206,7 @@ impl Tabe {
             TabContent::Markdown {
                 editor,
                 cache: CommonMarkCache::default(),
+                scroll_offset: 0.0,
             }
         };
 
@@ -376,6 +380,7 @@ impl TabViewer for MTabViewer<'_> {
                         tab.content = TabContent::Markdown {
                             editor,
                             cache: CommonMarkCache::default(),
+                            scroll_offset: 0.0,
                         };
                     }
                     if ui.selectable_label(is_kanban_view, "📋 Board").clicked() && !is_kanban_view {
@@ -509,6 +514,7 @@ impl TabViewer for MTabViewer<'_> {
                                     tab.content = TabContent::Markdown {
                                         editor,
                                         cache: CommonMarkCache::default(),
+                                        scroll_offset: 0.0,
                                     };
                                     tab.ctype = Content::View;
                                 } else {
@@ -591,7 +597,7 @@ impl TabViewer for MTabViewer<'_> {
                     }
                 }
                 
-                TabContent::Markdown { editor, cache } => {
+                TabContent::Markdown { editor, cache, scroll_offset } => {
                     if editor.code.is_empty() && !tab.path.is_empty() {
                         editor.code = files::read_file(&tab.path);
                     }
@@ -599,6 +605,7 @@ impl TabViewer for MTabViewer<'_> {
                     let height = ui.available_height();
                     let margin_ratio = (0.15 * (width / 1500.0).min(height / 1000.0)).clamp(0.005, 0.15);
                     let content_ratio = 1.0 - 2.0 * margin_ratio;
+                    let tab_id = tab.id;
 
                     if tab.ctype == Content::View {
                         let cont = StripBuilder::new(ui)
@@ -607,7 +614,16 @@ impl TabViewer for MTabViewer<'_> {
                         cont.horizontal(|mut strip| {
                             strip.cell(|_| {});
                             strip.cell(|ui| {
-                                egui::ScrollArea::vertical().show(ui, |ui| {
+                                let mut area = egui::ScrollArea::vertical();
+                                let restored_id = egui::Id::new("restored_scroll").with(tab_id);
+                                let is_restored: bool = ui.ctx().data(|d| d.get_temp(restored_id).unwrap_or(false));
+                                
+                                if !is_restored && *scroll_offset > 0.0 {
+                                    area = area.vertical_scroll_offset(*scroll_offset);
+                                    ui.ctx().data_mut(|d| d.insert_temp(restored_id, true));
+                                }
+
+                                let output = area.show(ui, |ui| {
                                     editor.code = files::read_file(&tab.path);
                                     let frame =
                                         Frame::NONE.inner_margin(egui::Margin::symmetric(30, 10));
@@ -700,6 +716,7 @@ impl TabViewer for MTabViewer<'_> {
 
                                     ui.add_space(height * 0.5);
                                 });
+                                *scroll_offset = output.state.offset.y;
                             });
                         });
                     } else if tab.ctype == Content::Edit {
@@ -709,7 +726,16 @@ impl TabViewer for MTabViewer<'_> {
                         cont.horizontal(|mut strip| {
                             strip.cell(|_| {});
                             strip.cell(|ui| {
-                                egui::ScrollArea::vertical().show(ui, |ui| {
+                                let mut area = egui::ScrollArea::vertical();
+                                let restored_id = egui::Id::new("restored_scroll").with(tab_id);
+                                let is_restored: bool = ui.ctx().data(|d| d.get_temp(restored_id).unwrap_or(false));
+                                
+                                if !is_restored && *scroll_offset > 0.0 {
+                                    area = area.vertical_scroll_offset(*scroll_offset);
+                                    ui.ctx().data_mut(|d| d.insert_temp(restored_id, true));
+                                }
+
+                                let output = area.show(ui, |ui| {
                                     let frame =
                                         Frame::NONE.inner_margin(egui::Margin::symmetric(30, 10));
                                     let response = frame.show(ui, |ui| {
@@ -731,6 +757,7 @@ impl TabViewer for MTabViewer<'_> {
 
                                     ui.add_space(height * 0.5);
                                 });
+                                *scroll_offset = output.state.offset.y;
                             });
                         });
                     }
@@ -823,6 +850,7 @@ fn update_tab_content(tab: &mut Tabe, path: &String, is_history_nav: bool) {
         TabContent::Markdown {
             editor,
             cache: CommonMarkCache::default(),
+            scroll_offset: 0.0,
         }
     };
 }
