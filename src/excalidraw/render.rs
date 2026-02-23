@@ -9,36 +9,77 @@ pub fn draw_selection_border<F>(painter: &egui::Painter, el: &ExcalidrawElement,
 where
     F: Fn(Pos2) -> Pos2,
 {
-    let padding = 4.0;
-    let c = Pos2::new(el.x + el.width / 2.0, el.y + el.height / 2.0);
-    let cl = Pos2::new(el.width / 2.0, el.height / 2.0);
-    let r = Rot2::from_angle(el.angle);
-    
-    // Bounding box points with padding
-    let pts: Vec<Pos2> = [
-        Pos2::new(-padding, -padding),
-        Pos2::new(el.width + padding, -padding),
-        Pos2::new(el.width + padding, el.height + padding),
-        Pos2::new(-padding, el.height + padding),
-    ]
-    .iter()
-    .map(|&p| to_screen(c + r * (p - cl)))
-    .collect();
-
     let stroke_color = ui.ctx().style().visuals.selection.stroke.color;
-    painter.add(Shape::closed_line(
-        pts.clone(),
-        Stroke::new(1.0, stroke_color),
-    ));
-
-    // Draw handles at corners
     let handle_size = 6.0 * sc.max(0.5).min(1.5);
-    for p in pts {
-        painter.rect_filled(
-            Rect::from_center_size(p, Vec2::splat(handle_size)),
-            1.0,
-            stroke_color,
-        );
+
+    if (el.element_type == "line" || el.element_type == "arrow") && el.points.len() >= 2 {
+        // Center of element for rotation
+        let c = Pos2::new(el.x + el.width / 2.0, el.y + el.height / 2.0);
+        let cl = Pos2::new(el.width / 2.0, el.height / 2.0);
+        let r = Rot2::from_angle(el.angle);
+
+        let handles = [0, el.points.len() - 1];
+        let handle_visual_size = 10.0 * sc.max(0.5).min(1.5);
+        for &p_idx in &handles {
+            let p = el.points[p_idx];
+            let p_screen = to_screen(c + r * (Pos2::new(p[0], p[1]) - cl));
+            
+            painter.rect_filled(
+                Rect::from_center_size(p_screen, Vec2::splat(handle_visual_size)),
+                handle_visual_size / 2.0,
+                stroke_color,
+            );
+            // Add a small border to the handle to make it more visible
+            painter.rect_stroke(
+                Rect::from_center_size(p_screen, Vec2::splat(handle_visual_size)),
+                handle_visual_size / 2.0,
+                Stroke::new(1.5, Color32::WHITE),
+                egui::StrokeKind::Outside,
+            );
+        }
+    } else {
+        let padding = 4.0;
+        let c = Pos2::new(el.x + el.width / 2.0, el.y + el.height / 2.0);
+        let cl = Pos2::new(el.width / 2.0, el.height / 2.0);
+        let r = Rot2::from_angle(el.angle);
+        
+        // Bounding box points with padding
+        let pts: Vec<Pos2> = [
+            Pos2::new(-padding, -padding), // 0: Top-Left
+            Pos2::new(el.width + padding, -padding), // 1: Top-Right
+            Pos2::new(el.width + padding, el.height + padding), // 2: Bottom-Right
+            Pos2::new(-padding, el.height + padding), // 3: Bottom-Left
+        ]
+        .iter()
+        .map(|&p| to_screen(c + r * (p - cl)))
+        .collect();
+
+        painter.add(Shape::closed_line(
+            pts.clone(),
+            Stroke::new(1.0, stroke_color),
+        ));
+
+        // Draw rotation handle
+        let top_mid = to_screen(c + r * (Pos2::new(el.width / 2.0, -padding - 20.0) - cl));
+        let connection_start = to_screen(c + r * (Pos2::new(el.width / 2.0, -padding) - cl));
+        painter.line_segment([connection_start, top_mid], Stroke::new(1.0, stroke_color));
+        painter.circle_filled(top_mid, handle_size * 0.8, stroke_color);
+        painter.circle_stroke(top_mid, handle_size * 0.8, Stroke::new(1.0, Color32::WHITE));
+
+        // Draw handles at corners
+        for p in pts {
+            painter.rect_filled(
+                Rect::from_center_size(p, Vec2::splat(handle_size)),
+                2.0,
+                stroke_color,
+            );
+            painter.rect_stroke(
+                Rect::from_center_size(p, Vec2::splat(handle_size)),
+                2.0,
+                Stroke::new(1.0, Color32::WHITE),
+                egui::StrokeKind::Outside,
+            );
+        }
     }
 }
 

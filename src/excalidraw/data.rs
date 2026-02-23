@@ -145,6 +145,10 @@ impl Default for ExcalidrawElement {
 pub struct ExcalidrawAppState {
     #[serde(rename = "viewBackgroundColor")]
     pub view_background_color: String,
+    #[serde(default, rename = "showGrid")]
+    pub show_grid: bool,
+    #[serde(default, rename = "snapEnabled")]
+    pub snap_enabled: bool,
     #[serde(flatten)]
     pub extra: serde_json::Map<String, serde_json::Value>,
 }
@@ -153,6 +157,8 @@ impl Default for ExcalidrawAppState {
     fn default() -> Self {
         Self {
             view_background_color: "#ffffff".to_string(),
+            show_grid: true,
+            snap_enabled: true,
             extra: serde_json::Map::new(),
         }
     }

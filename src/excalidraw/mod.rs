@@ -1,13 +1,13 @@
 use base64::{engine::general_purpose, Engine as _};
-use lz_str;
 use egui::UiBuilder;
+use lz_str;
 use regex::Regex;
 use std::path::Path;
 use walkdir::WalkDir;
 
 use egui::{
-    Color32, ColorImage, Context, PointerButton, Pos2, Rect,
-    Sense, Stroke, TextureHandle, TextureOptions, Ui, Vec2, Id,
+    Color32, ColorImage, Context, Id, PointerButton, Pos2, Rect, Sense, Stroke, TextureHandle,
+    TextureOptions, Ui, Vec2,
 };
 use image::imageops::FilterType;
 use serde::{Deserialize, Serialize};
@@ -15,14 +15,14 @@ use std::collections::{HashMap, HashSet};
 use std::fs;
 
 pub mod data;
-pub mod utils;
 pub mod render;
 pub mod ui_panel;
+pub mod utils;
 
 use data::{ExcalidrawElement, ExcalidrawFile, ExcalidrawScene, Tool};
-use utils::{is_point_inside, move_element_group, normalize_element};
 use render::{draw_element, draw_selection_border};
 use ui_panel::show_properties_panel;
+use utils::{is_point_inside, move_element_group, normalize_element};
 
 #[derive(Serialize, Deserialize)]
 pub struct ExcalidrawGui {
@@ -41,6 +41,8 @@ pub struct ExcalidrawGui {
     default_props: ExcalidrawElement,
     #[serde(skip)]
     dragged_element_idx: Option<usize>,
+    #[serde(skip)]
+    dragged_point_idx: Option<usize>,
     #[serde(skip)]
     last_mouse_pos_world: Option<Pos2>,
     #[serde(skip)]
@@ -65,6 +67,8 @@ pub struct ExcalidrawGui {
     redo_stack: Vec<ExcalidrawScene>,
     #[serde(skip)]
     clipboard: Vec<ExcalidrawElement>,
+    #[serde(skip)]
+    active_guides: Vec<Rect>,
 }
 
 impl Default for ExcalidrawGui {
@@ -79,6 +83,7 @@ impl Default for ExcalidrawGui {
             selected_element_idx: None,
             default_props: ExcalidrawElement::default(),
             dragged_element_idx: None,
+            dragged_point_idx: None,
             last_mouse_pos_world: None,
             drawing_start_pos: None,
             drawing_element: None,
@@ -91,6 +96,7 @@ impl Default for ExcalidrawGui {
             undo_stack: vec![],
             redo_stack: vec![],
             clipboard: vec![],
+            active_guides: vec![],
         }
     }
 }
@@ -336,10 +342,13 @@ tags: [excalidraw]
             // Height reduced by 30% means max_height = available_width * 0.7 (if we consider a square as baseline)
             // but more accurately, it usually means limit growth.
             let max_h = available_width * 0.7;
-            
-            let mut target_width = size.unwrap_or(available_width).min(available_width).min(max_w);
+
+            let mut target_width = size
+                .unwrap_or(available_width)
+                .min(available_width)
+                .min(max_w);
             let mut scale = target_width / drawing_width;
-            
+
             if drawing_height * scale > max_h {
                 scale = max_h / drawing_height;
                 target_width = drawing_width * scale;
@@ -351,16 +360,22 @@ tags: [excalidraw]
             let x_offset = (available_width - target_width) / 2.0;
             let (response, painter) =
                 ui.allocate_painter(Vec2::new(available_width, target_height), Sense::hover());
-            let drawing_rect = Rect::from_min_size(response.rect.min + Vec2::new(x_offset, 0.0), Vec2::new(target_width, target_height));
+            let drawing_rect = Rect::from_min_size(
+                response.rect.min + Vec2::new(x_offset, 0.0),
+                Vec2::new(target_width, target_height),
+            );
 
-            let bg_color = crate::excalidraw::utils::hex_to_color(&scene.app_state.view_background_color);
+            let bg_color =
+                crate::excalidraw::utils::hex_to_color(&scene.app_state.view_background_color);
             if bg_color != Color32::TRANSPARENT {
                 painter.rect_filled(drawing_rect, 0.0, bg_color);
             }
 
             let screen_min = drawing_rect.min;
             let to_screen = |pw: Pos2| {
-                screen_min + Vec2::new(0.0, padding_y) + (Vec2::new(pw.x - min_x, pw.y - min_y) * scale)
+                screen_min
+                    + Vec2::new(0.0, padding_y)
+                    + (Vec2::new(pw.x - min_x, pw.y - min_y) * scale)
             };
 
             let ctx = ui.ctx().clone();
@@ -419,16 +434,26 @@ tags: [excalidraw]
         });
 
         ui.horizontal(|ui| {
-            let color = ui.ctx().style().visuals.widgets.noninteractive.fg_stroke.color;
+            let color = ui
+                .ctx()
+                .style()
+                .visuals
+                .widgets
+                .noninteractive
+                .fg_stroke
+                .color;
             let btn_size = Vec2::splat(20.0);
 
             ui.label("Tools:");
             if ui
-                .add(egui::Button::image(
-                    egui::Image::new(egui::include_image!("../../resources/pointer.svg"))
-                        .tint(color)
-                        .fit_to_exact_size(btn_size),
-                ).selected(self.active_tool == Some(Tool::Selection)))
+                .add(
+                    egui::Button::image(
+                        egui::Image::new(egui::include_image!("../../resources/pointer.svg"))
+                            .tint(color)
+                            .fit_to_exact_size(btn_size),
+                    )
+                    .selected(self.active_tool == Some(Tool::Selection)),
+                )
                 .on_hover_text("Selection (S)")
                 .clicked()
             {
@@ -436,11 +461,14 @@ tags: [excalidraw]
             }
 
             if ui
-                .add(egui::Button::image(
-                    egui::Image::new(egui::include_image!("../../resources/hand.svg"))
-                        .tint(color)
-                        .fit_to_exact_size(btn_size),
-                ).selected(self.active_tool == Some(Tool::Hand)))
+                .add(
+                    egui::Button::image(
+                        egui::Image::new(egui::include_image!("../../resources/hand.svg"))
+                            .tint(color)
+                            .fit_to_exact_size(btn_size),
+                    )
+                    .selected(self.active_tool == Some(Tool::Hand)),
+                )
                 .on_hover_text("Hand (H)")
                 .clicked()
             {
@@ -486,6 +514,36 @@ tags: [excalidraw]
                 self.active_tool = Some(Tool::Freedraw);
             }
 
+            ui.separator();
+            let (mut sg, mut sn) = if let Some(scene) = &self.scene {
+                (scene.app_state.show_grid, scene.app_state.snap_enabled)
+            } else {
+                (true, true)
+            };
+
+            if ui
+                .selectable_label(sg, "▦")
+                .on_hover_text("Show Grid")
+                .clicked()
+            {
+                sg = !sg;
+                if let Some(scene) = &mut self.scene {
+                    scene.app_state.show_grid = sg;
+                    self.save_file();
+                }
+            }
+            if ui
+                .selectable_label(sn, "🧲")
+                .on_hover_text("Enable Snapping")
+                .clicked()
+            {
+                sn = !sn;
+                if let Some(scene) = &mut self.scene {
+                    scene.app_state.snap_enabled = sn;
+                    self.save_file();
+                }
+            }
+
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 if ui.button("💾").on_hover_text("Save (Manual)").clicked() {
                     self.save_file();
@@ -510,13 +568,9 @@ tags: [excalidraw]
 
         let mut bg_color = Color32::WHITE;
         if let Some(scene) = &self.scene {
-            if let Some(app_state) = scene.extra.get("appState").and_then(|v| v.as_object()) {
-                if let Some(view_bg) = app_state.get("viewBackgroundColor").and_then(|v| v.as_str()) {
-                    let color = utils::hex_to_color(view_bg);
-                    if color != Color32::TRANSPARENT {
-                        bg_color = color;
-                    }
-                }
+            let color = utils::hex_to_color(&scene.app_state.view_background_color);
+            if color != Color32::TRANSPARENT {
+                bg_color = color;
             }
         }
 
@@ -532,15 +586,19 @@ tags: [excalidraw]
         }
 
         // Detect double-click for Wikilinks
+        let screen_rect_min = response.rect.min;
+        let cp_pre = self.pan;
+        let cs_pre = self.scale;
+        let to_world_pre = |ps: Pos2| Pos2::ZERO + (ps - screen_rect_min - cp_pre) / cs_pre;
+
         if response.double_clicked() {
             if let Some(mp) = response.interact_pointer_pos() {
-                // Adjust for current pan/scale to get world coordinates
-                let screen_rect_min = response.rect.min;
-                let cp = self.pan;
-                let cs = self.scale;
-                let wp = Pos2::ZERO + (mp - screen_rect_min - cp) / cs;
-                
-                eprintln!("DEBUG: Double-click detected at screen {:?}, world {:?}", mp, wp);
+                let wp = to_world_pre(mp);
+
+                eprintln!(
+                    "DEBUG: Double-click detected at screen {:?}, world {:?}",
+                    mp, wp
+                );
 
                 if let Some(scene) = &self.scene {
                     for el in scene.elements.iter().rev() {
@@ -549,17 +607,22 @@ tags: [excalidraw]
                         }
                         if el.element_type == "text" {
                             // Use a very generous hit box for text
-                            let hit_margin = 20.0 / cs;
-                            let rect = Rect::from_min_size(Pos2::new(el.x, el.y), Vec2::new(el.width, el.height)).expand(hit_margin);
-                            
+                            let hit_margin = 20.0 / cs_pre;
+                            let rect = Rect::from_min_size(
+                                Pos2::new(el.x, el.y),
+                                Vec2::new(el.width, el.height),
+                            )
+                            .expand(hit_margin);
+
                             if rect.contains(wp) {
                                 eprintln!("DEBUG: Hit text element: '{}' at [{:?}]", el.text, rect);
-                                
+
                                 let mut link_target: Option<String> = None;
 
                                 // Helper to extract from [[ ]]
                                 let extract_wiki = |s: &str| -> Option<String> {
-                                    let re_wiki = Regex::new(r"\[\[([^\]|]+)(?:\|([^\]]+))?\]\]").unwrap();
+                                    let re_wiki =
+                                        Regex::new(r"\[\[([^\]|]+)(?:\|([^\]]+))?\]\]").unwrap();
                                     re_wiki.captures(s).map(|caps| caps[1].trim().to_string())
                                 };
 
@@ -597,8 +660,13 @@ tags: [excalidraw]
 
                                 // 4. Fallback: Cleaned text
                                 if link_target.is_none() {
-                                    let cleaned: String = el.text.chars()
-                                        .filter(|c| !c.is_ascii_punctuation() && (c.is_alphanumeric() || c.is_whitespace()))
+                                    let cleaned: String = el
+                                        .text
+                                        .chars()
+                                        .filter(|c| {
+                                            !c.is_ascii_punctuation()
+                                                && (c.is_alphanumeric() || c.is_whitespace())
+                                        })
                                         .collect();
                                     let cleaned = cleaned.trim();
                                     if !cleaned.is_empty() {
@@ -608,17 +676,28 @@ tags: [excalidraw]
 
                                 if let Some(target) = link_target {
                                     // Remove any remaining wikilink brackets if present (defensive)
-                                    let clean_target = target.trim_start_matches("[[").trim_end_matches("]]");
-                                    
-                                    eprintln!("DEBUG: Attempting to resolve link target: '{}'", clean_target);
-                                    let resolved = crate::files::resolve_path(vault, &self.path, clean_target);
+                                    let clean_target =
+                                        target.trim_start_matches("[[").trim_end_matches("]]");
+
+                                    eprintln!(
+                                        "DEBUG: Attempting to resolve link target: '{}'",
+                                        clean_target
+                                    );
+                                    let resolved =
+                                        crate::files::resolve_path(vault, &self.path, clean_target);
                                     eprintln!("DEBUG: Resolved path: {:?}", resolved);
 
                                     if let Some(path) = resolved {
-                                        ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("global_nav_request"), Some(path)));
-                                        return; 
+                                        ui.ctx().data_mut(|d| {
+                                            d.insert_temp(
+                                                egui::Id::new("global_nav_request"),
+                                                Some(path),
+                                            )
+                                        });
+                                        return;
                                     } else {
-                                        self.error_msg = Some(format!("Could not find file: {}", clean_target));
+                                        self.error_msg =
+                                            Some(format!("Could not find file: {}", clean_target));
                                     }
                                 } else {
                                     eprintln!("DEBUG: No link target found in element");
@@ -670,6 +749,43 @@ tags: [excalidraw]
         let to_world = move |ps: Pos2| Pos2::ZERO + (ps - screen_rect_min - cp) / cs;
         let vis_rect = Rect::from_min_max(to_world(response.rect.min), to_world(response.rect.max));
 
+        let (show_grid, snap_enabled) = if let Some(scene) = &self.scene {
+            (scene.app_state.show_grid, scene.app_state.snap_enabled)
+        } else {
+            (true, true)
+        };
+
+        // Grid Rendering
+        let grid_size = 20.0;
+        if show_grid {
+            let dot_color = Color32::from_rgb(22, 23, 23);
+            //if ui.visuals().dark_mode {
+            //    Color32::from_white_alpha(40)
+            //} else {
+            //    Color32::from_black_alpha(40)
+            //};
+
+            let start_x = (to_world(response.rect.min).x / grid_size).floor() * grid_size;
+            let start_y = (to_world(response.rect.min).y / grid_size).floor() * grid_size;
+            let end_x = (to_world(response.rect.max).x / grid_size).ceil() * grid_size;
+            let end_y = (to_world(response.rect.max).y / grid_size).ceil() * grid_size;
+
+            let steps_x = ((end_x - start_x) / grid_size).ceil() as i32 + 1;
+            let steps_y = ((end_y - start_y) / grid_size).ceil() as i32 + 1;
+
+            if steps_x > 0 && steps_x < 1000 && steps_y > 0 && steps_y < 1000 {
+                let dot_radius = (1.0 * self.scale).clamp(0.8, 1.5);
+                for ix in 0..steps_x {
+                    let x = start_x + ix as f32 * grid_size;
+                    for iy in 0..steps_y {
+                        let y = start_y + iy as f32 * grid_size;
+                        let p = to_screen(Pos2::new(x, y));
+                        painter.circle_filled(p, dot_radius, dot_color);
+                    }
+                }
+            }
+        }
+
         // Keyboard shortcuts for Undo/Redo
         if ui.input(|i| i.modifiers.ctrl && i.key_pressed(egui::Key::Z)) {
             if ui.input(|i| i.modifiers.shift) {
@@ -716,7 +832,7 @@ tags: [excalidraw]
                     scene.elements.push(new_el);
                     new_selected.insert(scene.elements.len() - 1);
                 }
-                
+
                 self.selected_indices = new_selected;
                 self.selected_element_idx = self.selected_indices.iter().next().copied();
                 dirty = true;
@@ -734,42 +850,122 @@ tags: [excalidraw]
             if !mouse_over_panel {
                 match tool {
                     Tool::Selection => {
-                        let click_or_drag_start = response.clicked_by(PointerButton::Primary) || response.drag_started_by(PointerButton::Primary);
-                        
-                        if click_or_drag_start
-                            && !self.is_panning
-                            && !ui.input(|i| i.modifiers.alt)
+                        let click_or_drag_start = response.clicked_by(PointerButton::Primary)
+                            || response.drag_started_by(PointerButton::Primary);
+
+                        if click_or_drag_start && !self.is_panning && !ui.input(|i| i.modifiers.alt)
                         {
                             if let Some(mp) = response.interact_pointer_pos() {
                                 let wp = to_world(mp);
-                                let mut hit_index = None;
-                                for (i, el) in scene.elements.iter().enumerate().rev() {
-                                    if el.is_deleted {
-                                        continue;
-                                    }
-                                    if is_point_inside(el, wp) {
-                                        hit_index = Some(i);
-                                        break;
+
+                                // Check if we clicked on a point handle of a single selected line/arrow
+                                let mut point_hit = None;
+                                let mut resize_hit = None;
+                                let mut rotate_hit = None;
+
+                                if self.selected_indices.len() == 1 {
+                                    let idx = *self.selected_indices.iter().next().unwrap();
+                                    if let Some(el) = scene.elements.get(idx) {
+                                        let center = Pos2::new(
+                                            el.x + el.width / 2.0,
+                                            el.y + el.height / 2.0,
+                                        );
+                                        let cl = Vec2::new(el.width / 2.0, el.height / 2.0);
+                                        let rot = egui::emath::Rot2::from_angle(el.angle);
+                                        let handle_radius = 16.0 / cs;
+
+                                        if (el.element_type == "line" || el.element_type == "arrow")
+                                            && el.points.len() >= 2
+                                        {
+                                            let handles = [0, el.points.len() - 1];
+                                            for &p_idx in &handles {
+                                                let p = el.points[p_idx];
+                                                let p_world = center
+                                                    + rot * (Pos2::new(p[0], p[1]) - cl).to_vec2();
+                                                if p_world.distance(wp) < handle_radius {
+                                                    point_hit = Some((idx, p_idx));
+                                                    break;
+                                                }
+                                            }
+                                        } else {
+                                            // Corner resize handles
+                                            let padding = 4.0;
+                                            let corners = [
+                                                Pos2::new(-padding, -padding),                      // 0: TL
+                                                Pos2::new(el.width + padding, -padding), // 1: TR
+                                                Pos2::new(el.width + padding, el.height + padding), // 2: BR
+                                                Pos2::new(-padding, el.height + padding), // 3: BL
+                                            ];
+                                            for (c_idx, &p) in corners.iter().enumerate() {
+                                                let p_world = center + rot * (p - cl).to_vec2();
+                                                if p_world.distance(wp) < handle_radius {
+                                                    resize_hit = Some((idx, c_idx));
+                                                    break;
+                                                }
+                                            }
+
+                                            // Rotation handle
+                                            if rotate_hit.is_none() {
+                                                let rot_p =
+                                                    Pos2::new(el.width / 2.0, -padding - 20.0);
+                                                let rot_p_world =
+                                                    center + rot * (rot_p - cl).to_vec2();
+                                                if rot_p_world.distance(wp) < handle_radius {
+                                                    rotate_hit = Some(idx);
+                                                }
+                                            }
+                                        }
                                     }
                                 }
 
-                                if let Some(i) = hit_index {
-                                    if !self.selected_indices.contains(&i) {
-                                        self.push_undo(&scene); 
-                                        self.selected_indices.clear();
-                                        self.selected_indices.insert(i);
-                                        self.selected_element_idx = Some(i);
-                                    }
-                                    if response.drag_started_by(PointerButton::Primary) {
-                                        self.dragged_element_idx = Some(i);
-                                        self.last_mouse_pos_world = Some(wp);
-                                    }
+                                if let Some((el_idx, p_idx)) = point_hit {
+                                    self.push_undo(&scene);
+                                    self.dragged_element_idx = Some(el_idx);
+                                    self.dragged_point_idx = Some(p_idx);
+                                    self.last_mouse_pos_world = Some(wp);
+                                } else if let Some((el_idx, c_idx)) = resize_hit {
+                                    self.push_undo(&scene);
+                                    self.dragged_element_idx = Some(el_idx);
+                                    // Use 100+ for corners
+                                    self.dragged_point_idx = Some(100 + c_idx);
+                                    self.last_mouse_pos_world = Some(wp);
+                                } else if let Some(el_idx) = rotate_hit {
+                                    self.push_undo(&scene);
+                                    self.dragged_element_idx = Some(el_idx);
+                                    // Use 200 for rotation
+                                    self.dragged_point_idx = Some(200);
+                                    self.last_mouse_pos_world = Some(wp);
                                 } else {
-                                    // Hit nothing
-                                    self.selected_indices.clear();
-                                    self.selected_element_idx = None;
-                                    if response.drag_started_by(PointerButton::Primary) {
-                                        self.selection_rect = Some(Rect::from_min_max(wp, wp));
+                                    let mut hit_index = None;
+                                    for (i, el) in scene.elements.iter().enumerate().rev() {
+                                        if el.is_deleted {
+                                            continue;
+                                        }
+                                        if is_point_inside(el, wp) {
+                                            hit_index = Some(i);
+                                            break;
+                                        }
+                                    }
+
+                                    if let Some(i) = hit_index {
+                                        if !self.selected_indices.contains(&i) {
+                                            self.push_undo(&scene);
+                                            self.selected_indices.clear();
+                                            self.selected_indices.insert(i);
+                                            self.selected_element_idx = Some(i);
+                                        }
+                                        if response.drag_started_by(PointerButton::Primary) {
+                                            self.dragged_element_idx = Some(i);
+                                            self.dragged_point_idx = None;
+                                            self.last_mouse_pos_world = Some(wp);
+                                        }
+                                    } else {
+                                        // Hit nothing
+                                        self.selected_indices.clear();
+                                        self.selected_element_idx = None;
+                                        if response.drag_started_by(PointerButton::Primary) {
+                                            self.selection_rect = Some(Rect::from_min_max(wp, wp));
+                                        }
                                     }
                                 }
                             }
@@ -780,7 +976,7 @@ tags: [excalidraw]
                                 if let Some(mp) = response.interact_pointer_pos() {
                                     let wp = to_world(mp);
                                     rect.max = wp;
-                                    
+
                                     // Update selection
                                     self.selected_indices.clear();
                                     let norm_rect = Rect::from_two_pos(rect.min, rect.max);
@@ -788,7 +984,10 @@ tags: [excalidraw]
                                         if el.is_deleted {
                                             continue;
                                         }
-                                        let el_rect = Rect::from_min_size(Pos2::new(el.x, el.y), Vec2::new(el.width, el.height));
+                                        let el_rect = Rect::from_min_size(
+                                            Pos2::new(el.x, el.y),
+                                            Vec2::new(el.width, el.height),
+                                        );
                                         if norm_rect.intersects(el_rect) {
                                             self.selected_indices.insert(i);
                                         }
@@ -800,15 +999,223 @@ tags: [excalidraw]
                         if let Some(idx) = self.dragged_element_idx {
                             if response.dragged_by(PointerButton::Primary) {
                                 if let Some(mp) = response.interact_pointer_pos() {
-                                    let cwp = to_world(mp);
+                                    let mut cwp = to_world(mp);
+
+                                    // Grid Snap (20px)
+                                    let grid_size = 20.0;
+                                    if snap_enabled {
+                                        cwp.x = (cwp.x / grid_size).round() * grid_size;
+                                        cwp.y = (cwp.y / grid_size).round() * grid_size;
+                                    }
+
                                     if let Some(lp) = self.last_mouse_pos_world {
-                                        let d = cwp - lp;
+                                        let mut d = cwp - lp;
                                         if d.length_sq() > 0.0001 {
-                                            // Move all selected elements if we are dragging one of them
-                                            for &s_idx in &self.selected_indices {
-                                                if let Some(el) = scene.elements.get_mut(s_idx) {
-                                                    el.x += d.x;
-                                                    el.y += d.y;
+                                            self.active_guides.clear();
+                                            if let Some(p_idx) = self.dragged_point_idx {
+                                                if p_idx == 200 {
+                                                    // Rotation
+                                                    if let Some(el) = scene.elements.get_mut(idx) {
+                                                        let center = Pos2::new(
+                                                            el.x + el.width / 2.0,
+                                                            el.y + el.height / 2.0,
+                                                        );
+                                                        let v = cwp - center;
+                                                        // Adjust by PI/2 because rotation handle is at the top
+                                                        el.angle = v.y.atan2(v.x)
+                                                            + std::f32::consts::FRAC_PI_2;
+                                                        // Snap rotation to 15 degrees
+                                                        let snap_angle = 15.0f32.to_radians();
+                                                        el.angle = (el.angle / snap_angle).round()
+                                                            * snap_angle;
+                                                        dirty = true;
+                                                    }
+                                                } else if p_idx >= 100 && p_idx <= 103 {
+                                                    // Corner Resize logic remains same but uses snapped d
+                                                    if let Some(el) = scene.elements.get_mut(idx) {
+                                                        let c_idx = p_idx - 100;
+                                                        let rot =
+                                                            egui::emath::Rot2::from_angle(el.angle);
+                                                        let rot_inv = egui::emath::Rot2::from_angle(
+                                                            -el.angle,
+                                                        );
+
+                                                        let center = Pos2::new(
+                                                            el.x + el.width / 2.0,
+                                                            el.y + el.height / 2.0,
+                                                        );
+                                                        let opp_idx = (c_idx + 2) % 4;
+                                                        let opp_local = match opp_idx {
+                                                            0 => Vec2::new(
+                                                                -el.width / 2.0,
+                                                                -el.height / 2.0,
+                                                            ),
+                                                            1 => Vec2::new(
+                                                                el.width / 2.0,
+                                                                -el.height / 2.0,
+                                                            ),
+                                                            2 => Vec2::new(
+                                                                el.width / 2.0,
+                                                                el.height / 2.0,
+                                                            ),
+                                                            3 => Vec2::new(
+                                                                -el.width / 2.0,
+                                                                el.height / 2.0,
+                                                            ),
+                                                            _ => Vec2::ZERO,
+                                                        };
+                                                        let opp_world = center + rot * opp_local;
+
+                                                        let d_local = rot_inv * d;
+                                                        match c_idx {
+                                                            0 => {
+                                                                el.width =
+                                                                    (el.width - d_local.x).max(1.0);
+                                                                el.height = (el.height - d_local.y)
+                                                                    .max(1.0);
+                                                            }
+                                                            1 => {
+                                                                el.width =
+                                                                    (el.width + d_local.x).max(1.0);
+                                                                el.height = (el.height - d_local.y)
+                                                                    .max(1.0);
+                                                            }
+                                                            2 => {
+                                                                el.width =
+                                                                    (el.width + d_local.x).max(1.0);
+                                                                el.height = (el.height + d_local.y)
+                                                                    .max(1.0);
+                                                            }
+                                                            3 => {
+                                                                el.width =
+                                                                    (el.width - d_local.x).max(1.0);
+                                                                el.height = (el.height + d_local.y)
+                                                                    .max(1.0);
+                                                            }
+                                                            _ => {}
+                                                        }
+
+                                                        let new_opp_local = match opp_idx {
+                                                            0 => Vec2::new(
+                                                                -el.width / 2.0,
+                                                                -el.height / 2.0,
+                                                            ),
+                                                            1 => Vec2::new(
+                                                                el.width / 2.0,
+                                                                -el.height / 2.0,
+                                                            ),
+                                                            2 => Vec2::new(
+                                                                el.width / 2.0,
+                                                                el.height / 2.0,
+                                                            ),
+                                                            3 => Vec2::new(
+                                                                -el.width / 2.0,
+                                                                el.height / 2.0,
+                                                            ),
+                                                            _ => Vec2::ZERO,
+                                                        };
+                                                        let new_center =
+                                                            opp_world - rot * new_opp_local;
+                                                        el.x = new_center.x - el.width / 2.0;
+                                                        el.y = new_center.y - el.height / 2.0;
+                                                        dirty = true;
+                                                    }
+                                                } else {
+                                                    // Dragging a specific point
+                                                    if let Some(el) = scene.elements.get_mut(idx) {
+                                                        let rot_inv = egui::emath::Rot2::from_angle(
+                                                            -el.angle,
+                                                        );
+                                                        let d_local = rot_inv * d;
+                                                        if p_idx < el.points.len() {
+                                                            el.points[p_idx][0] += d_local.x;
+                                                            el.points[p_idx][1] += d_local.y;
+                                                            normalize_element(el);
+                                                        }
+                                                    }
+                                                }
+                                            } else {
+                                                // Move all selected elements
+                                                // Alignment snap only if moving one element
+                                                if self.selected_indices.len() == 1 && snap_enabled
+                                                {
+                                                    if let Some(el) = scene.elements.get_mut(idx) {
+                                                        let mut target_x = el.x + d.x;
+                                                        let mut target_y = el.y + d.y;
+                                                        let snap_dist = 5.0;
+
+                                                        let my_bounds = [
+                                                            target_x,                  // Left
+                                                            target_x + el.width / 2.0, // Center X
+                                                            target_x + el.width,       // Right
+                                                        ];
+                                                        let my_bounds_y = [
+                                                            target_y,                   // Top
+                                                            target_y + el.height / 2.0, // Center Y
+                                                            target_y + el.height,       // Bottom
+                                                        ];
+
+                                                        for (other_i, other_el) in
+                                                            scene.elements.iter().enumerate()
+                                                        {
+                                                            if other_el.is_deleted || other_i == idx
+                                                            {
+                                                                continue;
+                                                            }
+
+                                                            let other_bounds = [
+                                                                other_el.x,
+                                                                other_el.x + other_el.width / 2.0,
+                                                                other_el.x + other_el.width,
+                                                            ];
+                                                            let other_bounds_y = [
+                                                                other_el.y,
+                                                                other_el.y + other_el.height / 2.0,
+                                                                other_el.y + other_el.height,
+                                                            ];
+
+                                                            // X Snapping
+                                                            for &mb in &my_bounds {
+                                                                for &ob in &other_bounds {
+                                                                    if (mb - ob).abs() < snap_dist {
+                                                                        let diff = ob - mb;
+                                                                        target_x += diff;
+                                                                        d.x += diff;
+                                                                        self.active_guides.push(
+                                                                            Rect::from_x_y_ranges(
+                                                                                ob..=ob,
+                                                                                -10000.0..=10000.0,
+                                                                            ),
+                                                                        );
+                                                                    }
+                                                                }
+                                                            }
+                                                            // Y Snapping
+                                                            for &mb in &my_bounds_y {
+                                                                for &ob in &other_bounds_y {
+                                                                    if (mb - ob).abs() < snap_dist {
+                                                                        let diff = ob - mb;
+                                                                        target_y += diff;
+                                                                        d.y += diff;
+                                                                        self.active_guides.push(
+                                                                            Rect::from_x_y_ranges(
+                                                                                -10000.0..=10000.0,
+                                                                                ob..=ob,
+                                                                            ),
+                                                                        );
+                                                                    }
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                }
+
+                                                for &s_idx in &self.selected_indices {
+                                                    if let Some(el) = scene.elements.get_mut(s_idx)
+                                                    {
+                                                        el.x += d.x;
+                                                        el.y += d.y;
+                                                    }
                                                 }
                                             }
                                             dirty = true;
@@ -820,14 +1227,20 @@ tags: [excalidraw]
                         }
                     }
                     _ => {
-                        // Dibujo
+                        // Drawing snap
                         if response.drag_started_by(PointerButton::Primary)
                             && !self.is_panning
                             && !ui.input(|i| i.modifiers.alt)
                         {
                             if let Some(mp) = response.interact_pointer_pos() {
-                                self.push_undo(&scene); // Push before adding new element
-                                let sw = to_world(mp);
+                                self.push_undo(&scene);
+                                let mut sw = to_world(mp);
+                                let grid_size = 20.0;
+                                if snap_enabled && tool != Tool::Freedraw {
+                                    sw.x = (sw.x / grid_size).round() * grid_size;
+                                    sw.y = (sw.y / grid_size).round() * grid_size;
+                                }
+
                                 self.drawing_start_pos = Some(sw);
                                 self.selected_element_idx = None;
                                 let mut new_el = self.default_props.clone();
@@ -864,7 +1277,14 @@ tags: [excalidraw]
                         if let Some(sp) = self.drawing_start_pos {
                             if response.dragged_by(PointerButton::Primary) {
                                 if let Some(mp) = response.interact_pointer_pos() {
-                                    let cw = to_world(mp);
+                                    let mut cw = to_world(mp);
+                                    let grid_size = 20.0;
+                                    // Disable snap for Freedraw
+                                    if snap_enabled && tool != Tool::Freedraw {
+                                        cw.x = (cw.x / grid_size).round() * grid_size;
+                                        cw.y = (cw.y / grid_size).round() * grid_size;
+                                    }
+
                                     if let Some(el) = &mut self.drawing_element {
                                         if tool == Tool::Line || tool == Tool::Arrow {
                                             let dx = cw.x - sp.x;
@@ -877,7 +1297,7 @@ tags: [excalidraw]
                                             let dx = cw.x - sp.x;
                                             let dy = cw.y - sp.y;
                                             el.points.push([dx, dy]);
-                                            normalize_element(el);
+                                            // Don't normalize during drag for freedraw to avoid jitter/offset
                                         } else {
                                             el.x = sp.x.min(cw.x);
                                             el.y = sp.y.min(cw.y);
@@ -896,12 +1316,16 @@ tags: [excalidraw]
                 self.dragged_element_idx = None;
                 self.last_mouse_pos_world = None;
                 self.selection_rect = None;
-                
+                self.active_guides.clear();
+
                 // If we have multiple selected, pick one for the properties panel (or just use the first)
                 self.selected_element_idx = self.selected_indices.iter().next().copied();
 
-                if let Some(el) = self.drawing_element.take() {
-                    if el.width > 2.0 || el.height > 2.0 {
+                if let Some(mut el) = self.drawing_element.take() {
+                    if el.width > 2.0 || el.height > 2.0 || !el.points.is_empty() {
+                        if el.element_type == "freedraw" {
+                            normalize_element(&mut el);
+                        }
                         scene.elements.push(el);
                         self.selected_indices.clear();
                         self.selected_indices.insert(scene.elements.len() - 1);
@@ -974,18 +1398,36 @@ tags: [excalidraw]
                 draw_element(&painter, el, None, &to_screen, cs);
             }
 
+            // Render Guides
+            for guide in &self.active_guides {
+                let p1 = to_screen(guide.min);
+                let p2 = to_screen(guide.max);
+                painter.line_segment([p1, p2], Stroke::new(1.0, Color32::from_rgb(255, 0, 255)));
+            }
+
             ui.scope_builder(UiBuilder::new().max_rect(panel_rect), |ui| {
                 egui::Frame::NONE
-                    .fill(ui.ctx().style().visuals.panel_fill.linear_multiply(240.0 / 255.0))
-                    .stroke(Stroke::new(1.0, ui.ctx().style().visuals.window_stroke.color))
+                    .fill(
+                        ui.ctx()
+                            .style()
+                            .visuals
+                            .panel_fill
+                            .linear_multiply(240.0 / 255.0),
+                    )
+                    .stroke(Stroke::new(
+                        1.0,
+                        ui.ctx().style().visuals.window_stroke.color,
+                    ))
                     .corner_radius(12.0)
                     .inner_margin(16.0)
                     .show(ui, |ui| {
                         ui.set_width(panel_rect.width() - 32.0);
-                        
+
                         // Capture undo state when starting to interact with the properties panel
-                        if ui.input(|i| i.pointer.any_pressed()) && ui.rect_contains_pointer(ui.max_rect()) {
-                             self.push_undo(&scene);
+                        if ui.input(|i| i.pointer.any_pressed())
+                            && ui.rect_contains_pointer(ui.max_rect())
+                        {
+                            self.push_undo(&scene);
                         }
 
                         let selected_element = if let Some(idx) = self.selected_element_idx {
@@ -999,14 +1441,14 @@ tags: [excalidraw]
                         };
 
                         if show_properties_panel(ui, selected_element, &mut self.default_props) {
-                             dirty = true;
-                             if self.selected_element_idx.is_some() {
-                                 save = true;
-                             }
+                            dirty = true;
+                            if self.selected_element_idx.is_some() {
+                                save = true;
+                            }
                         }
                     });
             });
-            
+
             self.scene = Some(scene);
             self.is_dirty = dirty;
             if save {
