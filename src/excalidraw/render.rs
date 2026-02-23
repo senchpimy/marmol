@@ -10,7 +10,7 @@ where
     F: Fn(Pos2) -> Pos2,
 {
     let stroke_color = ui.ctx().style().visuals.selection.stroke.color;
-    let handle_size = 6.0 * sc.max(0.5).min(1.5);
+    let handle_visual_size = 10.0 * sc.max(0.5).min(1.5);
 
     if (el.element_type == "line" || el.element_type == "arrow") && el.points.len() >= 2 {
         // Center of element for rotation
@@ -19,10 +19,9 @@ where
         let r = Rot2::from_angle(el.angle);
 
         let handles = [0, el.points.len() - 1];
-        let handle_visual_size = 10.0 * sc.max(0.5).min(1.5);
         for &p_idx in &handles {
             let p = el.points[p_idx];
-            let p_screen = to_screen(c + r * (Pos2::new(p[0], p[1]) - cl));
+            let p_screen = to_screen(c + r * (Pos2::new(p[0], p[1]) - Pos2::new(cl.x, cl.y)));
             
             painter.rect_filled(
                 Rect::from_center_size(p_screen, Vec2::splat(handle_visual_size)),
@@ -51,7 +50,7 @@ where
             Pos2::new(-padding, el.height + padding), // 3: Bottom-Left
         ]
         .iter()
-        .map(|&p| to_screen(c + r * (p - cl)))
+        .map(|&p| to_screen(c + r * (p - Pos2::new(cl.x, cl.y))))
         .collect();
 
         painter.add(Shape::closed_line(
@@ -60,21 +59,21 @@ where
         ));
 
         // Draw rotation handle
-        let top_mid = to_screen(c + r * (Pos2::new(el.width / 2.0, -padding - 20.0) - cl));
-        let connection_start = to_screen(c + r * (Pos2::new(el.width / 2.0, -padding) - cl));
+        let top_mid = to_screen(c + r * Vec2::new(0.0, -el.height / 2.0 - padding - 20.0));
+        let connection_start = to_screen(c + r * Vec2::new(0.0, -el.height / 2.0 - padding));
         painter.line_segment([connection_start, top_mid], Stroke::new(1.0, stroke_color));
-        painter.circle_filled(top_mid, handle_size * 0.8, stroke_color);
-        painter.circle_stroke(top_mid, handle_size * 0.8, Stroke::new(1.0, Color32::WHITE));
+        painter.circle_filled(top_mid, handle_visual_size * 0.4, stroke_color);
+        painter.circle_stroke(top_mid, handle_visual_size * 0.4, Stroke::new(1.0, Color32::WHITE));
 
         // Draw handles at corners
         for p in pts {
             painter.rect_filled(
-                Rect::from_center_size(p, Vec2::splat(handle_size)),
+                Rect::from_center_size(p, Vec2::splat(handle_visual_size)),
                 2.0,
                 stroke_color,
             );
             painter.rect_stroke(
-                Rect::from_center_size(p, Vec2::splat(handle_size)),
+                Rect::from_center_size(p, Vec2::splat(handle_visual_size)),
                 2.0,
                 Stroke::new(1.0, Color32::WHITE),
                 egui::StrokeKind::Outside,
@@ -143,7 +142,7 @@ pub fn draw_element<F>(
     let cl = Pos2::new(el.width / 2.0, el.height / 2.0);
     let rot = Rot2::from_angle(el.angle);
     let tr =
-        |ps: &[Pos2]| -> Vec<Pos2> { ps.iter().map(|&p| to_screen(cw + rot * (p - cl))).collect() };
+        |ps: &[Pos2]| -> Vec<Pos2> { ps.iter().map(|&p| to_screen(cw + rot * (p - Pos2::new(cl.x, cl.y)))).collect() };
 
     match el.element_type.as_str() {
         "rectangle" | "diamond" | "ellipse" => {

@@ -102,6 +102,90 @@ impl Default for ExcalidrawGui {
 }
 
 impl ExcalidrawGui {
+    fn move_selection_in_z(&mut self, scene: &mut ExcalidrawScene, direction: i32) -> bool {
+        if self.selected_indices.is_empty() {
+            return false;
+        }
+
+        let mut indices: Vec<usize> = self.selected_indices.iter().copied().collect();
+        indices.sort_unstable();
+
+        let mut changed = false;
+        
+        // Use IDs to track selection through reordering
+        let selected_ids: HashSet<String> = indices.iter()
+            .filter_map(|&i| scene.elements.get(i).map(|el| el.id.clone()))
+            .collect();
+
+        match direction {
+            2 => { // Bring to Front
+                self.push_undo(scene);
+                let mut moved = Vec::new();
+                let mut remaining = Vec::new();
+                for el in scene.elements.drain(..) {
+                    if selected_ids.contains(&el.id) {
+                        moved.push(el);
+                    } else {
+                        remaining.push(el);
+                    }
+                }
+                remaining.extend(moved);
+                scene.elements = remaining;
+                changed = true;
+            }
+            -2 => { // Send to Back
+                self.push_undo(scene);
+                let mut moved = Vec::new();
+                let mut remaining = Vec::new();
+                for el in scene.elements.drain(..) {
+                    if selected_ids.contains(&el.id) {
+                        moved.push(el);
+                    } else {
+                        remaining.push(el);
+                    }
+                }
+                moved.extend(remaining);
+                scene.elements = moved;
+                changed = true;
+            }
+            1 => { // Forward
+                if indices.last().map_or(false, |&i| i < scene.elements.len() - 1) {
+                    self.push_undo(scene);
+                    for i in (0..scene.elements.len() - 1).rev() {
+                        if selected_ids.contains(&scene.elements[i].id) && !selected_ids.contains(&scene.elements[i+1].id) {
+                            scene.elements.swap(i, i + 1);
+                        }
+                    }
+                    changed = true;
+                }
+            }
+            -1 => { // Backward
+                if indices.first().map_or(false, |&i| i > 0) {
+                    self.push_undo(scene);
+                    for i in 1..scene.elements.len() {
+                        if selected_ids.contains(&scene.elements[i].id) && !selected_ids.contains(&scene.elements[i-1].id) {
+                            scene.elements.swap(i, i - 1);
+                        }
+                    }
+                    changed = true;
+                }
+            }
+            _ => {}
+        }
+
+        if changed {
+            self.selected_indices.clear();
+            for (i, el) in scene.elements.iter().enumerate() {
+                if selected_ids.contains(&el.id) {
+                    self.selected_indices.insert(i);
+                }
+            }
+            self.selected_element_idx = self.selected_indices.iter().next().copied();
+        }
+
+        changed
+    }
+
     pub fn set_path(&mut self, path: &str) {
         if self.path != path || self.scene.is_none() {
             self.path = path.to_string();
@@ -250,6 +334,165 @@ tags: [excalidraw]
                 self.is_dirty = false;
             }
         }
+    }
+
+    pub fn generate_svg(&self) -> Option<String> {
+        let scene = self.scene.as_ref()?;
+        if scene.elements.is_empty() {
+            return None;
+        }
+
+        // Calculate bounding box
+        let mut min_x = f32::MAX;
+        let mut min_y = f32::MAX;
+        let mut max_x = f32::MIN;
+        let mut max_y = f32::MIN;
+
+        let mut has_visible = false;
+        for el in &scene.elements {
+            if el.is_deleted {
+                continue;
+            }
+            has_visible = true;
+            min_x = min_x.min(el.x);
+            min_y = min_y.min(el.y);
+            max_x = max_x.max(el.x + el.width);
+            max_y = max_y.max(el.y + el.height);
+        }
+
+        if !has_visible {
+            return None;
+        }
+
+        let width = max_x - min_x + 40.0;
+        let height = max_y - min_y + 40.0;
+        let offset_x = -min_x + 20.0;
+        let offset_y = -min_y + 20.0;
+
+        let bg_color = &scene.app_state.view_background_color;
+        let mut svg = format!(
+            r#"<svg viewBox="0 0 {} {}" width="{}" height="{}" xmlns="http://www.w3.org/2000/svg">"#,
+            width, height, width, height
+        );
+        svg.push_str(&format!(
+            r#"<rect x="0" y="0" width="{}" height="{}" fill="{}"/>"#,
+            width, height, bg_color
+        ));
+
+        for el in &scene.elements {
+            if el.is_deleted {
+                continue;
+            }
+
+            let x = el.x + offset_x;
+            let y = el.y + offset_y;
+            let stroke = &el.stroke_color;
+            let stroke_width = el.stroke_width;
+            let fill = if el.background_color == "transparent" {
+                "none".to_string()
+            } else {
+                el.background_color.clone()
+            };
+            let opacity = el.opacity as f32 / 100.0;
+            let angle_deg = el.angle.to_degrees();
+            let transform = format!(
+                r#"transform="rotate({} {} {})""#,
+                angle_deg,
+                x + el.width / 2.0,
+                y + el.height / 2.0
+            );
+
+            let dash_array = match el.stroke_style.as_str() {
+                "dashed" => format!(r#"stroke-dasharray="{},{}""#, 10, 10),
+                "dotted" => format!(r#"stroke-dasharray="{},{}""#, 2, 6),
+                _ => "".to_string(),
+            };
+
+            match el.element_type.as_str() {
+                "rectangle" => {
+                    let r = el
+                        .roundness
+                        .as_ref()
+                        .map(|x| if x.round_type == 3 { 20.0 } else { 4.0 })
+                        .unwrap_or(0.0);
+                    svg.push_str(&format!(
+                        r#"<rect x="{}" y="{}" width="{}" height="{}" rx="{}" ry="{}" fill="{}" stroke="{}" stroke-width="{}" opacity="{}" {} {} />"#,
+                        x, y, el.width, el.height, r, r, fill, stroke, stroke_width, opacity, dash_array, transform
+                    ));
+                }
+                "ellipse" => {
+                    svg.push_str(&format!(
+                        r#"<ellipse cx="{}" cy="{}" rx="{}" ry="{}" fill="{}" stroke="{}" stroke-width="{}" opacity="{}" {} {} />"#,
+                        x + el.width / 2.0,
+                        y + el.height / 2.0,
+                        el.width / 2.0,
+                        el.height / 2.0,
+                        fill,
+                        stroke,
+                        stroke_width,
+                        opacity,
+                        dash_array,
+                        transform
+                    ));
+                }
+                "diamond" => {
+                    let pts = format!(
+                        "{},{} {},{} {},{} {},{}",
+                        x + el.width / 2.0, y,
+                        x + el.width, y + el.height / 2.0,
+                        x + el.width / 2.0, y + el.height,
+                        x, y + el.height / 2.0
+                    );
+                    svg.push_str(&format!(
+                        r#"<polygon points="{}" fill="{}" stroke="{}" stroke-width="{}" opacity="{}" {} {} />"#,
+                        pts, fill, stroke, stroke_width, opacity, dash_array, transform
+                    ));
+                }
+                "line" | "arrow" | "draw" | "freedraw" => {
+                    if !el.points.is_empty() {
+                        let mut pts_str = String::new();
+                        for p in &el.points {
+                            pts_str.push_str(&format!("{},{} ", x + p[0], y + p[1]));
+                        }
+                        svg.push_str(&format!(
+                            r#"<polyline points="{}" fill="none" stroke="{}" stroke-width="{}" opacity="{}" stroke-linecap="round" stroke-linejoin="round" {} {} />"#,
+                            pts_str, stroke, stroke_width, opacity, dash_array, transform
+                        ));
+                        
+                        if el.element_type == "arrow" && el.points.len() >= 2 {
+                            let end = el.points[el.points.len() - 1];
+                            let prev = el.points[el.points.len() - 2];
+                            let dx = end[0] - prev[0];
+                            let dy = end[1] - prev[1];
+                            let angle = dy.atan2(dx);
+                            let l = 20.0;
+                            let sp = 0.52; // 30deg
+                            
+                            let p1x = x + end[0] + l * (angle + std::f32::consts::PI - sp).cos();
+                            let p1y = y + end[1] + l * (angle + std::f32::consts::PI - sp).sin();
+                            let p2x = x + end[0] + l * (angle + std::f32::consts::PI + sp).cos();
+                            let p2y = y + end[1] + l * (angle + std::f32::consts::PI + sp).sin();
+
+                            svg.push_str(&format!(
+                                r#"<polyline points="{},{} {},{} {},{}" fill="none" stroke="{}" stroke-width="{}" opacity="{}" stroke-linecap="round" stroke-linejoin="round" {} />"#,
+                                p1x, p1y, x + end[0], y + end[1], p2x, p2y, stroke, stroke_width, opacity, transform
+                            ));
+                        }
+                    }
+                }
+                "text" => {
+                    let font_size = el.font_size.unwrap_or(20.0);
+                    svg.push_str(&format!(
+                        r#"<text x="{}" y="{}" font-family="sans-serif" font-size="{}" fill="{}" opacity="{}" {} dominant-baseline="hanging">{}</text>"#,
+                        x, y, font_size, stroke, opacity, transform, el.text
+                    ));
+                }
+                _ => {}
+            }
+        }
+
+        svg.push_str("</svg>");
+        Some(svg)
     }
 
     fn get_or_load_texture(
@@ -548,6 +791,18 @@ tags: [excalidraw]
                 if ui.button("💾").on_hover_text("Save (Manual)").clicked() {
                     self.save_file();
                 }
+                if ui.button("🖼 SVG").on_hover_text("Export as SVG").clicked() {
+                    if let Some(svg_content) = self.generate_svg() {
+                        #[cfg(not(target_os = "android"))]
+                        if let Some(path) = rfd::FileDialog::new()
+                            .add_filter("SVG Image", &["svg"])
+                            .set_file_name("drawing.svg")
+                            .save_file()
+                        {
+                            let _ = fs::write(path, svg_content);
+                        }
+                    }
+                }
                 ui.separator();
                 if ui
                     .add_enabled(!self.redo_stack.is_empty(), egui::Button::new("↪"))
@@ -797,6 +1052,25 @@ tags: [excalidraw]
             self.redo();
         }
 
+        // Layer shortcuts
+        if ui.input(|i| i.modifiers.command && i.key_pressed(egui::Key::CloseBracket)) {
+            if let Some(mut scene) = self.scene.take() {
+                let dir = if ui.input(|i| i.modifiers.shift) { 2 } else { 1 };
+                if self.move_selection_in_z(&mut scene, dir) {
+                    self.save_file();
+                }
+                self.scene = Some(scene);
+            }
+        } else if ui.input(|i| i.modifiers.command && i.key_pressed(egui::Key::OpenBracket)) {
+            if let Some(mut scene) = self.scene.take() {
+                let dir = if ui.input(|i| i.modifiers.shift) { -2 } else { -1 };
+                if self.move_selection_in_z(&mut scene, dir) {
+                    self.save_file();
+                }
+                self.scene = Some(scene);
+            }
+        }
+
         if let Some(mut scene) = self.scene.take() {
             let mut dirty = self.is_dirty;
             let mut save = false;
@@ -852,6 +1126,80 @@ tags: [excalidraw]
                     Tool::Selection => {
                         let click_or_drag_start = response.clicked_by(PointerButton::Primary)
                             || response.drag_started_by(PointerButton::Primary);
+
+                        if response.clicked_by(PointerButton::Secondary) {
+                            if let Some(mp) = response.interact_pointer_pos() {
+                                let wp = to_world(mp);
+                                let mut hit_index = None;
+                                for (i, el) in scene.elements.iter().enumerate().rev() {
+                                    if el.is_deleted {
+                                        continue;
+                                    }
+                                    if is_point_inside(el, wp) {
+                                        hit_index = Some(i);
+                                        break;
+                                    }
+                                }
+
+                                if let Some(i) = hit_index {
+                                    if !self.selected_indices.contains(&i) {
+                                        self.push_undo(&scene);
+                                        self.selected_indices.clear();
+                                        self.selected_indices.insert(i);
+                                        self.selected_element_idx = Some(i);
+                                    }
+                                }
+                            }
+                        }
+
+                        response.context_menu(|ui| {
+                            if !self.selected_indices.is_empty() {
+                                if ui.button("⏫ Bring to Front").clicked() {
+                                    if self.move_selection_in_z(&mut scene, 2) {
+                                        dirty = true;
+                                        save = true;
+                                    }
+                                    ui.close();
+                                }
+                                if ui.button("🔼 Bring Forward").clicked() {
+                                    if self.move_selection_in_z(&mut scene, 1) {
+                                        dirty = true;
+                                        save = true;
+                                    }
+                                    ui.close();
+                                }
+                                if ui.button("🔽 Send Backward").clicked() {
+                                    if self.move_selection_in_z(&mut scene, -1) {
+                                        dirty = true;
+                                        save = true;
+                                    }
+                                    ui.close();
+                                }
+                                if ui.button("⏬ Send to Back").clicked() {
+                                    if self.move_selection_in_z(&mut scene, -2) {
+                                        dirty = true;
+                                        save = true;
+                                    }
+                                    ui.close();
+                                }
+                                ui.separator();
+                                if ui.button("🗑 Delete").clicked() {
+                                    self.push_undo(&scene);
+                                    for &idx in &self.selected_indices {
+                                        if let Some(el) = scene.elements.get_mut(idx) {
+                                            el.is_deleted = true;
+                                        }
+                                    }
+                                    self.selected_indices.clear();
+                                    self.selected_element_idx = None;
+                                    dirty = true;
+                                    save = true;
+                                    ui.close();
+                                }
+                            } else {
+                                ui.label("No element selected");
+                            }
+                        });
 
                         if click_or_drag_start && !self.is_panning && !ui.input(|i| i.modifiers.alt)
                         {
@@ -1179,7 +1527,6 @@ tags: [excalidraw]
                                                                 for &ob in &other_bounds {
                                                                     if (mb - ob).abs() < snap_dist {
                                                                         let diff = ob - mb;
-                                                                        target_x += diff;
                                                                         d.x += diff;
                                                                         self.active_guides.push(
                                                                             Rect::from_x_y_ranges(
@@ -1195,7 +1542,6 @@ tags: [excalidraw]
                                                                 for &ob in &other_bounds_y {
                                                                     if (mb - ob).abs() < snap_dist {
                                                                         let diff = ob - mb;
-                                                                        target_y += diff;
                                                                         d.y += diff;
                                                                         self.active_guides.push(
                                                                             Rect::from_x_y_ranges(
@@ -1423,6 +1769,37 @@ tags: [excalidraw]
                     .show(ui, |ui| {
                         ui.set_width(panel_rect.width() - 32.0);
 
+                        if !self.selected_indices.is_empty() {
+                            ui.label("Layers:");
+                            ui.horizontal(|ui| {
+                                if ui.button("⏫").on_hover_text("Bring to Front (Ctrl+Shift+])").clicked() {
+                                    if self.move_selection_in_z(&mut scene, 2) {
+                                        dirty = true;
+                                        save = true;
+                                    }
+                                }
+                                if ui.button("🔼").on_hover_text("Bring Forward (Ctrl+])").clicked() {
+                                    if self.move_selection_in_z(&mut scene, 1) {
+                                        dirty = true;
+                                        save = true;
+                                    }
+                                }
+                                if ui.button("🔽").on_hover_text("Send Backward (Ctrl+[)").clicked() {
+                                    if self.move_selection_in_z(&mut scene, -1) {
+                                        dirty = true;
+                                        save = true;
+                                    }
+                                }
+                                if ui.button("⏬").on_hover_text("Send to Back (Ctrl+Shift+[)").clicked() {
+                                    if self.move_selection_in_z(&mut scene, -2) {
+                                        dirty = true;
+                                        save = true;
+                                    }
+                                }
+                            });
+                            ui.separator();
+                        }
+
                         // Capture undo state when starting to interact with the properties panel
                         if ui.input(|i| i.pointer.any_pressed())
                             && ui.rect_contains_pointer(ui.max_rect())
@@ -1450,7 +1827,9 @@ tags: [excalidraw]
             });
 
             self.scene = Some(scene);
-            self.is_dirty = dirty;
+            if dirty {
+                self.is_dirty = true;
+            }
             if save {
                 self.save_file();
             }
