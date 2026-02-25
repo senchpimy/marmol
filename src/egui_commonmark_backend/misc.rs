@@ -337,9 +337,11 @@ impl CodeBlock {
 
                 let svg = if let Some(svg) = cache_map.get(&self.content) {
                     if svg == "LOADING" {
-                        ui.horizontal(|ui| {
-                            ui.spinner();
-                            ui.label("Generando gráfica de Vega localmente...");
+                        ui.vertical_centered(|ui| {
+                            ui.horizontal(|ui| {
+                                ui.spinner();
+                                ui.label("Generando gráfica de Vega localmente...");
+                            });
                         });
                         None
                     } else if svg.starts_with("ERROR:") {
@@ -384,6 +386,7 @@ impl CodeBlock {
                         let converter = get_vl_converter();
                         let rt = get_tokio_runtime();
                         let ctx = ui.ctx().clone();
+                        let is_dark = ui.visuals().dark_mode;
 
                         rt.spawn(async move {
                             let vega_spec: Result<serde_json::Value, _> =
@@ -392,11 +395,23 @@ impl CodeBlock {
                             match vega_spec {
                                 Ok(spec) => {
                                     let mut conv = converter.lock().await;
+                                    
+                                    let theme = if is_dark {
+                                        Some("dark".to_string())
+                                    } else {
+                                        None
+                                    };
+
+                                    // Force transparent background via config
+                                    let mut config_map = serde_json::Map::new();
+                                    config_map.insert("background".to_string(), serde_json::Value::String("transparent".to_string()));
+                                    let config = Some(serde_json::Value::Object(config_map));
+
                                     let result = if is_vegalite {
                                         let opts = vl_convert_rs::converter::VlOpts {
                                             vl_version: vl_convert_rs::VlVersion::v5_21,
-                                            config: None,
-                                            theme: None,
+                                            config,
+                                            theme,
                                             show_warnings: false,
                                             allowed_base_urls: None,
                                             format_locale: None,
@@ -414,9 +429,13 @@ impl CodeBlock {
 
                                     match result {
                                         Ok(mut svg) => {
+                                            // Fix potential font issues
+                                            svg = svg.replace("\"Segoe UI\"", "'Segoe UI'");
+
                                             if let Some(start) = svg.find("<svg") {
                                                 svg = svg[start..].to_string();
                                             }
+                                            
                                             let mut res_lock = results.lock().unwrap();
                                             res_lock.insert(content, svg);
                                         }
@@ -445,17 +464,17 @@ impl CodeBlock {
                 };
 
                 if let Some(svg) = svg {
-                    let uri = format!(
-                        "bytes://{}_{}.svg",
-                        lang,
-                        egui::Id::new(&self.content).value()
-                    );
+                    let hash = egui::Id::new(&self.content).value();
+                    let uri = format!("bytes://vega_{}.svg", hash);
                     let bytes = svg.as_bytes().to_vec();
-                    ui.add(
-                        egui::Image::from_bytes(uri, bytes)
-                            .fit_to_original_size(2.0)
-                            .max_width(ui.available_width()),
-                    );
+                    
+                    ui.vertical_centered(|ui| {
+                        ui.add(
+                            egui::Image::from_bytes(uri, bytes)
+                                .fit_to_original_size(1.0)
+                                .max_width(ui.available_width()),
+                        );
+                    });
                     return;
                 }
             }

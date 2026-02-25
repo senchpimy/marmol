@@ -524,22 +524,22 @@ impl CommonMarkViewerInternal {
             pulldown_cmark::Event::Start(tag) => self.start_tag(ui, tag, options),
             pulldown_cmark::Event::End(tag) => self.end_tag(ui, tag, cache, options, max_width),
             pulldown_cmark::Event::Text(text) => {
-                self.event_text(text, ui);
+                self.event_text(text, ui, cache, options);
             }
             pulldown_cmark::Event::Code(text) => {
                 self.text_style.code = true;
-                self.event_text(text, ui);
+                self.event_text(text, ui, cache, options);
                 self.text_style.code = false;
             }
             pulldown_cmark::Event::InlineHtml(text) => {
-                self.event_text(text, ui);
+                self.event_text(text, ui, cache, options);
             }
 
             pulldown_cmark::Event::Html(text) => {
                 if options.html_fn.is_some() {
                     self.html_block.push_str(&text);
                 } else {
-                    self.event_text(text, ui);
+                    self.event_text(text, ui, cache, options);
                 }
             }
             pulldown_cmark::Event::FootnoteReference(footnote) => {
@@ -585,16 +585,53 @@ impl CommonMarkViewerInternal {
         }
     }
 
-    fn event_text(&mut self, text: CowStr, ui: &mut Ui) {
-        let rich_text = self.text_style.to_richtext(ui, &text);
+    fn event_text(
+        &mut self,
+        text: CowStr,
+        ui: &mut Ui,
+        cache: &mut CommonMarkCache,
+        options: &CommonMarkOptions,
+    ) {
         if let Some(image) = &mut self.image {
+            let rich_text = self.text_style.to_richtext(ui, &text);
             image.alt_text.push(rich_text);
         } else if let Some(block) = &mut self.code_block {
             block.content.push_str(&text);
         } else if let Some(link) = &mut self.link {
+            let rich_text = self.text_style.to_richtext(ui, &text);
             link.text.push(rich_text);
         } else {
-            ui.label(rich_text);
+            // Check for \[ ... \] in normal text
+            if text.contains("\\[") && text.contains("\\]") && !self.text_style.code {
+                let mut parts = text.split("\\[");
+                if let Some(before) = parts.next() {
+                    if !before.is_empty() {
+                        ui.label(self.text_style.to_richtext(ui, before));
+                    }
+                }
+                for part in parts {
+                    if let Some(end_pos) = part.find("\\]") {
+                        let latex = &part[..end_pos];
+                        let after = &part[end_pos + 2..];
+
+                        if let Some(math_fn) = options.math_fn {
+                            math_fn(ui, latex, false);
+                        } else {
+                            crate::egui_commonmark_backend::latex::render(ui, cache, latex, false);
+                        }
+
+                        if !after.is_empty() {
+                            ui.label(self.text_style.to_richtext(ui, after));
+                        }
+                    } else {
+                        // Unclosed \[
+                        ui.label(self.text_style.to_richtext(ui, &format!("\\[{}", part)));
+                    }
+                }
+            } else {
+                let rich_text = self.text_style.to_richtext(ui, &text);
+                ui.label(rich_text);
+            }
         }
     }
 

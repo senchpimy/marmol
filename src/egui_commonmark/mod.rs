@@ -310,8 +310,12 @@ impl<'f> CommonMarkViewer<'f> {
         text: &str,
     ) {
         crate::egui_commonmark_backend::prepare_show(cache, ui.ctx());
+        let mut source_id = Id::new(source_id);
+        if self.options.mutable {
+            source_id = source_id.with("mutable");
+        }
         parsers::pulldown::CommonMarkViewerInternal::new().show_scrollable(
-            Id::new(source_id),
+            source_id,
             ui,
             cache,
             &self.options,

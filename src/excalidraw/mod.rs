@@ -487,6 +487,16 @@ tags: [excalidraw]
                         x, y, font_size, stroke, opacity, transform, el.text
                     ));
                 }
+                "image" => {
+                    if let Some(fid) = &el.file_id {
+                        if let Some(file) = scene.files.get(fid) {
+                            svg.push_str(&format!(
+                                r#"<image x="{}" y="{}" width="{}" height="{}" href="{}" opacity="{}" {} />"#,
+                                x, y, el.width, el.height, file.data_url, opacity, transform
+                            ));
+                        }
+                    }
+                }
                 _ => {}
             }
         }
@@ -989,7 +999,6 @@ tags: [excalidraw]
         }
 
         if response.dragged_by(PointerButton::Middle)
-            || (ui.input(|i| i.modifiers.alt) && response.dragged_by(PointerButton::Primary))
             || (self.active_tool == Some(Tool::Hand) && response.dragged_by(PointerButton::Primary))
         {
             self.pan += response.drag_delta();
@@ -1201,7 +1210,7 @@ tags: [excalidraw]
                             }
                         });
 
-                        if click_or_drag_start && !self.is_panning && !ui.input(|i| i.modifiers.alt)
+                        if click_or_drag_start && !self.is_panning
                         {
                             if let Some(mp) = response.interact_pointer_pos() {
                                 let wp = to_world(mp);
@@ -1284,6 +1293,11 @@ tags: [excalidraw]
                                     self.dragged_point_idx = Some(200);
                                     self.last_mouse_pos_world = Some(wp);
                                 } else {
+                                    // If Alt is held, we only want to select if we actually hit an element.
+                                    // If we hit nothing, we don't clear selection, to allow Alt+Drag to pan
+                                    // from outside the element if we didn'thit anything.
+                                    // But wait, our new pan logic already checks self.dragged_element_idx.is_none().
+                                    
                                     let mut hit_index = None;
                                     for (i, el) in scene.elements.iter().enumerate().rev() {
                                         if el.is_deleted {
@@ -1308,11 +1322,15 @@ tags: [excalidraw]
                                             self.last_mouse_pos_world = Some(wp);
                                         }
                                     } else {
-                                        // Hit nothing
-                                        self.selected_indices.clear();
-                                        self.selected_element_idx = None;
-                                        if response.drag_started_by(PointerButton::Primary) {
-                                            self.selection_rect = Some(Rect::from_min_max(wp, wp));
+                                        // Hit nothing. 
+                                        // If Alt is held, don't clear selection or start selection rect, 
+                                        // so the Pan logic can take over.
+                                        if !ui.input(|i| i.modifiers.alt) {
+                                            self.selected_indices.clear();
+                                            self.selected_element_idx = None;
+                                            if response.drag_started_by(PointerButton::Primary) {
+                                                self.selection_rect = Some(Rect::from_min_max(wp, wp));
+                                            }
                                         }
                                     }
                                 }
@@ -1344,233 +1362,487 @@ tags: [excalidraw]
                             }
                         }
 
-                        if let Some(idx) = self.dragged_element_idx {
-                            if response.dragged_by(PointerButton::Primary) {
-                                if let Some(mp) = response.interact_pointer_pos() {
-                                    let mut cwp = to_world(mp);
+                                                if let Some(idx) = self.dragged_element_idx {
 
-                                    // Grid Snap (20px)
-                                    let grid_size = 20.0;
-                                    if snap_enabled {
-                                        cwp.x = (cwp.x / grid_size).round() * grid_size;
-                                        cwp.y = (cwp.y / grid_size).round() * grid_size;
-                                    }
+                                                    if response.dragged_by(PointerButton::Primary) {
 
-                                    if let Some(lp) = self.last_mouse_pos_world {
-                                        let mut d = cwp - lp;
-                                        if d.length_sq() > 0.0001 {
-                                            self.active_guides.clear();
-                                            if let Some(p_idx) = self.dragged_point_idx {
-                                                if p_idx == 200 {
-                                                    // Rotation
-                                                    if let Some(el) = scene.elements.get_mut(idx) {
-                                                        let center = Pos2::new(
-                                                            el.x + el.width / 2.0,
-                                                            el.y + el.height / 2.0,
-                                                        );
-                                                        let v = cwp - center;
-                                                        // Adjust by PI/2 because rotation handle is at the top
-                                                        el.angle = v.y.atan2(v.x)
-                                                            + std::f32::consts::FRAC_PI_2;
-                                                        // Snap rotation to 15 degrees
-                                                        let snap_angle = 15.0f32.to_radians();
-                                                        el.angle = (el.angle / snap_angle).round()
-                                                            * snap_angle;
-                                                        dirty = true;
-                                                    }
-                                                } else if p_idx >= 100 && p_idx <= 103 {
-                                                    // Corner Resize logic remains same but uses snapped d
-                                                    if let Some(el) = scene.elements.get_mut(idx) {
-                                                        let c_idx = p_idx - 100;
-                                                        let rot =
-                                                            egui::emath::Rot2::from_angle(el.angle);
-                                                        let rot_inv = egui::emath::Rot2::from_angle(
-                                                            -el.angle,
-                                                        );
+                                                        if let Some(mp) = response.interact_pointer_pos() {
 
-                                                        let center = Pos2::new(
-                                                            el.x + el.width / 2.0,
-                                                            el.y + el.height / 2.0,
-                                                        );
-                                                        let opp_idx = (c_idx + 2) % 4;
-                                                        let opp_local = match opp_idx {
-                                                            0 => Vec2::new(
-                                                                -el.width / 2.0,
-                                                                -el.height / 2.0,
-                                                            ),
-                                                            1 => Vec2::new(
-                                                                el.width / 2.0,
-                                                                -el.height / 2.0,
-                                                            ),
-                                                            2 => Vec2::new(
-                                                                el.width / 2.0,
-                                                                el.height / 2.0,
-                                                            ),
-                                                            3 => Vec2::new(
-                                                                -el.width / 2.0,
-                                                                el.height / 2.0,
-                                                            ),
-                                                            _ => Vec2::ZERO,
-                                                        };
-                                                        let opp_world = center + rot * opp_local;
+                                                            let mut cwp = to_world(mp);
 
-                                                        let d_local = rot_inv * d;
-                                                        match c_idx {
-                                                            0 => {
-                                                                el.width =
-                                                                    (el.width - d_local.x).max(1.0);
-                                                                el.height = (el.height - d_local.y)
-                                                                    .max(1.0);
-                                                            }
-                                                            1 => {
-                                                                el.width =
-                                                                    (el.width + d_local.x).max(1.0);
-                                                                el.height = (el.height - d_local.y)
-                                                                    .max(1.0);
-                                                            }
-                                                            2 => {
-                                                                el.width =
-                                                                    (el.width + d_local.x).max(1.0);
-                                                                el.height = (el.height + d_local.y)
-                                                                    .max(1.0);
-                                                            }
-                                                            3 => {
-                                                                el.width =
-                                                                    (el.width - d_local.x).max(1.0);
-                                                                el.height = (el.height + d_local.y)
-                                                                    .max(1.0);
-                                                            }
-                                                            _ => {}
-                                                        }
+                                                            let mut d = response.drag_delta() / cs;
 
-                                                        let new_opp_local = match opp_idx {
-                                                            0 => Vec2::new(
-                                                                -el.width / 2.0,
-                                                                -el.height / 2.0,
-                                                            ),
-                                                            1 => Vec2::new(
-                                                                el.width / 2.0,
-                                                                -el.height / 2.0,
-                                                            ),
-                                                            2 => Vec2::new(
-                                                                el.width / 2.0,
-                                                                el.height / 2.0,
-                                                            ),
-                                                            3 => Vec2::new(
-                                                                -el.width / 2.0,
-                                                                el.height / 2.0,
-                                                            ),
-                                                            _ => Vec2::ZERO,
-                                                        };
-                                                        let new_center =
-                                                            opp_world - rot * new_opp_local;
-                                                        el.x = new_center.x - el.width / 2.0;
-                                                        el.y = new_center.y - el.height / 2.0;
-                                                        dirty = true;
-                                                    }
-                                                } else {
-                                                    // Dragging a specific point
-                                                    if let Some(el) = scene.elements.get_mut(idx) {
-                                                        let rot_inv = egui::emath::Rot2::from_angle(
-                                                            -el.angle,
-                                                        );
-                                                        let d_local = rot_inv * d;
-                                                        if p_idx < el.points.len() {
-                                                            el.points[p_idx][0] += d_local.x;
-                                                            el.points[p_idx][1] += d_local.y;
-                                                            normalize_element(el);
-                                                        }
-                                                    }
-                                                }
-                                            } else {
-                                                // Move all selected elements
-                                                // Alignment snap only if moving one element
-                                                if self.selected_indices.len() == 1 && snap_enabled
-                                                {
-                                                    if let Some(el) = scene.elements.get_mut(idx) {
-                                                        let mut target_x = el.x + d.x;
-                                                        let mut target_y = el.y + d.y;
-                                                        let snap_dist = 5.0;
+                        
 
-                                                        let my_bounds = [
-                                                            target_x,                  // Left
-                                                            target_x + el.width / 2.0, // Center X
-                                                            target_x + el.width,       // Right
-                                                        ];
-                                                        let my_bounds_y = [
-                                                            target_y,                   // Top
-                                                            target_y + el.height / 2.0, // Center Y
-                                                            target_y + el.height,       // Bottom
-                                                        ];
+                                                            // Grid Snap (20px) - we only snap the "final" position/delta if needed
 
-                                                        for (other_i, other_el) in
-                                                            scene.elements.iter().enumerate()
-                                                        {
-                                                            if other_el.is_deleted || other_i == idx
-                                                            {
-                                                                continue;
+                                                            // But for smooth resizing, using raw drag_delta is better.
+
+                                                            let grid_size = 20.0;
+
+                                                            if snap_enabled {
+
+                                                                cwp.x = (cwp.x / grid_size).round() * grid_size;
+
+                                                                cwp.y = (cwp.y / grid_size).round() * grid_size;
+
                                                             }
 
-                                                            let other_bounds = [
-                                                                other_el.x,
-                                                                other_el.x + other_el.width / 2.0,
-                                                                other_el.x + other_el.width,
-                                                            ];
-                                                            let other_bounds_y = [
-                                                                other_el.y,
-                                                                other_el.y + other_el.height / 2.0,
-                                                                other_el.y + other_el.height,
-                                                            ];
+                        
 
-                                                            // X Snapping
-                                                            for &mb in &my_bounds {
-                                                                for &ob in &other_bounds {
-                                                                    if (mb - ob).abs() < snap_dist {
-                                                                        let diff = ob - mb;
-                                                                        d.x += diff;
-                                                                        self.active_guides.push(
-                                                                            Rect::from_x_y_ranges(
-                                                                                ob..=ob,
-                                                                                -10000.0..=10000.0,
-                                                                            ),
-                                                                        );
+                                                            if d.length_sq() > 0.00001 {
+
+                                                                self.active_guides.clear();
+
+                                                                if let Some(p_idx) = self.dragged_point_idx {
+
+                                                                    if p_idx == 200 {
+
+                                                                        // Rotation - use snapped mouse pos for better control
+
+                                                                        if let Some(el) = scene.elements.get_mut(idx) {
+
+                                                                            let center = Pos2::new(
+
+                                                                                el.x + el.width / 2.0,
+
+                                                                                el.y + el.height / 2.0,
+
+                                                                            );
+
+                                                                            let v = cwp - center;
+
+                                                                            // Adjust by PI/2 because rotation handle is at the top
+
+                                                                            el.angle = v.y.atan2(v.x)
+
+                                                                                + std::f32::consts::FRAC_PI_2;
+
+                                                                            // Snap rotation to 15 degrees
+
+                                                                            let snap_angle = 15.0f32.to_radians();
+
+                                                                            el.angle = (el.angle / snap_angle).round()
+
+                                                                                * snap_angle;
+
+                                                                            dirty = true;
+
+                                                                        }
+
+                                                                                                                    } else if p_idx >= 100 && p_idx <= 103 {
+
+                                                                                                                        // Corner Resize - absolute logic for stability
+
+                                                                                                                        if let Some(el) = scene.elements.get_mut(idx) {
+
+                                                                                                                            let c_idx = p_idx - 100;
+
+                                                                                                                            let rot =
+
+                                                                                                                                egui::emath::Rot2::from_angle(el.angle);
+
+                                                                                                                            let rot_inv = egui::emath::Rot2::from_angle(
+
+                                                                                                                                -el.angle,
+
+                                                                                                                            );
+
+                                                                    
+
+                                                                                                                            let center = Pos2::new(
+
+                                                                                                                                el.x + el.width / 2.0,
+
+                                                                                                                                el.y + el.height / 2.0,
+
+                                                                                                                            );
+
+                                                                    
+
+                                                                                                                            // opposite corner
+
+                                                                                                                            let opp_idx = (c_idx + 2) % 4;
+
+                                                                                                                            let opp_local = match opp_idx {
+
+                                                                                                                                0 => Vec2::new(
+
+                                                                                                                                    -el.width / 2.0,
+
+                                                                                                                                    -el.height / 2.0,
+
+                                                                                                                                ),
+
+                                                                                                                                1 => Vec2::new(
+
+                                                                                                                                    el.width / 2.0,
+
+                                                                                                                                    -el.height / 2.0,
+
+                                                                                                                                ),
+
+                                                                                                                                2 => Vec2::new(
+
+                                                                                                                                    el.width / 2.0,
+
+                                                                                                                                    el.height / 2.0,
+
+                                                                                                                                ),
+
+                                                                                                                                3 => Vec2::new(
+
+                                                                                                                                    -el.width / 2.0,
+
+                                                                                                                                    el.height / 2.0,
+
+                                                                                                                                ),
+
+                                                                                                                                _ => Vec2::ZERO,
+
+                                                                                                                            };
+
+                                                                                                                            let opp_world = center + rot * opp_local;
+
+                                                                    
+
+                                                                                                                            let resize_from_center =
+
+                                                                                                                                ui.input(|i| i.modifiers.alt);
+
+                                                                                                                            let mut new_width;
+
+                                                                                                                            let mut new_height;
+
+                                                                    
+
+                                                                                                                            if resize_from_center {
+
+                                                                                                                                let mouse_local =
+
+                                                                                                                                    rot_inv * (cwp - center);
+
+                                                                                                                                new_width = (mouse_local.x.abs() * 2.0)
+
+                                                                                                                                    .max(1.0);
+
+                                                                                                                                new_height = (mouse_local.y.abs() * 2.0)
+
+                                                                                                                                    .max(1.0);
+
+                                                                                                                            } else {
+
+                                                                                                                                let mouse_rel_opp =
+
+                                                                                                                                    rot_inv * (cwp - opp_world);
+
+                                                                                                                                new_width = match c_idx {
+
+                                                                                                                                    0 | 3 => {
+
+                                                                                                                                        (-mouse_rel_opp.x).max(1.0)
+
+                                                                                                                                    }
+
+                                                                                                                                    1 | 2 => (mouse_rel_opp.x).max(1.0),
+
+                                                                                                                                    _ => el.width,
+
+                                                                                                                                };
+
+                                                                                                                                new_height = match c_idx {
+
+                                                                                                                                    0 | 1 => {
+
+                                                                                                                                        (-mouse_rel_opp.y).max(1.0)
+
+                                                                                                                                    }
+
+                                                                                                                                    2 | 3 => (mouse_rel_opp.y).max(1.0),
+
+                                                                                                                                    _ => el.height,
+
+                                                                                                                                };
+
+                                                                                                                            }
+
+                                                                    
+
+                                                                                                                            if ui.input(|i| i.modifiers.shift) {
+
+                                                                                                                                let ratio = el.width / el.height;
+
+                                                                                                                                if new_width / ratio > new_height {
+
+                                                                                                                                    new_height = new_width / ratio;
+
+                                                                                                                                } else {
+
+                                                                                                                                    new_width = new_height * ratio;
+
+                                                                                                                                }
+
+                                                                                                                            }
+
+                                                                    
+
+                                                                                                                            el.width = new_width;
+
+                                                                                                                            el.height = new_height;
+
+                                                                    
+
+                                                                                                                            let new_center = if resize_from_center {
+
+                                                                                                                                center
+
+                                                                                                                            } else {
+
+                                                                                                                                let new_opp_local = match opp_idx {
+
+                                                                                                                                    0 => Vec2::new(
+
+                                                                                                                                        -el.width / 2.0,
+
+                                                                                                                                        -el.height / 2.0,
+
+                                                                                                                                    ),
+
+                                                                                                                                    1 => Vec2::new(
+
+                                                                                                                                        el.width / 2.0,
+
+                                                                                                                                        -el.height / 2.0,
+
+                                                                                                                                    ),
+
+                                                                                                                                    2 => Vec2::new(
+
+                                                                                                                                        el.width / 2.0,
+
+                                                                                                                                        el.height / 2.0,
+
+                                                                                                                                    ),
+
+                                                                                                                                    3 => Vec2::new(
+
+                                                                                                                                        -el.width / 2.0,
+
+                                                                                                                                        el.height / 2.0,
+
+                                                                                                                                    ),
+
+                                                                                                                                    _ => Vec2::ZERO,
+
+                                                                                                                                };
+
+                                                                                                                                opp_world - rot * new_opp_local
+
+                                                                                                                            };
+
+                                                                                                                            el.x = new_center.x - el.width / 2.0;
+
+                                                                                                                            el.y = new_center.y - el.height / 2.0;
+
+                                                                                                                            dirty = true;
+
+                                                                                                                        }
+
+                                                                    } else {
+
+                                                                        // Dragging a specific point
+
+                                                                        if let Some(el) = scene.elements.get_mut(idx) {
+
+                                                                            let rot_inv = egui::emath::Rot2::from_angle(
+
+                                                                                -el.angle,
+
+                                                                            );
+
+                                                                            let d_local = rot_inv * d;
+
+                                                                            if p_idx < el.points.len() {
+
+                                                                                el.points[p_idx][0] += d_local.x;
+
+                                                                                el.points[p_idx][1] += d_local.y;
+
+                                                                                normalize_element(el);
+
+                                                                            }
+
+                                                                        }
+
                                                                     }
-                                                                }
-                                                            }
-                                                            // Y Snapping
-                                                            for &mb in &my_bounds_y {
-                                                                for &ob in &other_bounds_y {
-                                                                    if (mb - ob).abs() < snap_dist {
-                                                                        let diff = ob - mb;
-                                                                        d.y += diff;
-                                                                        self.active_guides.push(
-                                                                            Rect::from_x_y_ranges(
-                                                                                -10000.0..=10000.0,
-                                                                                ob..=ob,
-                                                                            ),
-                                                                        );
-                                                                    }
-                                                                }
-                                                            }
-                                                        }
-                                                    }
-                                                }
 
-                                                for &s_idx in &self.selected_indices {
-                                                    if let Some(el) = scene.elements.get_mut(s_idx)
-                                                    {
-                                                        el.x += d.x;
-                                                        el.y += d.y;
+                                                                } else {
+
+                                                                    // Move all selected elements
+
+                                                                    // Alignment snap only if moving one element
+
+                                                                    if self.selected_indices.len() == 1 && snap_enabled
+
+                                                                    {
+
+                                                                        if let Some(el) = scene.elements.get_mut(idx) {
+
+                                                                            let my_bounds = [
+
+                                                                                el.x + d.x,                  // Left
+
+                                                                                el.x + d.x + el.width / 2.0, // Center X
+
+                                                                                el.x + d.x + el.width,       // Right
+
+                                                                            ];
+
+                                                                            let my_bounds_y = [
+
+                                                                                el.y + d.y,                   // Top
+
+                                                                                el.y + d.y + el.height / 2.0, // Center Y
+
+                                                                                el.y + d.y + el.height,       // Bottom
+
+                                                                            ];
+
+                        
+
+                                                                            let snap_dist = 5.0;
+
+                                                                            for (other_i, other_el) in
+
+                                                                                scene.elements.iter().enumerate()
+
+                                                                            {
+
+                                                                                if other_el.is_deleted || other_i == idx {
+
+                                                                                    continue;
+
+                                                                                }
+
+                        
+
+                                                                                let other_bounds = [
+
+                                                                                    other_el.x,
+
+                                                                                    other_el.x + other_el.width / 2.0,
+
+                                                                                    other_el.x + other_el.width,
+
+                                                                                ];
+
+                                                                                let other_bounds_y = [
+
+                                                                                    other_el.y,
+
+                                                                                    other_el.y + other_el.height / 2.0,
+
+                                                                                    other_el.y + other_el.height,
+
+                                                                                ];
+
+                        
+
+                                                                                // X Snapping
+
+                                                                                for &mb in &my_bounds {
+
+                                                                                    for &ob in &other_bounds {
+
+                                                                                        if (mb - ob).abs() < snap_dist {
+
+                                                                                            let diff = ob - mb;
+
+                                                                                            d.x += diff;
+
+                                                                                            self.active_guides.push(
+
+                                                                                                Rect::from_x_y_ranges(
+
+                                                                                                    ob..=ob,
+
+                                                                                                    -10000.0..=10000.0,
+
+                                                                                                ),
+
+                                                                                            );
+
+                                                                                        }
+
+                                                                                    }
+
+                                                                                }
+
+                                                                                // Y Snapping
+
+                                                                                for &mb in &my_bounds_y {
+
+                                                                                    for &ob in &other_bounds_y {
+
+                                                                                        if (mb - ob).abs() < snap_dist {
+
+                                                                                            let diff = ob - mb;
+
+                                                                                            d.y += diff;
+
+                                                                                            self.active_guides.push(
+
+                                                                                                Rect::from_x_y_ranges(
+
+                                                                                                    -10000.0..=10000.0,
+
+                                                                                                    ob..=ob,
+
+                                                                                                ),
+
+                                                                                            );
+
+                                                                                        }
+
+                                                                                    }
+
+                                                                                }
+
+                                                                            }
+
+                                                                        }
+
+                                                                    }
+
+                        
+
+                                                                    for &s_idx in &self.selected_indices {
+
+                                                                        if let Some(el) = scene.elements.get_mut(s_idx)
+
+                                                                        {
+
+                                                                            el.x += d.x;
+
+                                                                            el.y += d.y;
+
+                                                                        }
+
+                                                                    }
+
+                                                                }
+
+                                                                dirty = true;
+
+                                                            }
+
+                                                            self.last_mouse_pos_world = Some(cwp);
+
+                                                        }
+
                                                     }
+
                                                 }
-                                            }
-                                            dirty = true;
-                                        }
-                                    }
-                                    self.last_mouse_pos_world = Some(cwp);
-                                }
-                            }
-                        }
                     }
                     _ => {
                         // Drawing snap
@@ -1698,6 +1970,39 @@ tags: [excalidraw]
                 }
                 self.selected_indices.clear();
                 self.selected_element_idx = None;
+                dirty = true;
+                save = true;
+            }
+
+            // Keyboard arrow movement
+            let mut move_vec = Vec2::ZERO;
+            let step = if ui.input(|i| i.modifiers.shift) {
+                10.0
+            } else {
+                1.0
+            };
+
+            if ui.input(|i| i.key_pressed(egui::Key::ArrowLeft)) {
+                move_vec.x -= step;
+            }
+            if ui.input(|i| i.key_pressed(egui::Key::ArrowRight)) {
+                move_vec.x += step;
+            }
+            if ui.input(|i| i.key_pressed(egui::Key::ArrowUp)) {
+                move_vec.y -= step;
+            }
+            if ui.input(|i| i.key_pressed(egui::Key::ArrowDown)) {
+                move_vec.y += step;
+            }
+
+            if move_vec != Vec2::ZERO && !self.selected_indices.is_empty() {
+                self.push_undo(&scene);
+                for &idx in &self.selected_indices {
+                    if let Some(el) = scene.elements.get_mut(idx) {
+                        el.x += move_vec.x;
+                        el.y += move_vec.y;
+                    }
+                }
                 dirty = true;
                 save = true;
             }

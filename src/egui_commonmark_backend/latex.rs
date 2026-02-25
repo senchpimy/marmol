@@ -118,8 +118,9 @@ fn render_to_svg(latex_input: &str, inline: bool, color_hex: &str) -> Result<Str
     let font_data = font_file.data.to_vec();
 
     // Convertir LaTeX a Typst Math
+    let clean_latex = latex_input.replace('\n', "");
     let typst_math =
-        tex2typst_rs::tex2typst(latex_input).unwrap_or_else(|_| latex_input.to_string());
+        tex2typst_rs::tex2typst(&clean_latex).unwrap_or_else(|_| latex_input.to_string());
 
     let font = Font::new(Bytes::from(font_data.clone()), 0).ok_or("Fuente inválida")?;
     let font_family = font.info().family.clone();
