@@ -7,6 +7,10 @@ use egui::{
     Ui,
     text::CCursorRange,
 };
+use arboard::Clipboard;
+use image::{DynamicImage, ImageBuffer, Rgba};
+use std::path::PathBuf;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 #[derive(serde::Deserialize, serde::Serialize)]
 #[serde(default)]
@@ -18,6 +22,9 @@ pub struct EasyMarkEditor {
     pub shortcut_bold: KeyboardShortcut,
     pub shortcut_code: KeyboardShortcut,
     pub shortcut_italics: KeyboardShortcut,
+
+    pub vault_path: String,
+    pub file_path: String,
 
     #[serde(skip)]
     highlighter: super::MemoizedEasymarkHighlighter,
@@ -42,6 +49,8 @@ impl Default for EasyMarkEditor {
             shortcut_bold: SHORTCUT_BOLD,
             shortcut_code: SHORTCUT_CODE,
             shortcut_italics: SHORTCUT_ITALICS,
+            vault_path: String::new(),
+            file_path: String::new(),
             highlighter: Default::default(),
         }
     }
@@ -49,7 +58,26 @@ impl Default for EasyMarkEditor {
 
 impl EasyMarkEditor {
     pub fn ui(&mut self, ui: &mut egui::Ui) -> egui::Response {
+        let mut changed_programmatically = false;
+
+        // Handle Ctrl+V before TextEdit
+        let has_image = self.has_image_in_clipboard();
+        if has_image {
+            let ctrl_v = egui::KeyboardShortcut::new(egui::Modifiers::CTRL, egui::Key::V);
+            let cmd_v = egui::KeyboardShortcut::new(egui::Modifiers::COMMAND, egui::Key::V);
+            if ui.input_mut(|i| i.consume_shortcut(&ctrl_v) || i.consume_shortcut(&cmd_v)) {
+                if self.try_paste_image(ui.ctx()) {
+                    changed_programmatically = true;
+                }
+            }
+        }
+
         ui.horizontal(|ui| {
+            if ui.button("📋").on_hover_text("Paste image from clipboard").clicked() {
+                if self.try_paste_image(ui.ctx()) {
+                    changed_programmatically = true;
+                }
+            }
             if ui.button("Hotkeys").clicked() {
                 self.show_hotkey_editor = !self.show_hotkey_editor;
             }
@@ -80,10 +108,13 @@ impl EasyMarkEditor {
             .and_then(|state| state.cursor.char_range())
             .map(|range| range.primary.index);
 
+        let mut galley_out = None;
         let mut layouter = |ui: &egui::Ui, easymark: &dyn TextBuffer, wrap_width: f32| {
             let mut layout_job = self.highlighter.highlight(ui.style(), easymark.as_str(), cursor_index);
             layout_job.wrap.max_width = wrap_width;
-            ui.fonts(|f| f.layout_job(layout_job))
+            let galley = ui.fonts(|f| f.layout_job(layout_job));
+            galley_out = Some(galley.clone());
+            galley
         };
 
         let mut response = ui.add(
@@ -95,17 +126,112 @@ impl EasyMarkEditor {
                 .frame(false),
         );
 
-        if let Some(mut state) = TextEdit::load_state(ui.ctx(), response.id) {
-            if let Some(mut ccursor_range) = state.cursor.char_range() {
-                let any_change = shortcuts(ui, self, &mut ccursor_range);
-                if any_change {
-                    state.cursor.set_char_range(Some(ccursor_range));
-                    state.store(ui.ctx(), response.id);
-                    response.mark_changed();
+        if let Some(galley) = galley_out {
+            if let Some(mut state) = TextEdit::load_state(ui.ctx(), response.id) {
+                if let Some(mut ccursor_range) = state.cursor.char_range() {
+                    let any_change = shortcuts(ui, self, &mut ccursor_range);
+                    
+                    // Centrar el cursor si hubo cambios o si se está escribiendo al final
+                    if response.changed() || any_change {
+                        let cursor_pos_rect = galley.pos_from_cursor(ccursor_range.primary);
+                        let cursor_rect = cursor_pos_rect.translate(response.rect.min.to_vec2());
+                        ui.scroll_to_rect(cursor_rect, Some(egui::Align::Center));
+                    }
+
+                    if any_change {
+                        state.cursor.set_char_range(Some(ccursor_range));
+                        state.store(ui.ctx(), response.id);
+                        response.mark_changed();
+                    }
                 }
             }
         }
+
+        if changed_programmatically {
+            response.mark_changed();
+        }
+
         response
+    }
+
+    fn has_image_in_clipboard(&self) -> bool {
+        let mut clipboard = match Clipboard::new() {
+            Ok(c) => c,
+            Err(_) => return false,
+        };
+        
+        if clipboard.get_image().is_ok() {
+            return true;
+        }
+        
+        if let Ok(text) = clipboard.get_text() {
+            let path_str = text.trim().trim_start_matches("file://");
+            let path = PathBuf::from(path_str);
+            if path.exists() && path.is_file() {
+                if let Some(ext) = path.extension() {
+                    let ext = ext.to_string_lossy().to_lowercase();
+                    return matches!(ext.as_str(), "png" | "jpg" | "jpeg" | "gif" | "webp");
+                }
+            }
+        }
+        false
+    }
+
+    pub fn try_paste_image(&mut self, ctx: &egui::Context) -> bool {
+        let mut clipboard = match Clipboard::new() {
+            Ok(c) => c,
+            Err(_) => return false,
+        };
+
+        let image = if let Ok(image_data) = clipboard.get_image() {
+            let width = image_data.width as u32;
+            let height = image_data.height as u32;
+            let rgba_data = image_data.bytes.into_owned();
+            
+            let img_buffer: ImageBuffer<Rgba<u8>, Vec<u8>> = 
+                ImageBuffer::from_raw(width, height, rgba_data)
+                .expect("Failed to create image buffer");
+            
+            Some(DynamicImage::ImageRgba8(img_buffer))
+        } else if let Ok(text) = clipboard.get_text() {
+            let path_str = text.trim().trim_start_matches("file://");
+            let path = PathBuf::from(path_str);
+            if path.exists() && path.is_file() {
+                image::open(&path).ok()
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+
+        if let Some(img) = image {
+            let attachments_dir = if !self.vault_path.is_empty() {
+                PathBuf::from(&self.vault_path).join("attachments")
+            } else {
+                PathBuf::from("attachments")
+            };
+
+            if !attachments_dir.exists() {
+                let _ = std::fs::create_dir_all(&attachments_dir);
+            }
+
+            let timestamp = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_millis();
+            let filename = format!("pasted_{}.png", timestamp);
+            let file_path = attachments_dir.join(&filename);
+            
+            if img.save(&file_path).is_ok() {
+                let markdown_ref = format!("\n![[{}]]\n", filename);
+                
+                self.code.push_str(&markdown_ref);
+                ctx.request_repaint();
+                return true;
+            }
+        }
+        false
     }
 }
 

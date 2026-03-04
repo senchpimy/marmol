@@ -67,7 +67,7 @@ impl World for MinimalWorld {
     }
 }
 
-pub fn render(ui: &mut Ui, cache: &mut CommonMarkCache, latex: &str, inline: bool) {
+pub fn render(ui: &mut Ui, cache: &mut CommonMarkCache, latex: &str, inline: bool, font_size: f32) {
     let text_color = ui.visuals().text_color();
     let color_hex = format!(
         "#{:02x}{:02x}{:02x}",
@@ -75,12 +75,12 @@ pub fn render(ui: &mut Ui, cache: &mut CommonMarkCache, latex: &str, inline: boo
         text_color.g(),
         text_color.b()
     );
-    let cache_key = format!("{}_{}_{}", latex, inline, color_hex);
+    let cache_key = format!("{}_{}_{}_{}", latex, inline, color_hex, font_size);
 
     let svg_content = if let Some(svg) = cache.latex_cache.get(&cache_key) {
         Some(svg.clone())
     } else {
-        match render_to_svg(latex, inline, &color_hex) {
+        match render_to_svg(latex, inline, &color_hex, font_size) {
             Ok(svg) => {
                 cache.latex_cache.insert(cache_key.clone(), svg.clone());
                 Some(svg)
@@ -97,14 +97,15 @@ pub fn render(ui: &mut Ui, cache: &mut CommonMarkCache, latex: &str, inline: boo
         let mut img = egui::Image::from_bytes(uri, svg.as_bytes().to_vec());
 
         if inline || (latex.len() < 50 && !latex.contains('\n')) {
-            img = img.fit_to_original_size(1.3);
+            // No need to fit to original size 1.3 if we are already using the correct font size
+            img = img.fit_to_original_size(1.0); 
 
             ui.vertical(|ui| {
                 ui.add_space(1.0);
                 ui.add(img);
             });
         } else {
-            img = img.fit_to_original_size(2.0);
+            img = img.fit_to_original_size(1.0);
             ui.vertical_centered(|ui| {
                 ui.add(img.max_width(ui.available_width()));
             });
@@ -112,7 +113,7 @@ pub fn render(ui: &mut Ui, cache: &mut CommonMarkCache, latex: &str, inline: boo
     }
 }
 
-fn render_to_svg(latex_input: &str, inline: bool, color_hex: &str) -> Result<String, String> {
+fn render_to_svg(latex_input: &str, inline: bool, color_hex: &str, font_size: f32) -> Result<String, String> {
     let font_file = Asset::get("NotoSansMath-Regular.ttf")
         .ok_or("No se encontró la fuente NotoSansMath en el binario")?;
     let font_data = font_file.data.to_vec();
@@ -125,20 +126,20 @@ fn render_to_svg(latex_input: &str, inline: bool, color_hex: &str) -> Result<Str
     let font = Font::new(Bytes::from(font_data.clone()), 0).ok_or("Fuente inválida")?;
     let font_family = font.info().family.clone();
 
-    let (margin, size) = if inline {
-        ("0.5pt", "10pt")
+    let margin = if inline {
+        "0.5pt"
     } else {
-        ("0pt", "10pt")
+        "0pt"
     };
 
     let typst_code = format!(
         r#"
         #set page(width: auto, height: auto, margin: {}, fill: none)
-        #set text(font: "{}", size: {}, fill: rgb("{}"))
+        #set text(font: "{}", size: {}pt, fill: rgb("{}"))
         #show math.equation: set text(font: "{}", fill: rgb("{}"))
         $ {} $
         "#,
-        margin, font_family, size, color_hex, font_family, color_hex, typst_math
+        margin, font_family, font_size, color_hex, font_family, color_hex, typst_math
     );
 
     let world = MinimalWorld::new(typst_code, font_data);

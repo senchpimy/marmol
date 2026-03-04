@@ -306,8 +306,10 @@ impl TabViewer for MTabViewer<'_> {
 
     fn scroll_bars(&self, tab: &Self::Tab) -> [bool; 2] {
         match tab.content {
-            TabContent::Excalidraw { .. } | TabContent::Canvas { .. } | TabContent::Graph { .. } => [false, false],
-            _ => [true, true],
+            TabContent::Excalidraw { .. } | TabContent::Canvas { .. } | TabContent::Graph { .. } 
+            | TabContent::Markdown { .. } | TabContent::Income { .. } | TabContent::Tasks { .. }
+            | TabContent::Kanban { .. } | TabContent::Image { .. } => [false, false],
+            _ => [false, true],
         }
     }
 
@@ -607,6 +609,9 @@ impl TabViewer for MTabViewer<'_> {
                     if editor.code.is_empty() && !tab.path.is_empty() {
                         editor.code = files::read_file(&tab.path);
                     }
+                    editor.vault_path = self.vault.to_string();
+                    editor.file_path = tab.path.clone();
+
                     let width = ui.available_width();
                     let height = ui.available_height();
                     let margin_ratio = (0.15 * (width / 1500.0).min(height / 1000.0)).clamp(0.005, 0.15);

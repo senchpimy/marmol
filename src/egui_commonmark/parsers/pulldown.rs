@@ -573,17 +573,19 @@ impl CommonMarkViewerInternal {
                 }
             }
             pulldown_cmark::Event::InlineMath(tex) => {
+                let font_size = self.text_style.font_size(ui);
                 if let Some(math_fn) = options.math_fn {
-                    math_fn(ui, &tex, true);
+                    math_fn(ui, &tex, true, font_size);
                 } else {
-                    crate::egui_commonmark_backend::latex::render(ui, cache, &tex, true);
+                    crate::egui_commonmark_backend::latex::render(ui, cache, &tex, true, font_size);
                 }
             }
             pulldown_cmark::Event::DisplayMath(tex) => {
+                let font_size = self.text_style.font_size(ui);
                 if let Some(math_fn) = options.math_fn {
-                    math_fn(ui, &tex, false);
+                    math_fn(ui, &tex, false, font_size);
                 } else {
-                    crate::egui_commonmark_backend::latex::render(ui, cache, &tex, false);
+                    crate::egui_commonmark_backend::latex::render(ui, cache, &tex, false, font_size);
                 }
             }
         }
@@ -618,10 +620,11 @@ impl CommonMarkViewerInternal {
                         let latex = &part[..end_pos];
                         let after = &part[end_pos + 2..];
 
+                        let font_size = self.text_style.font_size(ui);
                         if let Some(math_fn) = options.math_fn {
-                            math_fn(ui, latex, false);
+                            math_fn(ui, latex, false, font_size);
                         } else {
-                            crate::egui_commonmark_backend::latex::render(ui, cache, latex, false);
+                            crate::egui_commonmark_backend::latex::render(ui, cache, latex, false, font_size);
                         }
 
                         if !after.is_empty() {

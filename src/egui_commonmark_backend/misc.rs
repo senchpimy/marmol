@@ -153,6 +153,36 @@ pub struct Style {
 }
 
 impl Style {
+    pub fn font_size(&self, ui: &Ui) -> f32 {
+        if let Some(level) = self.heading {
+            let max_height = ui
+                .style()
+                .text_styles
+                .get(&TextStyle::Heading)
+                .map_or(32.0, |d| d.size);
+            let min_height = ui
+                .style()
+                .text_styles
+                .get(&TextStyle::Body)
+                .map_or(14.0, |d| d.size);
+            let diff = max_height - min_height;
+
+            match level {
+                0 => max_height,
+                1 => min_height + diff * 0.835,
+                2 => min_height + diff * 0.668,
+                3 => min_height + diff * 0.501,
+                4 => min_height + diff * 0.334,
+                5.. => min_height + diff * 0.167,
+            }
+        } else {
+            ui.style()
+                .text_styles
+                .get(&TextStyle::Body)
+                .map_or(14.0, |d| d.size)
+        }
+    }
+
     pub fn to_richtext(&self, ui: &Ui, text: &str) -> RichText {
         let mut text = RichText::new(text);
 

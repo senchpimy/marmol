@@ -186,7 +186,7 @@ impl<'f> CommonMarkViewer<'f> {
     /// # use egui_commonmark::CommonMarkViewer;
     /// let mut math_images = Rc::new(RefCell::new(HashMap::new()));
     /// CommonMarkViewer::new()
-    ///     .render_math_fn(Some(&move |ui, math, inline| {
+    ///     .render_math_fn(Some(&move |ui, math, inline, font_size| {
     ///         let mut map = math_images.borrow_mut();
     ///         let svg = map
     ///             .entry(math.to_string())

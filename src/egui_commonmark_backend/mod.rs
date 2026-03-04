@@ -28,7 +28,7 @@ pub use {
 // The only struct that is allowed to use directly. (If one does not need egui_commonmark)
 pub use misc::CommonMarkCache;
 
-/// Takes [`egui::Ui`], the math text to be rendered and whether it is inline
-pub type RenderMathFn = dyn Fn(&mut egui::Ui, &str, bool);
+/// Takes [`egui::Ui`], the math text to be rendered, whether it is inline and the font size
+pub type RenderMathFn = dyn Fn(&mut egui::Ui, &str, bool, f32);
 /// Takes [`egui::Ui`] and the html text to be rendered/used
 pub type RenderHtmlFn = dyn Fn(&mut egui::Ui, &str);
