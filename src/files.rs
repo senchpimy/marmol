@@ -119,7 +119,11 @@ pub fn resolve_path(vault: &str, current_file_path: &str, target: &str) -> Optio
     // 1. Ruta absoluta dentro del vault (si empieza con /)
     if clean_target.starts_with('/') {
         let p = format!("{}{}", vault, clean_target);
-        if Path::new(&p).exists() {
+        let path = Path::new(&p);
+        if path.exists() {
+            if let Ok(abs) = path.canonicalize() {
+                return Some(abs.to_string_lossy().to_string());
+            }
             return Some(p);
         }
     }
@@ -128,6 +132,9 @@ pub fn resolve_path(vault: &str, current_file_path: &str, target: &str) -> Optio
     if let Some(current_dir) = Path::new(current_file_path).parent() {
         let joined = current_dir.join(clean_target);
         if joined.exists() && joined.is_file() {
+            if let Ok(abs) = joined.canonicalize() {
+                return Some(abs.to_string_lossy().to_string());
+            }
             return Some(joined.to_string_lossy().to_string());
         }
 
@@ -136,6 +143,9 @@ pub fn resolve_path(vault: &str, current_file_path: &str, target: &str) -> Optio
             if !clean_target.to_lowercase().ends_with(ext) {
                 let joined_ext = current_dir.join(format!("{}{}", clean_target, ext));
                 if joined_ext.exists() && joined_ext.is_file() {
+                    if let Ok(abs) = joined_ext.canonicalize() {
+                        return Some(abs.to_string_lossy().to_string());
+                    }
                     return Some(joined_ext.to_string_lossy().to_string());
                 }
             }
@@ -169,6 +179,9 @@ pub fn resolve_path(vault: &str, current_file_path: &str, target: &str) -> Optio
                 let fname_lower = fname.to_lowercase();
                 for t in &targets_names {
                     if fname_lower == *t {
+                        if let Ok(abs) = entry.path().canonicalize() {
+                            return Some(abs.to_string_lossy().to_string());
+                        }
                         return Some(entry.path().to_string_lossy().to_string());
                     }
                 }

@@ -289,8 +289,27 @@ impl Image {
     }
 
     pub fn end(self, ui: &mut Ui, options: &CommonMarkOptions) {
+        let uri = if self.uri.starts_with("file://") {
+             let path_str = &self.uri[7..];
+             let ctx = ui.ctx();
+             let vault: String = ctx.data(|d| d.get_temp(egui::Id::new("nav_vault")).unwrap_or_default());
+             let current_path: String = ctx.data(|d| d.get_temp(egui::Id::new("nav_current_path")).unwrap_or_default());
+             
+             if !vault.is_empty() && !current_path.is_empty() {
+                 if let Some(resolved) = crate::files::resolve_path(&vault, &current_path, path_str) {
+                     format!("file://{}", resolved)
+                 } else {
+                     self.uri.clone()
+                 }
+             } else {
+                 self.uri.clone()
+             }
+        } else {
+            self.uri.clone()
+        };
+
         let response = ui.add(
-            egui::Image::from_uri(&self.uri)
+            egui::Image::from_uri(&uri)
                 .fit_to_original_size(1.0)
                 .max_width(options.max_width(ui)),
         );
@@ -319,15 +338,16 @@ impl CodeBlock {
         max_width: f32,
     ) {
         if let Some(lang) = &self.lang {
-            if lang == "mermaid" || lang == "vega" || lang == "vega-lite" {
-                let cache_map = if lang == "mermaid" {
+            let lang_lower = lang.to_lowercase();
+            if lang_lower == "mermaid" || lang_lower == "vega" || lang_lower == "vega-lite" {
+                let cache_map = if lang_lower == "mermaid" {
                     &mut cache.mermaid_cache
                 } else {
                     &mut cache.vega_cache
                 };
 
                 // Primero revisamos si hay resultados asíncronos pendientes de integrar al cache local
-                if lang != "mermaid" {
+                if lang_lower != "mermaid" {
                     let results = get_vega_results();
                     let mut results_lock = results.lock().unwrap();
                     if let Some(svg) = results_lock.remove(&self.content) {
@@ -351,7 +371,7 @@ impl CodeBlock {
                         Some(svg.clone())
                     }
                 } else {
-                    if lang == "mermaid" {
+                    if lang_lower == "mermaid" {
                         let opts = mermaid_rs_renderer::RenderOptions::modern();
                         match mermaid_rs_renderer::render_with_options(&self.content, opts) {
                             Ok(svg) => {
@@ -381,7 +401,7 @@ impl CodeBlock {
 
                         // Vega/Vega-Lite rendering local via vl-convert-rs
                         let content = self.content.clone();
-                        let is_vegalite = lang == "vega-lite";
+                        let is_vegalite_tag = lang_lower == "vega-lite";
                         let results = get_vega_results();
                         let converter = get_vl_converter();
                         let rt = get_tokio_runtime();
@@ -407,7 +427,14 @@ impl CodeBlock {
                                     config_map.insert("background".to_string(), serde_json::Value::String("transparent".to_string()));
                                     let config = Some(serde_json::Value::Object(config_map));
 
-                                    let result = if is_vegalite {
+                                    // Detect if it's vega-lite even if tagged as vega
+                                    let actually_vegalite = if let Some(schema) = spec.get("$schema").and_then(|s| s.as_str()) {
+                                        schema.contains("vega-lite")
+                                    } else {
+                                        is_vegalite_tag
+                                    };
+
+                                    let result = if actually_vegalite {
                                         let opts = vl_convert_rs::converter::VlOpts {
                                             vl_version: vl_convert_rs::VlVersion::v5_21,
                                             config,
@@ -475,8 +502,9 @@ impl CodeBlock {
                                 .max_width(ui.available_width()),
                         );
                     });
-                    return;
                 }
+                // Si es un bloque que manejamos nosotros (mermaid/vega), no renderizamos el código de abajo
+                return;
             }
         }
 

@@ -573,7 +573,13 @@ impl TabViewer for MTabViewer<'_> {
                     egui::ScrollArea::vertical()
                         .id_salt(seed_id.with("img_scroll"))
                         .show(ui, |ui| {
-                            let img = Image::from_uri(format!("file://{}", image_path));
+                            let p = Path::new(image_path);
+                            let uri = if let Ok(abs) = p.canonicalize() {
+                                format!("file://{}", abs.to_string_lossy())
+                            } else {
+                                format!("file://{}", image_path)
+                            };
+                            let img = Image::from_uri(uri);
                             ui.add(img);
                         });
                 }

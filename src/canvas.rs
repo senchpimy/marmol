@@ -662,6 +662,10 @@ impl CanvasGui {
                             .or_insert_with(|| fs::read_to_string(&p).unwrap_or_default());
 
                         egui::ScrollArea::vertical().id_salt(nid).show(ui, |ui| {
+                            ui.ctx().data_mut(|d| {
+                                d.insert_temp(egui::Id::new("nav_vault"), vault.to_string());
+                                d.insert_temp(egui::Id::new("nav_current_path"), p.clone());
+                            });
                             CommonMarkViewer::new().show(ui, commonmark_cache, content);
                         });
                     } else {
