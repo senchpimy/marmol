@@ -556,6 +556,7 @@ impl CodeBlock {
                 ui,
                 max_width,
                 &self.content,
+                self.lang.as_deref(),
                 &mut layout,
             );
         });

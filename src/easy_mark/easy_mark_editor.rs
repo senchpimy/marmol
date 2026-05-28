@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use egui::{
     Key,
     KeyboardShortcut,
@@ -26,14 +27,16 @@ pub struct EasyMarkEditor {
     pub vault_path: String,
     pub file_path: String,
 
+    pub collapsed_blocks: HashSet<usize>,
+
     #[serde(skip)]
     highlighter: super::MemoizedEasymarkHighlighter,
 }
 
 impl PartialEq for EasyMarkEditor {
     fn eq(&self, other: &Self) -> bool {
-        (&self.code, self.show_rendered, self.show_hotkey_editor)
-            == (&other.code, other.show_rendered, other.show_hotkey_editor)
+        (&self.code, self.show_rendered, self.show_hotkey_editor, &self.collapsed_blocks)
+            == (&other.code, other.show_rendered, other.show_hotkey_editor, &other.collapsed_blocks)
             && self.shortcut_bold == other.shortcut_bold
             && self.shortcut_code == other.shortcut_code
             && self.shortcut_italics == other.shortcut_italics
@@ -51,6 +54,7 @@ impl Default for EasyMarkEditor {
             shortcut_italics: SHORTCUT_ITALICS,
             vault_path: String::new(),
             file_path: String::new(),
+            collapsed_blocks: HashSet::new(),
             highlighter: Default::default(),
         }
     }
@@ -72,6 +76,7 @@ impl EasyMarkEditor {
             }
         }
 
+        // --- BARRA DE HERRAMIENTAS FIJA ---
         ui.horizontal(|ui| {
             if ui.button("📋").on_hover_text("Paste image from clipboard").clicked() {
                 if self.try_paste_image(ui.ctx()) {
@@ -81,7 +86,66 @@ impl EasyMarkEditor {
             if ui.button("Hotkeys").clicked() {
                 self.show_hotkey_editor = !self.show_hotkey_editor;
             }
+            
+            // Botón para colapsar el bloque actual
+            if ui.button("⮩").on_hover_text("Toggle folding of code block at cursor").clicked() {
+                let text = self.code.as_str();
+                let editor_id = ui.id().with("easymark_edit");
+                if let Some(state) = TextEdit::load_state(ui.ctx(), editor_id) {
+                    if let Some(range) = state.cursor.char_range() {
+                        let cursor_idx = range.primary.index;
+                        
+                        let mut count_before = 0;
+                        let mut temp_text = &text[..cursor_idx];
+                        let mut found_start = None;
+                        while let Some(pos) = temp_text.rfind("```") {
+                            if pos == 0 || temp_text.get(pos-1..pos) == Some("\n") {
+                                count_before += 1;
+                                if count_before % 2 != 0 {
+                                    found_start = Some(pos);
+                                    break;
+                                }
+                            }
+                            temp_text = &temp_text[..pos];
+                        }
+
+                        if let Some(start_pos) = found_start {
+                            if self.collapsed_blocks.contains(&start_pos) {
+                                self.collapsed_blocks.remove(&start_pos);
+                            } else {
+                                self.collapsed_blocks.insert(start_pos);
+                            }
+                            changed_programmatically = true;
+                        }
+                    }
+                }
+            }
+
+            // Botón para colapsar/expandir TODO
+            if ui.button("↕").on_hover_text("Toggle all code blocks").clicked() {
+                if self.collapsed_blocks.is_empty() {
+                    let mut text = self.code.as_str();
+                    let mut idx = 0;
+                    while !text.is_empty() {
+                        if text.starts_with("```") {
+                            self.collapsed_blocks.insert(idx);
+                            let end = text.find("\n```").map_or_else(|| text.len(), |i| i + 4);
+                            text = &text[end..];
+                            idx += end;
+                        } else {
+                            let next_line = text.find('\n').map_or(text.len(), |i| i + 1);
+                            text = &text[next_line..];
+                            idx += next_line;
+                        }
+                    }
+                } else {
+                    self.collapsed_blocks.clear();
+                }
+                changed_programmatically = true;
+            }
         });
+
+        ui.separator();
 
         if self.show_hotkey_editor {
             egui::Window::new("Hotkey Editor")
@@ -103,55 +167,60 @@ impl EasyMarkEditor {
                 });
         }
 
+        // --- ÁREA DE EDICIÓN CON SCROLL PROPIO ---
         let editor_id = ui.id().with("easymark_edit");
         let cursor_index = TextEdit::load_state(ui.ctx(), editor_id)
             .and_then(|state| state.cursor.char_range())
             .map(|range| range.primary.index);
 
         let mut galley_out = None;
-        let mut layouter = |ui: &egui::Ui, easymark: &dyn TextBuffer, wrap_width: f32| {
-            let mut layout_job = self.highlighter.highlight(ui.style(), easymark.as_str(), cursor_index);
-            layout_job.wrap.max_width = wrap_width;
-            let galley = ui.fonts(|f| f.layout_job(layout_job));
-            galley_out = Some(galley.clone());
-            galley
-        };
+        {
+            let highlighter = &mut self.highlighter;
+            let collapsed_blocks = &self.collapsed_blocks;
+            let mut layouter = |ui: &egui::Ui, easymark: &dyn TextBuffer, wrap_width: f32| {
+                let mut layout_job = highlighter.highlight(ui.style(), easymark.as_str(), cursor_index, collapsed_blocks);
+                layout_job.wrap.max_width = wrap_width;
+                let galley = ui.fonts(|f| f.layout_job(layout_job));
+                galley_out = Some(galley.clone());
+                galley
+            };
 
-        let mut response = ui.add(
-            egui::TextEdit::multiline(&mut self.code)
-                .id(editor_id)
-                .desired_width(f32::INFINITY)
-                .font(egui::TextStyle::Monospace) // for cursor height
-                .layouter(&mut layouter)
-                .frame(false),
-        );
+            ui.spacing_mut().item_spacing.y = 0.0;
+            
+            let mut response = ui.add(
+                egui::TextEdit::multiline(&mut self.code)
+                    .id(editor_id)
+                    .desired_width(f32::INFINITY)
+                    .font(egui::TextStyle::Monospace)
+                    .layouter(&mut layouter)
+                    .frame(false),
+            );
 
-        if let Some(galley) = galley_out {
-            if let Some(mut state) = TextEdit::load_state(ui.ctx(), response.id) {
-                if let Some(mut ccursor_range) = state.cursor.char_range() {
-                    let any_change = shortcuts(ui, self, &mut ccursor_range);
-                    
-                    // Centrar el cursor si hubo cambios o si se está escribiendo al final
-                    if response.changed() || any_change {
-                        let cursor_pos_rect = galley.pos_from_cursor(ccursor_range.primary);
-                        let cursor_rect = cursor_pos_rect.translate(response.rect.min.to_vec2());
-                        ui.scroll_to_rect(cursor_rect, Some(egui::Align::Center));
-                    }
+            if let Some(galley) = galley_out {
+                if let Some(mut state) = TextEdit::load_state(ui.ctx(), response.id) {
+                    if let Some(mut ccursor_range) = state.cursor.char_range() {
+                        let any_change = shortcuts(ui, self, &mut ccursor_range);
+                        
+                        if response.changed() || any_change {
+                            let cursor_pos_rect = galley.pos_from_cursor(ccursor_range.primary);
+                            let cursor_rect = cursor_pos_rect.translate(response.rect.min.to_vec2());
+                            ui.scroll_to_rect(cursor_rect, Some(egui::Align::Center));
+                        }
 
-                    if any_change {
-                        state.cursor.set_char_range(Some(ccursor_range));
-                        state.store(ui.ctx(), response.id);
-                        response.mark_changed();
+                        if any_change {
+                            state.cursor.set_char_range(Some(ccursor_range));
+                            state.store(ui.ctx(), response.id);
+                            response.mark_changed();
+                        }
                     }
                 }
             }
-        }
 
-        if changed_programmatically {
-            response.mark_changed();
+            if changed_programmatically {
+                response.mark_changed();
+            }
+            response
         }
-
-        response
     }
 
     fn has_image_in_clipboard(&self) -> bool {

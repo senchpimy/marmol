@@ -1018,6 +1018,14 @@ impl Tabs {
             .style(dock_style.clone())
             .show_add_buttons(true)
             .show_inside(ui, tab_viewer);
+
+        // Update current_file based on the currently active/focused tab
+        if let Some((_, tab)) = self.tree.find_active_focused() {
+            if *current_file != tab.path {
+                *current_file = tab.path.clone();
+            }
+        }
+
         added_nodes.drain(..).for_each(|(surface, node)| {
             self.tree.set_focused_node_and_surface((surface, node));
             let last = self.tree.iter_all_tabs().last();

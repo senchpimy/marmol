@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use super::easy_mark_parser::{self, Heading};
 
 /// Highlight easymark, memoizing previous output to save CPU.
@@ -9,15 +10,23 @@ pub struct MemoizedEasymarkHighlighter {
     code: String,
     output: egui::text::LayoutJob,
     cursor_index: Option<usize>,
+    collapsed_blocks: HashSet<usize>,
 }
 
 impl MemoizedEasymarkHighlighter {
-    pub fn highlight(&mut self, egui_style: &egui::Style, code: &str, cursor_index: Option<usize>) -> egui::text::LayoutJob {
-        if (&self.style, self.code.as_str(), self.cursor_index) != (egui_style, code, cursor_index) {
+    pub fn highlight(
+        &mut self, 
+        egui_style: &egui::Style, 
+        code: &str, 
+        cursor_index: Option<usize>,
+        collapsed_blocks: &HashSet<usize>,
+    ) -> egui::text::LayoutJob {
+        if (&self.style, self.code.as_str(), self.cursor_index, &self.collapsed_blocks) != (egui_style, code, cursor_index, collapsed_blocks) {
             self.style = egui_style.clone();
             code.clone_into(&mut self.code);
             self.cursor_index = cursor_index;
-            self.output = highlight_easymark(egui_style, code, cursor_index);
+            self.collapsed_blocks = collapsed_blocks.clone();
+            self.output = highlight_easymark(egui_style, code, cursor_index, collapsed_blocks);
         }
         self.output.clone()
     }
@@ -26,7 +35,8 @@ impl MemoizedEasymarkHighlighter {
 pub fn highlight_easymark(
     egui_style: &egui::Style, 
     mut text: &str, 
-    cursor_index: Option<usize>
+    cursor_index: Option<usize>,
+    collapsed_blocks: &HashSet<usize>,
 ) -> egui::text::LayoutJob {
     let mut job = egui::text::LayoutJob::default();
     let mut style = easy_mark_parser::Style::default();
@@ -36,17 +46,46 @@ pub fn highlight_easymark(
     while !text.is_empty() {
         if start_of_line && text.starts_with("```") {
             let end = text.find("\n```").map_or_else(|| text.len(), |i| i + 4);
-            job.append(
-                &text[..end],
-                0.0,
-                format_from_style(
-                    egui_style,
-                    &easy_mark_parser::Style {
-                        code: true,
+            
+            if collapsed_blocks.contains(&current_index) {
+                // Render only the first line and hide the rest
+                let first_line_end = text.find('\n').map_or(end, |i| i + 1);
+                
+                // Visible header
+                job.append(
+                    &format!("{} ... [COLLAPSED]", &text[..first_line_end-1]),
+                    0.0,
+                    egui::text::TextFormat {
+                        color: egui_style.visuals.weak_text_color(),
+                        background: egui_style.visuals.code_bg_color,
+                        italics: true,
                         ..Default::default()
                     },
-                ),
-            );
+                );
+
+                // Invisible content (to keep cursor mapping working)
+                job.append(
+                    &text[first_line_end-1..end],
+                    0.0,
+                    egui::text::TextFormat {
+                        color: egui::Color32::TRANSPARENT,
+                        font_id: egui::FontId::new(0.1, egui::FontFamily::Monospace),
+                        ..Default::default()
+                    },
+                );
+            } else {
+                job.append(
+                    &text[..end],
+                    0.0,
+                    format_from_style(
+                        egui_style,
+                        &easy_mark_parser::Style {
+                            code: true,
+                            ..Default::default()
+                        },
+                    ),
+                );
+            }
             text = &text[end..];
             current_index += end;
             style = Default::default();
