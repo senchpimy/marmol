@@ -458,42 +458,14 @@ impl CommonMarkViewerInternal {
                     .show(ui, |ui| {
                         egui::Grid::new(id).striped(true).show(ui, |ui| {
                             for col in header {
-                                ui.horizontal(|ui| {
-                                    for (e, src_span) in col {
-                                        let tmp_start = std::mem::replace(
-                                            &mut self.line.should_start_newline,
-                                            false,
-                                        );
-                                        let tmp_end = std::mem::replace(
-                                            &mut self.line.should_end_newline,
-                                            false,
-                                        );
-                                        self.event(ui, e, src_span, cache, options, max_width);
-                                        self.line.should_start_newline = tmp_start;
-                                        self.line.should_end_newline = tmp_end;
-                                    }
-                                });
+                                self.render_table_cell(ui, col, cache, options, max_width);
                             }
 
                             ui.end_row();
 
                             for row in rows {
                                 for col in row {
-                                    ui.horizontal(|ui| {
-                                        for (e, src_span) in col {
-                                            let tmp_start = std::mem::replace(
-                                                &mut self.line.should_start_newline,
-                                                false,
-                                            );
-                                            let tmp_end = std::mem::replace(
-                                                &mut self.line.should_end_newline,
-                                                false,
-                                            );
-                                            self.event(ui, e, src_span, cache, options, max_width);
-                                            self.line.should_start_newline = tmp_start;
-                                            self.line.should_end_newline = tmp_end;
-                                        }
-                                    });
+                                    self.render_table_cell(ui, col, cache, options, max_width);
                                 }
 
                                 ui.end_row();
@@ -509,6 +481,44 @@ impl CommonMarkViewerInternal {
 
             self.line.try_insert_end(ui);
         }
+    }
+
+    fn render_table_cell<'e>(
+        &mut self,
+        ui: &mut Ui,
+        col: Vec<(pulldown_cmark::Event<'e>, Range<usize>)>,
+        cache: &mut CommonMarkCache,
+        options: &CommonMarkOptions,
+        max_width: f32,
+    ) {
+        let mut line = Vec::new();
+        let mut lines = Vec::new();
+        for (e, src_span) in col {
+            if let pulldown_cmark::Event::InlineHtml(text) = &e {
+                let lower = text.trim().to_lowercase();
+                if lower == "<br>" || lower == "<br/>" || lower == "<br />" {
+                    lines.push(std::mem::take(&mut line));
+                    continue;
+                }
+            }
+            line.push((e, src_span));
+        }
+        lines.push(line);
+
+        ui.vertical(|ui| {
+            for line in lines {
+                ui.horizontal(|ui| {
+                    for (e, src_span) in line {
+                        let tmp_start =
+                            std::mem::replace(&mut self.line.should_start_newline, false);
+                        let tmp_end = std::mem::replace(&mut self.line.should_end_newline, false);
+                        self.event(ui, e, src_span, cache, options, max_width);
+                        self.line.should_start_newline = tmp_start;
+                        self.line.should_end_newline = tmp_end;
+                    }
+                });
+            }
+        });
     }
 
     fn event(
