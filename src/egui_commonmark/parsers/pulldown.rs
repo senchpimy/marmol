@@ -449,61 +449,57 @@ impl CommonMarkViewerInternal {
             let id = ui.id().with("_table").with(self.curr_table);
             self.curr_table += 1;
 
-            ui.columns(3, |columns| {
-                columns[1].vertical_centered(|ui| {
-                    egui::Frame::group(ui.style()).show(ui, |ui| {
-                        let Table { header, rows } = parse_table(events);
+            egui::Frame::group(ui.style()).show(ui, |ui| {
+                let Table { header, rows } = parse_table(events);
 
-                        egui::ScrollArea::horizontal()
-                            .id_salt(id.with("_scroll"))
-                            .auto_shrink([true, true])
-                            .show(ui, |ui| {
-                                egui::Grid::new(id).striped(true).show(ui, |ui| {
-                                    for col in header {
-                                        ui.horizontal(|ui| {
-                                            for (e, src_span) in col {
-                                                let tmp_start = std::mem::replace(
-                                                    &mut self.line.should_start_newline,
-                                                    false,
-                                                );
-                                                let tmp_end = std::mem::replace(
-                                                    &mut self.line.should_end_newline,
-                                                    false,
-                                                );
-                                                self.event(ui, e, src_span, cache, options, max_width);
-                                                self.line.should_start_newline = tmp_start;
-                                                self.line.should_end_newline = tmp_end;
-                                            }
-                                        });
-                                    }
-
-                                    ui.end_row();
-
-                                    for row in rows {
-                                        for col in row {
-                                            ui.horizontal(|ui| {
-                                                for (e, src_span) in col {
-                                                    let tmp_start = std::mem::replace(
-                                                        &mut self.line.should_start_newline,
-                                                        false,
-                                                    );
-                                                    let tmp_end = std::mem::replace(
-                                                        &mut self.line.should_end_newline,
-                                                        false,
-                                                    );
-                                                    self.event(ui, e, src_span, cache, options, max_width);
-                                                    self.line.should_start_newline = tmp_start;
-                                                    self.line.should_end_newline = tmp_end;
-                                                }
-                                            });
-                                        }
-
-                                        ui.end_row();
+                egui::ScrollArea::horizontal()
+                    .id_salt(id.with("_scroll"))
+                    .auto_shrink([true, true])
+                    .show(ui, |ui| {
+                        egui::Grid::new(id).striped(true).show(ui, |ui| {
+                            for col in header {
+                                ui.horizontal(|ui| {
+                                    for (e, src_span) in col {
+                                        let tmp_start = std::mem::replace(
+                                            &mut self.line.should_start_newline,
+                                            false,
+                                        );
+                                        let tmp_end = std::mem::replace(
+                                            &mut self.line.should_end_newline,
+                                            false,
+                                        );
+                                        self.event(ui, e, src_span, cache, options, max_width);
+                                        self.line.should_start_newline = tmp_start;
+                                        self.line.should_end_newline = tmp_end;
                                     }
                                 });
-                            });
+                            }
+
+                            ui.end_row();
+
+                            for row in rows {
+                                for col in row {
+                                    ui.horizontal(|ui| {
+                                        for (e, src_span) in col {
+                                            let tmp_start = std::mem::replace(
+                                                &mut self.line.should_start_newline,
+                                                false,
+                                            );
+                                            let tmp_end = std::mem::replace(
+                                                &mut self.line.should_end_newline,
+                                                false,
+                                            );
+                                            self.event(ui, e, src_span, cache, options, max_width);
+                                            self.line.should_start_newline = tmp_start;
+                                            self.line.should_end_newline = tmp_end;
+                                        }
+                                    });
+                                }
+
+                                ui.end_row();
+                            }
+                        });
                     });
-                });
             });
 
             self.is_table = false;
