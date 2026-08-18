@@ -52,6 +52,7 @@ tokio-util = "=0.7.10"
 tokio-stream = "=0.1.14"
 vl-convert-rs = "1.9.0"
 arboard = { version = "3.6.1", features = ["image", "wayland-data-control"] }
+rust_tikz = { git = "https://github.com/siefkenj/rust-tikzjax", package = "rust-tikz", rev = "6489950f25dddecb899b86c6c00f5891b3077dd7" }
 
 [features]
 default = ["serde", "pulldown_cmark", "better_syntax_highlighting"]

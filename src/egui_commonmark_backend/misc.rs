@@ -30,6 +30,19 @@ fn get_tokio_runtime() -> &'static tokio::runtime::Runtime {
     })
 }
 
+static SCG_RESULTS: OnceLock<Arc<Mutex<HashMap<String, String>>>> = OnceLock::new();
+static SCG_RUNNER: OnceLock<Mutex<Option<rust_tikz::WasmRunner>>> = OnceLock::new();
+
+fn get_scg_results() -> Arc<Mutex<HashMap<String, String>>> {
+    SCG_RESULTS
+        .get_or_init(|| Arc::new(Mutex::new(HashMap::new())))
+        .clone()
+}
+
+fn get_scg_runner() -> &'static Mutex<Option<rust_tikz::WasmRunner>> {
+    SCG_RUNNER.get_or_init(|| Mutex::new(None))
+}
+
 #[cfg(feature = "better_syntax_highlighting")]
 use syntect::{
     easy::HighlightLines,
@@ -369,16 +382,28 @@ impl CodeBlock {
     ) {
         if let Some(lang) = &self.lang {
             let lang_lower = lang.to_lowercase();
-            if lang_lower == "mermaid" || lang_lower == "vega" || lang_lower == "vega-lite" {
+            if lang_lower == "mermaid"
+                || lang_lower == "vega"
+                || lang_lower == "vega-lite"
+                || lang_lower == "scg"
+            {
                 let cache_map = if lang_lower == "mermaid" {
                     &mut cache.mermaid_cache
+                } else if lang_lower == "scg" {
+                    &mut cache.scg_cache
                 } else {
                     &mut cache.vega_cache
                 };
 
                 // Primero revisamos si hay resultados asíncronos pendientes de integrar al cache local
-                if lang_lower != "mermaid" {
+                if lang_lower == "vega" || lang_lower == "vega-lite" {
                     let results = get_vega_results();
+                    let mut results_lock = results.lock().unwrap();
+                    if let Some(svg) = results_lock.remove(&self.content) {
+                        cache_map.insert(self.content.clone(), svg);
+                    }
+                } else if lang_lower == "scg" {
+                    let results = get_scg_results();
                     let mut results_lock = results.lock().unwrap();
                     if let Some(svg) = results_lock.remove(&self.content) {
                         cache_map.insert(self.content.clone(), svg);
@@ -390,7 +415,7 @@ impl CodeBlock {
                         ui.vertical_centered(|ui| {
                             ui.horizontal(|ui| {
                                 ui.spinner();
-                                ui.label("Generando gráfica de Vega localmente...");
+                                ui.label("Generando gráfica...");
                             });
                         });
                         None
@@ -425,6 +450,60 @@ impl CodeBlock {
                                 None
                             }
                         }
+                    } else if lang_lower == "scg" {
+                        // Marcar como cargando para evitar peticiones infinitas cada frame
+                        cache_map.insert(self.content.clone(), "LOADING".to_string());
+
+                        // TikZ rendering local via rust_tikz (tikzjax)
+                        let content = self.content.clone();
+                        let results = get_scg_results();
+                        let runner = get_scg_runner();
+                        let rt = get_tokio_runtime();
+                        let ctx = ui.ctx().clone();
+
+                        rt.spawn(async move {
+                            let content_for_task = content.clone();
+                            let rendered = tokio::task::spawn_blocking(move || {
+                                let mut guard = runner.lock().unwrap();
+                                if guard.is_none() {
+                                    match rust_tikz::WasmRunner::new() {
+                                        Ok(r) => *guard = Some(r),
+                                        Err(e) => {
+                                            return format!("ERROR: TikZ init: {}", e)
+                                        }
+                                    }
+                                }
+
+                                let input = if content_for_task.contains("\\begin{document}") {
+                                    content_for_task.clone()
+                                } else {
+                                    format!(
+                                        "\n\\begin{{document}}\n{}\n\\end{{document}}\n",
+                                        content_for_task
+                                    )
+                                };
+                                match rust_tikz::tex2svg(guard.as_mut().unwrap(), &input) {
+                                    Ok(mut svg) => {
+                                        svg = svg.trim().to_string();
+                                        svg = svg.replace("\"Segoe UI\"", "'Segoe UI'");
+                                        if let Some(start) = svg.find("<svg") {
+                                            svg = svg[start..].to_string();
+                                        }
+                                        svg
+                                    }
+                                    Err(e) => format!("ERROR: TikZ render: {}", e),
+                                }
+                            })
+                            .await;
+
+                            let result =
+                                rendered.unwrap_or_else(|e| format!("ERROR: TikZ task: {}", e));
+                            let mut res_lock = results.lock().unwrap();
+                            res_lock.insert(content, result);
+                            ctx.request_repaint();
+                        });
+
+                        None
                     } else {
                         // Marcar como cargando para evitar peticiones infinitas cada frame
                         cache_map.insert(self.content.clone(), "LOADING".to_string());
@@ -694,6 +773,7 @@ pub struct CommonMarkCache {
     pub(self) has_installed_loaders: bool,
     pub mermaid_cache: HashMap<String, String>,
     pub vega_cache: HashMap<String, String>,
+    pub scg_cache: HashMap<String, String>,
     pub latex_cache: HashMap<String, String>,
 }
 
@@ -710,6 +790,7 @@ impl Default for CommonMarkCache {
             has_installed_loaders: false,
             mermaid_cache: HashMap::new(),
             vega_cache: HashMap::new(),
+            scg_cache: HashMap::new(),
             latex_cache: HashMap::new(),
         }
     }
