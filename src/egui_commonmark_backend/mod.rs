@@ -16,6 +16,8 @@ pub mod latex;
 #[cfg(feature = "embedded_image")]
 mod data_url_loader;
 
+mod svg_loader;
+
 // For ease of use in proc macros
 #[doc(hidden)]
 pub use {

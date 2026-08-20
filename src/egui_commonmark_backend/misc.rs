@@ -939,6 +939,11 @@ pub fn prepare_show(cache: &mut CommonMarkCache, ctx: &egui::Context) {
         crate::egui_commonmark_backend::data_url_loader::install_loader(ctx);
 
         egui_extras::install_image_loaders(ctx);
+        // Nuestro loader de SVG se instala después para que egui lo pruebe primero
+        // (egui recorre los loaders en orden inverso de registro). Configura un
+        // fontdb que resuelve las familias genéricas CSS de las fuentes del
+        // sistema, algo que el SvgLoader de egui_extras no hace.
+        crate::egui_commonmark_backend::svg_loader::install_svg_loader(ctx);
         cache.has_installed_loaders = true;
     }
 
