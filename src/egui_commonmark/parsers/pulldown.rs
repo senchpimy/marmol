@@ -458,14 +458,14 @@ impl CommonMarkViewerInternal {
                     .show(ui, |ui| {
                         egui::Grid::new(id).striped(true).show(ui, |ui| {
                             for col in header {
-                                self.render_table_cell(ui, col, cache, options, max_width);
+                                self.render_table_cell(ui, col, cache, options, max_width, true);
                             }
 
                             ui.end_row();
 
                             for row in rows {
                                 for col in row {
-                                    self.render_table_cell(ui, col, cache, options, max_width);
+                                    self.render_table_cell(ui, col, cache, options, max_width, false);
                                 }
 
                                 ui.end_row();
@@ -490,6 +490,7 @@ impl CommonMarkViewerInternal {
         cache: &mut CommonMarkCache,
         options: &CommonMarkOptions,
         max_width: f32,
+        bold: bool,
     ) {
         let mut line = Vec::new();
         let mut lines = Vec::new();
@@ -505,6 +506,8 @@ impl CommonMarkViewerInternal {
         }
         lines.push(line);
 
+        let tmp_strong = std::mem::replace(&mut self.text_style.strong, bold);
+
         ui.vertical(|ui| {
             for line in lines {
                 ui.horizontal(|ui| {
@@ -519,6 +522,8 @@ impl CommonMarkViewerInternal {
                 });
             }
         });
+
+        self.text_style.strong = tmp_strong;
     }
 
     fn event(
