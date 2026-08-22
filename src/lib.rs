@@ -31,6 +31,7 @@ pub mod main_area;
 pub mod screens;
 pub mod search;
 pub mod server;
+pub mod sketch;
 pub mod switcher;
 pub mod tabs;
 pub mod tasks;
@@ -97,7 +98,9 @@ pub struct Marmol {
     android_storage: configuraciones::AndroidStorage,
     #[cfg(target_os = "android")]
     pub android_app: Option<winit::platform::android::activity::AndroidApp>,
-    
+
+    zoom_factor: f32,
+
     // Style
     dock_style: crate::egui_dock::Style,
 }
@@ -120,6 +123,8 @@ impl Marmol {
     }
 
     fn from_program_state(state: configuraciones::MarmolProgramState, ctx: &egui::Context) -> Self {
+        let zoom_factor = state.zoom_factor;
+        ctx.set_zoom_factor(zoom_factor);
         let current_path_str = state.current_file.unwrap_or_default();
         Self {
             window_size: MShape {
@@ -165,6 +170,7 @@ impl Marmol {
                 .unwrap_or(configuraciones::AndroidStorage::Unselected),
             #[cfg(target_os = "android")]
             android_app: None,
+            zoom_factor,
             dock_style: crate::egui_dock::Style::from_egui(ctx.style().as_ref()),
         }
     }
@@ -213,6 +219,7 @@ impl Default for Marmol {
             android_storage: configuraciones::AndroidStorage::Unselected,
             #[cfg(target_os = "android")]
             android_app: None,
+            zoom_factor: 1.0,
             dock_style: crate::egui_dock::Style::default(),
         }
     }
@@ -220,6 +227,11 @@ impl Default for Marmol {
 
 impl eframe::App for Marmol {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        let zoom_actual = ctx.zoom_factor();
+        if (zoom_actual - self.zoom_factor).abs() > 1e-3 {
+            self.zoom_factor = zoom_actual;
+        }
+
         #[cfg(target_os = "android")]
         {
             self.keyboard.pump_events(ctx);
@@ -601,6 +613,7 @@ impl Marmol {
             dock_state: self.tabs.dock_state().clone(),
             enable_icon_folder: self.enable_icon_folder,
             android_storage: Some(self.android_storage),
+            zoom_factor: self.zoom_factor,
         };
         configuraciones::save_program_state(&state);
 

@@ -5,6 +5,7 @@ use crate::files;
 use crate::iconize::{IconManager, IconSource};
 use crate::income;
 use crate::kanban;
+use crate::sketch;
 
 use crate::main_area::content_enum::Content;
 use crate::main_area::metadata_renderer::create_metadata;
@@ -51,6 +52,10 @@ pub enum TabContent {
         path: String,
         #[serde(skip, default)]
         gui: canvas::CanvasGui,
+    },
+    Sketch {
+        #[serde(skip, default)]
+        gui: sketch::SketchGui,
     },
     Markdown {
         #[serde(skip, default)]
@@ -116,6 +121,12 @@ impl Clone for TabContent {
                     path: path.clone(),
                     gui,
                 }
+            }
+            TabContent::Sketch { gui } => {
+                let mut new_gui = sketch::SketchGui::default();
+                new_gui.target_path = gui.target_path.clone();
+                new_gui.target_cursor = gui.target_cursor;
+                TabContent::Sketch { gui: new_gui }
             }
             TabContent::Markdown { scroll_offset, .. } => TabContent::Markdown {
                 editor: easy_mark::EasyMarkEditor::default(),
@@ -241,6 +252,24 @@ impl Tabe {
             rename_buffer: String::new(),
         }
     }
+
+    pub fn new_sketch(n: usize, target_path: String, target_cursor: usize) -> Self {
+        let mut gui = sketch::SketchGui::default();
+        gui.target_path = target_path;
+        gui.target_cursor = target_cursor;
+        Self {
+            id: n,
+            ctype: Content::Edit,
+            title: "Sketch".to_string(),
+            path: String::new(),
+            content: TabContent::Sketch { gui },
+            history: vec![String::new()],
+            history_index: 0,
+            is_renaming: false,
+            just_started_renaming: false,
+            rename_buffer: String::new(),
+        }
+    }
 }
 
 struct MTabViewer<'a> {
@@ -308,7 +337,7 @@ impl TabViewer for MTabViewer<'_> {
         match tab.content {
             TabContent::Excalidraw { .. } | TabContent::Canvas { .. } | TabContent::Graph { .. } 
             | TabContent::Markdown { .. } | TabContent::Income { .. } | TabContent::Tasks { .. }
-            | TabContent::Kanban { .. } | TabContent::Image { .. } => [false, false],
+            | TabContent::Kanban { .. } | TabContent::Image { .. } | TabContent::Sketch { .. } => [false, false],
             _ => [false, true],
         }
     }
@@ -596,6 +625,9 @@ impl TabViewer for MTabViewer<'_> {
                 TabContent::Canvas { path, gui } => {
                     gui.set_path(path);
                     gui.show(ui, self.vault);
+                }
+                TabContent::Sketch { gui } => {
+                    gui.show(ui);
                 }
                 TabContent::Kanban { path, gui } => {
                     gui.set_path(path);
@@ -1005,6 +1037,32 @@ impl Tabs {
             ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("split_right_signal"), None::<Tabe>));
         }
 
+        // Abrir pestaña Sketch (escribir a mano → LaTeX)
+        let open_sketch: Option<(String, usize)> = ui
+            .ctx()
+            .data_mut(|d| d.get_temp(egui::Id::new("open_sketch_signal")).flatten());
+        if let Some((target_path, target_cursor)) = open_sketch {
+            self.counter += 1;
+            while self.tree.iter_all_tabs().any(|(_, t)| t.id == self.counter) {
+                self.counter += 1;
+            }
+            self.tree
+                .push_to_focused_leaf(Tabe::new_sketch(self.counter, target_path, target_cursor));
+            ui.ctx()
+                .data_mut(|d| d.insert_temp(egui::Id::new("open_sketch_signal"), None::<(String, usize)>));
+        }
+
+        // Confirmar inserción de LaTeX en la nota de origen
+        let confirm: Option<(String, usize, String)> = ui
+            .ctx()
+            .data_mut(|d| d.get_temp(egui::Id::new("sketch_confirm_signal")).flatten());
+        if let Some((target_path, target_cursor, latex)) = confirm {
+            self.insert_latex(&target_path, target_cursor, &latex);
+            ui.ctx().data_mut(
+                |d| d.insert_temp(egui::Id::new("sketch_confirm_signal"), None::<(String, usize, String)>),
+            );
+        }
+
         let mut added_nodes = Vec::new();
         let tab_viewer = &mut MTabViewer {
             added_nodes: &mut added_nodes,
@@ -1068,6 +1126,36 @@ impl Tabs {
              self.counter += 1;
         }
         self.tree.push_to_focused_leaf(Tabe::new_graph(self.counter, vault));
+    }
+
+    fn insert_latex(&mut self, target_path: &str, cursor: usize, latex: &str) {
+        let latex = latex.trim();
+        if latex.is_empty() {
+            return;
+        }
+        let wrapped = format!("$${}$$", latex);
+
+        let mut encontrado = false;
+        for surface in self.tree.iter_surfaces_mut() {
+            for (_, tab) in surface.iter_all_tabs_mut() {
+                if tab.path == target_path {
+                    if let TabContent::Markdown { editor, .. } = &mut tab.content {
+                        let idx = cursor.min(editor.code.len());
+                        editor.code.insert_str(idx, &wrapped);
+                        let _ = std::fs::write(&tab.path, &editor.code);
+                        encontrado = true;
+                    }
+                }
+            }
+        }
+
+        if !encontrado {
+            if let Ok(mut content) = std::fs::read_to_string(target_path) {
+                let idx = cursor.min(content.len());
+                content.insert_str(idx, &wrapped);
+                let _ = std::fs::write(target_path, content);
+            }
+        }
     }
 
     pub fn dock_state(&self) -> &DockState<Tabe> {

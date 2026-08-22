@@ -1,15 +1,7 @@
-use std::collections::HashSet;
-use egui::{
-    Key,
-    KeyboardShortcut,
-    Modifiers,
-    TextBuffer,
-    TextEdit,
-    Ui,
-    text::CCursorRange,
-};
 use arboard::Clipboard;
+use egui::{text::CCursorRange, Key, KeyboardShortcut, Modifiers, TextBuffer, TextEdit, Ui};
 use image::{DynamicImage, ImageBuffer, Rgba};
+use std::collections::HashSet;
 use std::path::PathBuf;
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -35,9 +27,17 @@ pub struct EasyMarkEditor {
 
 impl PartialEq for EasyMarkEditor {
     fn eq(&self, other: &Self) -> bool {
-        (&self.code, self.show_rendered, self.show_hotkey_editor, &self.collapsed_blocks)
-            == (&other.code, other.show_rendered, other.show_hotkey_editor, &other.collapsed_blocks)
-            && self.shortcut_bold == other.shortcut_bold
+        (
+            &self.code,
+            self.show_rendered,
+            self.show_hotkey_editor,
+            &self.collapsed_blocks,
+        ) == (
+            &other.code,
+            other.show_rendered,
+            other.show_hotkey_editor,
+            &other.collapsed_blocks,
+        ) && self.shortcut_bold == other.shortcut_bold
             && self.shortcut_code == other.shortcut_code
             && self.shortcut_italics == other.shortcut_italics
     }
@@ -78,7 +78,11 @@ impl EasyMarkEditor {
 
         // --- BARRA DE HERRAMIENTAS FIJA ---
         ui.horizontal(|ui| {
-            if ui.button("📋").on_hover_text("Paste image from clipboard").clicked() {
+            if ui
+                .button("📋")
+                .on_hover_text("Paste image from clipboard")
+                .clicked()
+            {
                 if self.try_paste_image(ui.ctx()) {
                     changed_programmatically = true;
                 }
@@ -86,20 +90,24 @@ impl EasyMarkEditor {
             if ui.button("Hotkeys").clicked() {
                 self.show_hotkey_editor = !self.show_hotkey_editor;
             }
-            
+
             // Botón para colapsar el bloque actual
-            if ui.button("⮩").on_hover_text("Toggle folding of code block at cursor").clicked() {
+            if ui
+                .button("⮩")
+                .on_hover_text("Toggle folding of code block at cursor")
+                .clicked()
+            {
                 let text = self.code.as_str();
                 let editor_id = ui.id().with("easymark_edit");
                 if let Some(state) = TextEdit::load_state(ui.ctx(), editor_id) {
                     if let Some(range) = state.cursor.char_range() {
                         let cursor_idx = range.primary.index;
-                        
+
                         let mut count_before = 0;
                         let mut temp_text = &text[..cursor_idx];
                         let mut found_start = None;
                         while let Some(pos) = temp_text.rfind("```") {
-                            if pos == 0 || temp_text.get(pos-1..pos) == Some("\n") {
+                            if pos == 0 || temp_text.get(pos - 1..pos) == Some("\n") {
                                 count_before += 1;
                                 if count_before % 2 != 0 {
                                     found_start = Some(pos);
@@ -122,7 +130,11 @@ impl EasyMarkEditor {
             }
 
             // Botón para colapsar/expandir TODO
-            if ui.button("↕").on_hover_text("Toggle all code blocks").clicked() {
+            if ui
+                .button("↕")
+                .on_hover_text("Toggle all code blocks")
+                .clicked()
+            {
                 if self.collapsed_blocks.is_empty() {
                     let mut text = self.code.as_str();
                     let mut idx = 0;
@@ -142,6 +154,25 @@ impl EasyMarkEditor {
                     self.collapsed_blocks.clear();
                 }
                 changed_programmatically = true;
+            }
+
+            // Abrir pestaña Sketch (escribir a mano → LaTeX)
+            if ui
+                .button("Latex")
+                .on_hover_text("Abrir Sketch: escribir a mano y convertir a LaTeX")
+                .clicked()
+            {
+                let editor_id = ui.id().with("easymark_edit");
+                let cursor_index = TextEdit::load_state(ui.ctx(), editor_id)
+                    .and_then(|state| state.cursor.char_range())
+                    .map(|range| range.primary.index)
+                    .unwrap_or_else(|| self.code.len());
+                ui.ctx().data_mut(|d| {
+                    d.insert_temp(
+                        egui::Id::new("open_sketch_signal"),
+                        Some((self.file_path.clone(), cursor_index)),
+                    )
+                });
             }
         });
 
@@ -178,7 +209,12 @@ impl EasyMarkEditor {
             let highlighter = &mut self.highlighter;
             let collapsed_blocks = &self.collapsed_blocks;
             let mut layouter = |ui: &egui::Ui, easymark: &dyn TextBuffer, wrap_width: f32| {
-                let mut layout_job = highlighter.highlight(ui.style(), easymark.as_str(), cursor_index, collapsed_blocks);
+                let mut layout_job = highlighter.highlight(
+                    ui.style(),
+                    easymark.as_str(),
+                    cursor_index,
+                    collapsed_blocks,
+                );
                 layout_job.wrap.max_width = wrap_width;
                 let galley = ui.fonts(|f| f.layout_job(layout_job));
                 galley_out = Some(galley.clone());
@@ -186,7 +222,7 @@ impl EasyMarkEditor {
             };
 
             ui.spacing_mut().item_spacing.y = 0.0;
-            
+
             let mut response = ui.add(
                 egui::TextEdit::multiline(&mut self.code)
                     .id(editor_id)
@@ -200,10 +236,11 @@ impl EasyMarkEditor {
                 if let Some(mut state) = TextEdit::load_state(ui.ctx(), response.id) {
                     if let Some(mut ccursor_range) = state.cursor.char_range() {
                         let any_change = shortcuts(ui, self, &mut ccursor_range);
-                        
+
                         if response.changed() || any_change {
                             let cursor_pos_rect = galley.pos_from_cursor(ccursor_range.primary);
-                            let cursor_rect = cursor_pos_rect.translate(response.rect.min.to_vec2());
+                            let cursor_rect =
+                                cursor_pos_rect.translate(response.rect.min.to_vec2());
                             ui.scroll_to_rect(cursor_rect, Some(egui::Align::Center));
                         }
 
@@ -228,11 +265,11 @@ impl EasyMarkEditor {
             Ok(c) => c,
             Err(_) => return false,
         };
-        
+
         if clipboard.get_image().is_ok() {
             return true;
         }
-        
+
         if let Ok(text) = clipboard.get_text() {
             let path_str = text.trim().trim_start_matches("file://");
             let path = PathBuf::from(path_str);
@@ -256,11 +293,11 @@ impl EasyMarkEditor {
             let width = image_data.width as u32;
             let height = image_data.height as u32;
             let rgba_data = image_data.bytes.into_owned();
-            
-            let img_buffer: ImageBuffer<Rgba<u8>, Vec<u8>> = 
+
+            let img_buffer: ImageBuffer<Rgba<u8>, Vec<u8>> =
                 ImageBuffer::from_raw(width, height, rgba_data)
-                .expect("Failed to create image buffer");
-            
+                    .expect("Failed to create image buffer");
+
             Some(DynamicImage::ImageRgba8(img_buffer))
         } else if let Ok(text) = clipboard.get_text() {
             let path_str = text.trim().trim_start_matches("file://");
@@ -291,10 +328,10 @@ impl EasyMarkEditor {
                 .as_millis();
             let filename = format!("pasted_{}.png", timestamp);
             let file_path = attachments_dir.join(&filename);
-            
+
             if img.save(&file_path).is_ok() {
                 let markdown_ref = format!("\n![[{}]]\n", filename);
-                
+
                 self.code.push_str(&markdown_ref);
                 ctx.request_repaint();
                 return true;
@@ -345,28 +382,32 @@ pub const SHORTCUT_BOLD: KeyboardShortcut = KeyboardShortcut::new(Modifiers::COM
 pub const SHORTCUT_CODE: KeyboardShortcut = KeyboardShortcut::new(Modifiers::COMMAND, Key::N);
 pub const SHORTCUT_ITALICS: KeyboardShortcut = KeyboardShortcut::new(Modifiers::COMMAND, Key::I);
 pub const SHORTCUT_SUBSCRIPT: KeyboardShortcut = KeyboardShortcut::new(Modifiers::COMMAND, Key::L);
-pub const SHORTCUT_SUPERSCRIPT:
-KeyboardShortcut = KeyboardShortcut::new(Modifiers::COMMAND, Key::Y);
-pub const SHORTCUT_STRIKETHROUGH:
-KeyboardShortcut = KeyboardShortcut::new(Modifiers::CTRL.plus(Modifiers::SHIFT), Key::Q);
-pub const SHORTCUT_UNDERLINE:
-KeyboardShortcut = KeyboardShortcut::new(Modifiers::CTRL.plus(Modifiers::SHIFT), Key::W);
-pub const SHORTCUT_INDENT:
-KeyboardShortcut = KeyboardShortcut::new(Modifiers::CTRL.plus(Modifiers::SHIFT), Key::E);
-pub const SHORTCUT_INDENT_INC: KeyboardShortcut = KeyboardShortcut::new(Modifiers::COMMAND, Key::CloseBracket);
-pub const SHORTCUT_INDENT_DEC: KeyboardShortcut = KeyboardShortcut::new(Modifiers::COMMAND, Key::OpenBracket);
+pub const SHORTCUT_SUPERSCRIPT: KeyboardShortcut =
+    KeyboardShortcut::new(Modifiers::COMMAND, Key::Y);
+pub const SHORTCUT_STRIKETHROUGH: KeyboardShortcut =
+    KeyboardShortcut::new(Modifiers::CTRL.plus(Modifiers::SHIFT), Key::Q);
+pub const SHORTCUT_UNDERLINE: KeyboardShortcut =
+    KeyboardShortcut::new(Modifiers::CTRL.plus(Modifiers::SHIFT), Key::W);
+pub const SHORTCUT_INDENT: KeyboardShortcut =
+    KeyboardShortcut::new(Modifiers::CTRL.plus(Modifiers::SHIFT), Key::E);
+pub const SHORTCUT_INDENT_INC: KeyboardShortcut =
+    KeyboardShortcut::new(Modifiers::COMMAND, Key::CloseBracket);
+pub const SHORTCUT_INDENT_DEC: KeyboardShortcut =
+    KeyboardShortcut::new(Modifiers::COMMAND, Key::OpenBracket);
 
 fn shortcuts(ui: &Ui, editor: &mut EasyMarkEditor, ccursor_range: &mut CCursorRange) -> bool {
     let mut any_change = false;
     let code = &mut editor.code;
 
-    if ui.input_mut(|i| i.consume_shortcut(&SHORTCUT_INDENT)) || ui.input_mut(|i| i.consume_shortcut(&SHORTCUT_INDENT_INC)) {
+    if ui.input_mut(|i| i.consume_shortcut(&SHORTCUT_INDENT))
+        || ui.input_mut(|i| i.consume_shortcut(&SHORTCUT_INDENT_INC))
+    {
         any_change = true;
         let [primary, _secondary] = ccursor_range.sorted_cursors();
-        
+
         // Find start of line
         let mut line_start = primary.index;
-        while line_start > 0 && code.char_range(line_start-1..line_start) != "\n" {
+        while line_start > 0 && code.char_range(line_start - 1..line_start) != "\n" {
             line_start -= 1;
         }
 
@@ -377,22 +418,23 @@ fn shortcuts(ui: &Ui, editor: &mut EasyMarkEditor, ccursor_range: &mut CCursorRa
 
     if ui.input_mut(|i| i.consume_shortcut(&SHORTCUT_INDENT_DEC)) {
         let [primary, _secondary] = ccursor_range.sorted_cursors();
-        
+
         // Find start of line
         let mut line_start = primary.index;
-        while line_start > 0 && code.char_range(line_start-1..line_start) != "\n" {
+        while line_start > 0 && code.char_range(line_start - 1..line_start) != "\n" {
             line_start -= 1;
         }
 
-        if code.char_range(line_start..line_start+1) == " " {
+        if code.char_range(line_start..line_start + 1) == " " {
             any_change = true;
             let mut remove_count = 1;
-            if code.char_range(line_start+1..line_start+2) == " " {
+            if code.char_range(line_start + 1..line_start + 2) == " " {
                 remove_count = 2;
             }
             code.delete_char_range(line_start..line_start + remove_count);
             ccursor_range.primary.index = ccursor_range.primary.index.saturating_sub(remove_count);
-            ccursor_range.secondary.index = ccursor_range.secondary.index.saturating_sub(remove_count);
+            ccursor_range.secondary.index =
+                ccursor_range.secondary.index.saturating_sub(remove_count);
         }
     }
 
