@@ -16,6 +16,7 @@ use crate::egui_commonmark::*;
 use crate::egui_dock::{DockArea, DockState, NodeIndex, Style, SurfaceIndex, TabViewer, Split, Node};
 use egui_extras::{Size, StripBuilder};
 use serde::{Deserialize, Serialize};
+use std::collections::{HashMap, HashSet};
 use std::io::Write;
 use std::path::Path;
 
@@ -278,6 +279,7 @@ struct MTabViewer<'a> {
     content: &'a mut Content,
     vault: &'a str,
     icon_manager: &'a mut IconManager,
+    duplicated_titles: &'a HashSet<String>,
 }
 
 impl TabViewer for MTabViewer<'_> {
@@ -285,6 +287,17 @@ impl TabViewer for MTabViewer<'_> {
 
     fn title(&mut self, tab: &mut Self::Tab) -> WidgetText {
         let mut title = tab.title.clone();
+
+        let base = Path::new(&tab.path)
+            .file_name()
+            .map(|s| s.to_string_lossy().to_string())
+            .unwrap_or_else(|| tab.title.clone());
+        if self.duplicated_titles.contains(&base) {
+            if let Some(dir) = Path::new(&tab.path).parent().and_then(|p| p.file_name()) {
+                title = format!("{} / {}", dir.to_string_lossy(), title);
+            }
+        }
+
         if self.icon_manager.settings.icon_in_title_enabled {
             let relative_path = if tab.path.starts_with(self.vault) {
                 let p = tab.path.strip_prefix(self.vault).unwrap_or(&tab.path);
@@ -1064,6 +1077,21 @@ impl Tabs {
         }
 
         let mut added_nodes = Vec::new();
+
+        let mut titulos: HashMap<String, usize> = HashMap::new();
+        for (_, tab) in self.tree.iter_all_tabs() {
+            let base = Path::new(&tab.path)
+                .file_name()
+                .map(|s| s.to_string_lossy().to_string())
+                .unwrap_or_else(|| tab.title.clone());
+            *titulos.entry(base).or_insert(0) += 1;
+        }
+        let duplicated_titles: HashSet<String> = titulos
+            .into_iter()
+            .filter(|(_, n)| *n > 1)
+            .map(|(k, _)| k)
+            .collect();
+
         let tab_viewer = &mut MTabViewer {
             added_nodes: &mut added_nodes,
             //graph: marker,
@@ -1071,6 +1099,7 @@ impl Tabs {
             content,
             vault,
             icon_manager,
+            duplicated_titles: &duplicated_titles,
         };
         DockArea::new(&mut self.tree)
             .style(dock_style.clone())
