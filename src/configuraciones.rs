@@ -33,6 +33,12 @@ pub struct MarmolProgramState {
     pub enable_icon_folder: bool,
     #[serde(default)]
     pub android_storage: Option<AndroidStorage>,
+    #[serde(default = "default_zoom_factor")]
+    pub zoom_factor: f32,
+}
+
+fn default_zoom_factor() -> f32 {
+    1.0
 }
 
 impl Default for MarmolProgramState {
@@ -58,6 +64,7 @@ impl Default for MarmolProgramState {
             dock_state: default_dock_state,
             enable_icon_folder: default_enable_icon_folder,
             android_storage: Some(AndroidStorage::Unselected),
+            zoom_factor: default_zoom_factor(),
         }
     }
 }
