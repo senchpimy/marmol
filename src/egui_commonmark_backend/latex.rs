@@ -120,8 +120,7 @@ fn render_to_svg(latex_input: &str, inline: bool, color_hex: &str, font_size: f3
 
     // Convertir LaTeX a Typst Math
     let clean_latex = latex_input.replace('\n', "");
-    let typst_math =
-        tex2typst_rs::tex2typst(&clean_latex).unwrap_or_else(|_| latex_input.to_string());
+    let typst_math = crate::format::latex_a_typst(&clean_latex);
 
     let font = Font::new(Bytes::from(font_data.clone()), 0).ok_or("Fuente inválida")?;
     let font_family = font.info().family.clone();

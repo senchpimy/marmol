@@ -79,7 +79,7 @@ pub fn latex_a_svg(latex: &str, color: Color32) -> Result<String, String> {
     let font_data = font_file.data.to_vec();
 
     let clean = latex.replace('\n', " ");
-    let typst_math = tex2typst_rs::tex2typst(&clean).unwrap_or_else(|_| clean.clone());
+    let typst_math = crate::format::latex_a_typst(&clean);
 
     let hex = format!("#{:02x}{:02x}{:02x}", color.r(), color.g(), color.b());
     let font = Font::new(Bytes::from(font_data.clone()), 0).ok_or("Fuente inválida")?;

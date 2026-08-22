@@ -31,16 +31,11 @@ fn get_tokio_runtime() -> &'static tokio::runtime::Runtime {
 }
 
 static SCG_RESULTS: OnceLock<Arc<Mutex<HashMap<String, String>>>> = OnceLock::new();
-static SCG_RUNNER: OnceLock<Mutex<Option<rust_tikz::WasmRunner>>> = OnceLock::new();
 
 fn get_scg_results() -> Arc<Mutex<HashMap<String, String>>> {
     SCG_RESULTS
         .get_or_init(|| Arc::new(Mutex::new(HashMap::new())))
         .clone()
-}
-
-fn get_scg_runner() -> &'static Mutex<Option<rust_tikz::WasmRunner>> {
-    SCG_RUNNER.get_or_init(|| Mutex::new(None))
 }
 
 #[cfg(feature = "better_syntax_highlighting")]
@@ -457,22 +452,21 @@ impl CodeBlock {
                         // TikZ rendering local via rust_tikz (tikzjax)
                         let content = self.content.clone();
                         let results = get_scg_results();
-                        let runner = get_scg_runner();
                         let rt = get_tokio_runtime();
                         let ctx = ui.ctx().clone();
 
                         rt.spawn(async move {
                             let content_for_task = content.clone();
                             let rendered = tokio::task::spawn_blocking(move || {
-                                let mut guard = runner.lock().unwrap();
-                                if guard.is_none() {
-                                    match rust_tikz::WasmRunner::new() {
-                                        Ok(r) => *guard = Some(r),
-                                        Err(e) => {
-                                            return format!("ERROR: TikZ init: {}", e)
-                                        }
-                                    }
-                                }
+                                // No se puede reutilizar un mismo WasmRunner: el motor TeX
+                                // conserva el estado interno entre ejecuciones y no regenera
+                                // el DVI, por lo que devuelve el SVG del diagrama anterior
+                                // (todos los diagramas renderizan el primero). Por eso se
+                                // crea un runner nuevo por render.
+                                let mut runner = match rust_tikz::WasmRunner::new() {
+                                    Ok(r) => r,
+                                    Err(e) => return format!("ERROR: TikZ init: {}", e),
+                                };
 
                                 let input = if content_for_task.contains("\\begin{document}") {
                                     content_for_task.clone()
@@ -482,7 +476,7 @@ impl CodeBlock {
                                         content_for_task
                                     )
                                 };
-                                match rust_tikz::tex2svg(guard.as_mut().unwrap(), &input) {
+                                match rust_tikz::tex2svg(&mut runner, &input) {
                                     Ok(mut svg) => {
                                         svg = svg.trim().to_string();
                                         svg = svg.replace("\"Segoe UI\"", "'Segoe UI'");
