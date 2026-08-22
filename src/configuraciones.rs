@@ -78,10 +78,10 @@ pub fn get_config_dir() -> String {
     {
         use directories::BaseDirs;
         if let Some(binding) = BaseDirs::new() {
-            let home_dir = binding.home_dir().to_str().unwrap_or(".");
-            format!("{}/.config/marmol", home_dir)
+            let config_dir = binding.config_dir().to_str().unwrap_or(".");
+            format!("{}/marmol", config_dir)
         } else {
-            "./.config/marmol".to_string()
+            "./marmol".to_string()
         }
     }
 }

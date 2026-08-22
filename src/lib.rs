@@ -196,7 +196,7 @@ impl Default for Marmol {
             new_vault_folder: String::new(),
             new_vault_folder_err: String::new(),
             new_vault_str: String::new(),
-            config_path: "/home/plof/.config/marmol".to_string(), // Default config path
+            config_path: configuraciones::get_config_dir(), // Default config path
             create_new_vault: false,
             show_create_button: false,
             current_window: screens::Screen::Default,
