@@ -232,6 +232,18 @@ impl<'f> CommonMarkViewer<'f> {
         self
     }
 
+    /// Callback invoked after a heading is rendered.
+    ///
+    /// Arguments are `(ui, heading_index, response)`, where `heading_index` is
+    /// the zero-based position of the heading in the document and `response` is
+    /// the [`egui::Response`] of the rendered heading widget. This can be used
+    /// to implement a table of contents that scrolls to the heading, e.g. via
+    /// [`egui::Response::scroll_to_me`].
+    pub fn on_heading(mut self, func: Option<&'f crate::egui_commonmark_backend::misc::OnHeadingFn>) -> Self {
+        self.options.on_heading = func;
+        self
+    }
+
     /// Shows rendered markdown
     pub fn show(
         self,

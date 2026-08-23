@@ -212,6 +212,7 @@ const DEFAULT_THEME_DARK: &str = "base16-ocean.dark";
 
 pub type ProcessLinkFn = dyn Fn(&mut Ui, &str, egui::text::LayoutJob) -> bool;
 pub type RenderExcalidrawFn = dyn Fn(&mut Ui, &str, Option<f32>);
+pub type OnHeadingFn = dyn Fn(&mut Ui, usize, egui::Response);
 
 pub struct CommonMarkOptions<'f> {
     pub indentation_spaces: usize,
@@ -231,6 +232,7 @@ pub struct CommonMarkOptions<'f> {
     pub html_fn: Option<&'f crate::egui_commonmark_backend::RenderHtmlFn>,
     pub process_link: Option<&'f ProcessLinkFn>,
     pub render_excalidraw_fn: Option<&'f RenderExcalidrawFn>,
+    pub on_heading: Option<&'f OnHeadingFn>,
 }
 
 impl std::fmt::Debug for CommonMarkOptions<'_> {
@@ -255,6 +257,7 @@ impl std::fmt::Debug for CommonMarkOptions<'_> {
             .field("mutable", &self.mutable)
             .field("process_link", &self.process_link.map(|_| "ProcessLinkFn"))
             .field("render_excalidraw_fn", &self.render_excalidraw_fn.map(|_| "RenderExcalidrawFn"))
+            .field("on_heading", &self.on_heading.map(|_| "OnHeadingFn"))
             .finish()
     }
 }
@@ -278,6 +281,7 @@ impl Default for CommonMarkOptions<'_> {
             html_fn: None,
             process_link: None,
             render_excalidraw_fn: None,
+            on_heading: None,
         }
     }
 }

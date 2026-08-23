@@ -82,6 +82,8 @@ pub struct CommonMarkViewerInternal {
     def_list: DefinitionList,
     is_table: bool,
     is_blockquote: bool,
+    heading_pending: bool,
+    heading_count: usize,
     checkbox_events: Vec<CheckboxClickEvent>,
 }
 
@@ -105,6 +107,8 @@ impl CommonMarkViewerInternal {
             html_block: String::new(),
             is_table: false,
             is_blockquote: false,
+            heading_pending: false,
+            heading_count: 0,
             checkbox_events: Vec::new(),
         }
     }
@@ -648,8 +652,26 @@ impl CommonMarkViewerInternal {
                 }
             } else {
                 let rich_text = self.text_style.to_richtext(ui, &text);
-                ui.label(rich_text);
+                let response = ui.label(rich_text);
+                self.capture_heading(ui, options, response);
             }
+        }
+    }
+
+    fn capture_heading(
+        &mut self,
+        ui: &mut Ui,
+        options: &CommonMarkOptions,
+        response: egui::Response,
+    ) {
+        if !self.heading_pending {
+            return;
+        }
+        self.heading_pending = false;
+        let index = self.heading_count;
+        self.heading_count += 1;
+        if let Some(on_heading) = options.on_heading.as_ref() {
+            on_heading(ui, index, response);
         }
     }
 
@@ -662,14 +684,16 @@ impl CommonMarkViewerInternal {
                 // Headings should always insert a newline even if it is at the start.
                 // Whether this is okay in all scenarios is a different question.
                 newline(ui);
-                self.text_style.heading = Some(match level {
+                let level = match level {
                     HeadingLevel::H1 => 0,
                     HeadingLevel::H2 => 1,
                     HeadingLevel::H3 => 2,
                     HeadingLevel::H4 => 3,
                     HeadingLevel::H5 => 4,
                     HeadingLevel::H6 => 5,
-                });
+                };
+                self.text_style.heading = Some(level);
+                self.heading_pending = true;
             }
 
             // deliberately not using the built in alerts from pulldown-cmark as

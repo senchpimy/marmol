@@ -20,6 +20,50 @@ use std::collections::{HashMap, HashSet};
 use std::io::Write;
 use std::path::Path;
 
+struct TocHeading {
+    level: usize,
+    text: String,
+}
+
+fn parse_toc(markdown: &str) -> Vec<TocHeading> {
+    use pulldown_cmark::{Event, Options, Parser, Tag, TagEnd};
+    let mut headings = Vec::new();
+    let mut cur_level: Option<usize> = None;
+    let mut cur_text = String::new();
+    let options = crate::egui_commonmark_backend::pulldown::parser_options()
+        | Options::ENABLE_MATH;
+    for event in Parser::new_ext(markdown, options) {
+        match event {
+            Event::Start(Tag::Heading { level, .. }) => {
+                cur_level = Some(match level {
+                    pulldown_cmark::HeadingLevel::H1 => 0,
+                    pulldown_cmark::HeadingLevel::H2 => 1,
+                    pulldown_cmark::HeadingLevel::H3 => 2,
+                    pulldown_cmark::HeadingLevel::H4 => 3,
+                    pulldown_cmark::HeadingLevel::H5 => 4,
+                    pulldown_cmark::HeadingLevel::H6 => 5,
+                });
+                cur_text.clear();
+            }
+            Event::Text(t) | Event::Code(t) => {
+                if cur_level.is_some() {
+                    cur_text.push_str(&t);
+                }
+            }
+            Event::End(TagEnd::Heading(_)) => {
+                if let Some(lvl) = cur_level.take() {
+                    let text = cur_text.trim().to_string();
+                    if !text.is_empty() {
+                        headings.push(TocHeading { level: lvl, text });
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+    headings
+}
+
 #[derive(Serialize, Deserialize)]
 pub enum TabContent {
     Empty,
@@ -664,9 +708,48 @@ impl TabViewer for MTabViewer<'_> {
                     let tab_id = tab.id;
 
                     if tab.ctype == Content::View {
+                        editor.code = files::read_file(&tab.path);
+                        let (markdown_content, metadata) = files::contents(&editor.code);
+                        let headings = parse_toc(&markdown_content);
+
+                        let index_open_id = egui::Id::new("index_panel_open");
+                        let mut index_open = ui.ctx().data(|d| {
+                            d.get_temp::<bool>(index_open_id).unwrap_or(true)
+                        });
+                        egui::Panel::right("index_panel")
+                            .default_size(220.0)
+                            .min_size(150.0)
+                            .show_collapsible(ui, &mut index_open, |ui| {
+                                egui::ScrollArea::vertical()
+                                    .auto_shrink([false, false])
+                                    .show(ui, |ui| {
+                                        ui.add_space(14.0);
+                                        ui.label(
+                                            egui::RichText::new("Índice").strong().size(15.0),
+                                        );
+                                        ui.separator();
+                                        for (i, h) in headings.iter().enumerate() {
+                                            let indent = "  ".repeat(h.level);
+                                            let text = format!("{}{}", indent, h.text);
+                                            let response = ui
+                                                .selectable_label(false, text)
+                                                .on_hover_cursor(egui::CursorIcon::PointingHand);
+                                            if response.clicked() {
+                                                ui.ctx().data_mut(|d| {
+                                                    d.insert_temp(
+                                                        egui::Id::new("index_nav_target"),
+                                                        Some(i),
+                                                    );
+                                                });
+                                            }
+                                        }
+                                    });
+                            });
+                        ui.ctx().data_mut(|d| d.insert_temp(index_open_id, index_open));
+
                         let cont = StripBuilder::new(ui)
                             .size(Size::relative(margin_ratio))
-                            .size(Size::relative(content_ratio));
+                            .size(Size::remainder());
                         cont.horizontal(|mut strip| {
                             strip.cell(|_| {});
                             strip.cell(|ui| {
@@ -680,12 +763,9 @@ impl TabViewer for MTabViewer<'_> {
                                 }
 
                                 let output = area.show(ui, |ui| {
-                                    editor.code = files::read_file(&tab.path);
                                     let frame =
                                         Frame::NONE.inner_margin(egui::Margin::symmetric(30, 10));
                                     let inner_response = frame.show(ui, |ui| {
-                                        let (markdown_content, metadata) = files::contents(&editor.code);
-                                        
                                         if self.icon_manager.settings.icon_in_title_enabled {
                                             let relative_path = if tab.path.starts_with(self.vault) {
                                                 let p = tab.path.strip_prefix(self.vault).unwrap_or(&tab.path);
@@ -728,6 +808,21 @@ impl TabViewer for MTabViewer<'_> {
                                         });
 
                                         CommonMarkViewer::new()
+                                            .on_heading(Some(&|ui: &mut egui::Ui, index: usize, response: egui::Response| {
+                                                let target: Option<usize> = ui.ctx().data(|d| {
+                                                    d.get_temp(egui::Id::new("index_nav_target"))
+                                                        .unwrap_or(None)
+                                                });
+                                                if target == Some(index) {
+                                                    response.scroll_to_me(Some(egui::Align::Min));
+                                                    ui.ctx().data_mut(|d| {
+                                                        d.insert_temp(
+                                                            egui::Id::new("index_nav_target"),
+                                                            None::<usize>,
+                                                        );
+                                                    });
+                                                }
+                                            }))
                                             .process_link(Some(&|ui, url, layout| {
                                                 let response = ui.link(layout);
                                                 if response.clicked() {
