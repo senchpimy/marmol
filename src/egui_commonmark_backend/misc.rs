@@ -38,6 +38,165 @@ fn get_scg_results() -> Arc<Mutex<HashMap<String, String>>> {
         .clone()
 }
 
+fn detectar_librerias_tikz(content: &str) -> Vec<&'static str> {
+    let mut libs: Vec<&'static str> = Vec::new();
+    let push = |libs: &mut Vec<&'static str>, lib: &'static str| {
+        if !libs.contains(&lib) {
+            libs.push(lib);
+        }
+    };
+
+    if content.contains("cylinder") || content.contains("diamond") {
+        push(&mut libs, "shapes.geometric");
+    }
+    if content.contains("=of") || content.contains(" of ") || content.contains("node distance") {
+        push(&mut libs, "positioning");
+    }
+    if content.contains("bend") {
+        push(&mut libs, "bending");
+    }
+    if content.contains("->")
+        || content.contains("<-")
+        || content.contains("-latex")
+        || content.contains("stealth")
+        || content.contains("triangle 60")
+        || content.contains("{Latex")
+        || content.contains(">{=")
+        || content.contains("Latex[")
+        || content.contains("Stealth[")
+        || content.contains("Triangle[")
+        || content.contains("Circle[")
+        || content.contains("Square[")
+        || content.contains("arrows.meta")
+    {
+        push(&mut libs, "arrows");
+        push(&mut libs, "arrows.meta");
+    }
+    if content.contains("xshift") || content.contains("yshift") || content.contains("$(") {
+        push(&mut libs, "calc");
+    }
+    if content.contains("fit") {
+        push(&mut libs, "fit");
+    }
+    if content.contains("matrix of") || content.contains("matrix{") {
+        push(&mut libs, "matrix");
+    }
+    if content.contains("background") {
+        push(&mut libs, "backgrounds");
+    }
+    if content.contains("decorat") {
+        push(&mut libs, "decorations.pathreplacing");
+    }
+    if content.contains("mindmap") {
+        push(&mut libs, "mindmap");
+    }
+    if content.contains("automata") {
+        push(&mut libs, "automata");
+    }
+    if content.contains("shadows") {
+        push(&mut libs, "shadows");
+    }
+    libs
+}
+
+fn neutralizar_fuentes_tikz(s: &str) -> String {
+    const TEXT_CMDS: &[&str] = &[
+        "\\textbf", "\\textit", "\\texttt", "\\emph", "\\textsc", "\\textsl", "\\textrm",
+        "\\textsf", "\\textmd", "\\textup",
+    ];
+    const DECL_CMDS: &[&str] = &[
+        "\\bfseries", "\\itshape", "\\ttfamily", "\\scshape", "\\slshape", "\\sffamily",
+        "\\rmfamily", "\\mdseries", "\\upshape",
+    ];
+    const SIZE_CMDS: &[&str] = &[
+        "\\tiny", "\\scriptsize", "\\footnotesize", "\\small", "\\normalsize", "\\large",
+        "\\Large", "\\LARGE", "\\huge", "\\Huge",
+    ];
+
+    let chars: Vec<char> = s.chars().collect();
+    let mut out = String::with_capacity(s.len());
+    let mut i = 0;
+
+    while i < chars.len() {
+        if chars[i] == '\\' {
+            let mut j = i + 1;
+            while j < chars.len() && chars[j].is_ascii_alphabetic() {
+                j += 1;
+            }
+            let name: String = chars[i..j].iter().collect();
+
+            if TEXT_CMDS.contains(&name.as_str()) {
+                let mut k = j;
+                while k < chars.len() && chars[k] == ' ' {
+                    k += 1;
+                }
+                if k < chars.len() && chars[k] == '{' {
+                    let mut depth = 0;
+                    let mut m = k;
+                    while m < chars.len() {
+                        if chars[m] == '{' {
+                            depth += 1;
+                        } else if chars[m] == '}' {
+                            depth -= 1;
+                            if depth == 0 {
+                                break;
+                            }
+                        }
+                        m += 1;
+                    }
+                    if depth == 0 && m < chars.len() {
+                        let inner: String = chars[k + 1..m].iter().collect();
+                        out.push_str(&neutralizar_fuentes_tikz(&inner));
+                        i = m + 1;
+                        continue;
+                    }
+                }
+            }
+
+            if DECL_CMDS.contains(&name.as_str()) {
+                i = j;
+                continue;
+            }
+
+            if SIZE_CMDS.contains(&name.as_str()) {
+                out.push_str("\\normalsize");
+                i = j;
+                continue;
+            }
+
+            out.push_str(&name);
+            i = j;
+            continue;
+        }
+        out.push(chars[i]);
+        i += 1;
+    }
+    out
+}
+
+pub fn preparar_tikz(content: &str) -> String {
+    let content = neutralizar_fuentes_tikz(content);
+
+    let mut input = content.clone();
+    if !input.contains("\\usetikzlibrary") {
+        let libs = detectar_librerias_tikz(&input);
+        if !libs.is_empty() {
+            let inj = format!("\\usetikzlibrary{{{}}}\n", libs.join(","));
+            if let Some(pos) = input.find("\\begin{document}") {
+                input.insert_str(pos, &inj);
+            } else {
+                input.insert_str(0, &inj);
+            }
+        }
+    }
+
+    if input.contains("\\begin{document}") {
+        input
+    } else {
+        format!("\n\\begin{{document}}\n{}\n\\end{{document}}\n", input)
+    }
+}
+
 #[cfg(feature = "better_syntax_highlighting")]
 use syntect::{
     easy::HighlightLines,
@@ -468,14 +627,7 @@ impl CodeBlock {
                                     Err(e) => return format!("ERROR: TikZ init: {}", e),
                                 };
 
-                                let input = if content_for_task.contains("\\begin{document}") {
-                                    content_for_task.clone()
-                                } else {
-                                    format!(
-                                        "\n\\begin{{document}}\n{}\n\\end{{document}}\n",
-                                        content_for_task
-                                    )
-                                };
+                                let input = preparar_tikz(&content_for_task);
                                 match rust_tikz::tex2svg(&mut runner, &input) {
                                     Ok(mut svg) => {
                                         svg = svg.trim().to_string();
