@@ -2,8 +2,6 @@ use base64::{engine::general_purpose, Engine as _};
 use egui::UiBuilder;
 use lz_str;
 use regex::Regex;
-use std::path::Path;
-use walkdir::WalkDir;
 
 use egui::{
     Color32, ColorImage, Context, Id, PointerButton, Pos2, Rect, Sense, Stroke, TextureHandle,
@@ -22,7 +20,7 @@ pub mod utils;
 use data::{ExcalidrawElement, ExcalidrawFile, ExcalidrawScene, Tool};
 use render::{draw_element, draw_selection_border};
 use ui_panel::show_properties_panel;
-use utils::{is_point_inside, move_element_group, normalize_element};
+use utils::{is_point_inside, normalize_element};
 
 #[derive(Serialize, Deserialize)]
 pub struct ExcalidrawGui {
@@ -549,7 +547,7 @@ tags: [excalidraw]
 
     pub fn render_static(&mut self, ui: &mut Ui, size: Option<f32>) {
         if let Some(e) = &self.error_msg {
-            ui.colored_label(ui.ctx().style().visuals.error_fg_color, e);
+            ui.colored_label(ui.style().visuals.error_fg_color, e);
             return;
         }
         if self.scene.is_none() {
@@ -649,7 +647,7 @@ tags: [excalidraw]
 
     pub fn show(&mut self, ui: &mut Ui, vault: &str, _seed_id: Id) {
         if let Some(e) = &self.error_msg {
-            ui.colored_label(ui.ctx().style().visuals.error_fg_color, e);
+            ui.colored_label(ui.style().visuals.error_fg_color, e);
             return;
         }
         if self.scene.is_none() {
@@ -688,7 +686,6 @@ tags: [excalidraw]
 
         ui.horizontal(|ui| {
             let color = ui
-                .ctx()
                 .style()
                 .visuals
                 .widgets
@@ -984,7 +981,7 @@ tags: [excalidraw]
             Vec2::new(panel_width, 400.0),
         );
 
-        let scroll_delta = ui.input(|i| i.raw_scroll_delta);
+        let scroll_delta = ui.input(|i| i.smooth_scroll_delta);
         let screen_rect_min = response.rect.min;
         if ui.input(|i| i.modifiers.ctrl) && scroll_delta.y != 0.0 {
             let zf = if scroll_delta.y > 0.0 { 1.1 } else { 0.9 };
@@ -2059,15 +2056,14 @@ tags: [excalidraw]
             ui.scope_builder(UiBuilder::new().max_rect(panel_rect), |ui| {
                 egui::Frame::NONE
                     .fill(
-                        ui.ctx()
-                            .style()
+                        ui.style()
                             .visuals
                             .panel_fill
                             .linear_multiply(240.0 / 255.0),
                     )
                     .stroke(Stroke::new(
                         1.0,
-                        ui.ctx().style().visuals.window_stroke.color,
+                        ui.style().visuals.window_stroke.color,
                     ))
                     .corner_radius(12.0)
                     .inner_margin(16.0)

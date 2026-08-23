@@ -11,7 +11,7 @@ use crate::main_area::content_enum::Content;
 use crate::main_area::metadata_renderer::create_metadata;
 use crate::tasks;
 use egui::Image;
-use egui::{Frame, Sense, Ui, WidgetText};
+use egui::{Frame, Ui, WidgetText};
 use crate::egui_commonmark::*;
 use crate::egui_dock::{DockArea, DockState, NodeIndex, Style, SurfaceIndex, TabViewer, Split, Node};
 use egui_extras::{Size, StripBuilder};
@@ -370,7 +370,7 @@ impl TabViewer for MTabViewer<'_> {
             }
 
             if tab.is_renaming {
-                let res = ui.add(egui::TextEdit::singleline(&mut tab.rename_buffer).frame(false));
+                let res = ui.add(egui::TextEdit::singleline(&mut tab.rename_buffer).frame(egui::Frame::NONE));
                 if tab.just_started_renaming {
                     res.request_focus();
                     tab.just_started_renaming = false;

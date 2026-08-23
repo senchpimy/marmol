@@ -689,29 +689,39 @@ impl CodeBlock {
                                         is_vegalite_tag
                                     };
 
+                                    let svg_opts = vl_convert_rs::converter::SvgOpts { bundle: false };
                                     let result = if actually_vegalite {
                                         let opts = vl_convert_rs::converter::VlOpts {
                                             vl_version: vl_convert_rs::VlVersion::v5_21,
                                             config,
                                             theme,
-                                            show_warnings: false,
-                                            allowed_base_urls: None,
                                             format_locale: None,
                                             time_format_locale: None,
+                                            google_fonts: None,
+                                            vega_plugin: None,
+                                            background: None,
+                                            width: None,
+                                            height: None,
                                         };
-                                        conv.vegalite_to_svg(spec, opts).await
+                                        conv.vegalite_to_svg(spec, opts, svg_opts).await
                                     } else {
                                         let opts = vl_convert_rs::converter::VgOpts {
-                                            allowed_base_urls: None,
                                             format_locale: None,
                                             time_format_locale: None,
+                                            vega_plugin: None,
+                                            google_fonts: None,
+                                            config: None,
+                                            background: None,
+                                            width: None,
+                                            height: None,
                                         };
-                                        conv.vega_to_svg(spec, opts).await
+                                        conv.vega_to_svg(spec, opts, svg_opts).await
                                     };
 
                                     match result {
-                                        Ok(mut svg) => {
+                                        Ok(mut out) => {
                                             // Fix potential font issues
+                                            let mut svg = out.svg;
                                             svg = svg.replace("\"Segoe UI\"", "'Segoe UI'");
 
                                             if let Some(start) = svg.find("<svg") {
@@ -774,7 +784,7 @@ impl CodeBlock {
                 };
 
                 job.wrap.max_width = wrap_width;
-                ui.fonts(|f| f.layout_job(job))
+                ui.fonts_mut(|f| f.layout_job(job))
             };
 
             crate::egui_commonmark_backend::elements::code_block(
@@ -991,7 +1001,7 @@ impl CommonMarkCache {
 
     /// Clear the cache for a specific scrollable viewer. Returns false if the
     /// id was not in the cache.
-    pub fn clear_scrollable_with_id(&mut self, source_id: impl std::hash::Hash) -> bool {
+    pub fn clear_scrollable_with_id(&mut self, source_id: impl std::hash::Hash + std::fmt::Debug) -> bool {
         self.scroll.remove(&egui::Id::new(source_id)).is_some()
     }
 

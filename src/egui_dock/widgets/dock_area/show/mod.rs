@@ -37,7 +37,7 @@ impl<Tab> DockArea<'_, Tab> {
     /// # let mut tab_viewer = TabViewer {};
     /// # egui::__run_test_ctx(|ctx| {
     /// CentralPanel::default()
-    ///     .frame(Frame::central_panel(&ctx.style()).inner_margin(0.))
+    ///     .frame(Frame::central_panel(&ctx.style_of(ctx.theme())).inner_margin(0.))
     ///     .show(ctx, |ui| {
     ///         DockArea::new(&mut tree).show_inside(ui, &mut tab_viewer);
     ///     });
@@ -48,14 +48,14 @@ impl<Tab> DockArea<'_, Tab> {
     ///
     /// See also [`show_inside`](Self::show_inside).
     #[inline]
-    pub fn show(self, ctx: &Context, tab_viewer: &mut impl TabViewer<Tab = Tab>) {
+    pub fn show(self, ui: &mut Ui, tab_viewer: &mut impl TabViewer<Tab = Tab>) {
         CentralPanel::default()
             .frame(
-                Frame::central_panel(&ctx.style())
+                Frame::central_panel(ui.style())
                     .inner_margin(0.)
                     .fill(Color32::TRANSPARENT),
             )
-            .show(ctx, |ui| {
+            .show(ui, |ui| {
                 self.show_inside(ui, tab_viewer);
             });
     }
@@ -66,7 +66,7 @@ impl<Tab> DockArea<'_, Tab> {
     pub fn show_inside(mut self, ui: &mut Ui, tab_viewer: &mut impl TabViewer<Tab = Tab>) {
         self.style
             .get_or_insert(Style::from_egui(ui.style().as_ref()));
-        self.window_bounds.get_or_insert(ui.ctx().screen_rect());
+        self.window_bounds.get_or_insert(ui.ctx().content_rect());
 
         let mut state = State::load(ui.ctx(), self.id);
 

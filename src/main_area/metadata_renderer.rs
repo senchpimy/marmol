@@ -36,7 +36,7 @@ pub fn create_metadata(metadata: String, ui: &mut egui::Ui) {
                 &(s.to_owned() + "\n"),
                 0.0,
                 TextFormat {
-                    color: ui.ctx().style().visuals.widgets.inactive.fg_stroke.color,
+                    color: ui.style().visuals.widgets.inactive.fg_stroke.color,
                     ..Default::default()
                 },
             )
@@ -45,7 +45,7 @@ pub fn create_metadata(metadata: String, ui: &mut egui::Ui) {
                 &(s.to_owned() + "\n"),
                 0.0,
                 TextFormat {
-                    color: ui.ctx().style().visuals.override_text_color.unwrap_or(Color32::WHITE),
+                    color: ui.style().visuals.override_text_color.unwrap_or(Color32::WHITE),
                     ..Default::default()
                 },
             )
@@ -61,7 +61,7 @@ pub fn create_metadata(metadata: String, ui: &mut egui::Ui) {
                 content,
                 0.0,
                 TextFormat {
-                    color: ui.ctx().style().visuals.widgets.inactive.fg_stroke.color,
+                    color: ui.style().visuals.widgets.inactive.fg_stroke.color,
                     ..Default::default()
                 },
             );
@@ -74,7 +74,7 @@ pub fn create_metadata(metadata: String, ui: &mut egui::Ui) {
                 &format!("{}\n", content),
                 0.0,
                 TextFormat {
-                    color: ui.ctx().style().visuals.override_text_color.unwrap_or(Color32::WHITE),
+                    color: ui.style().visuals.override_text_color.unwrap_or(Color32::WHITE),
                     ..Default::default()
                 },
             );

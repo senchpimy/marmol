@@ -59,7 +59,7 @@ fn get_theme_path() -> Option<PathBuf> {
 pub fn load_and_apply_theme(ctx: &Context) -> Style {
     let theme_path = match get_theme_path() {
         Some(path) => path,
-        None => return Style::from_egui(ctx.style().as_ref()),
+        None => return Style::from_egui(ctx.style_of(ctx.theme()).as_ref()),
     };
 
     println!("Intentando cargar tema desde: {:?}", theme_path);
@@ -96,7 +96,7 @@ pub fn load_and_apply_theme(ctx: &Context) -> Style {
 
     apply_visuals(ctx, &theme_config);
     
-    let mut dock_style = Style::from_egui(ctx.style().as_ref());
+    let mut dock_style = Style::from_egui(ctx.style_of(ctx.theme()).as_ref());
     apply_dock_style(&mut dock_style, &theme_config);
 
     if let Some(font_name) = &theme_config.font_family {
@@ -291,7 +291,7 @@ fn setup_font_sizes(ctx: &Context, base_size: f32) {
     #[cfg(target_os = "android")]
     let base_size = (base_size * 1.5).max(22.0);
     
-    let mut style = (*ctx.style()).clone();
+    let mut style = (*ctx.style_of(ctx.theme())).clone();
     style.text_styles = [
         (
             TextStyle::Heading,
@@ -316,5 +316,5 @@ fn setup_font_sizes(ctx: &Context, base_size: f32) {
     ]
     .into();
     style.spacing.item_spacing = egui::vec2(8.0, 5.0);
-    ctx.set_style(style);
+    ctx.set_style_of(ctx.theme(), style);
 }

@@ -234,7 +234,7 @@ impl IncomeGui {
     pub fn show(&mut self, ui: &mut egui::Ui, seed_id: Id) {
         self.header_nav(ui, seed_id);
 
-        egui::CentralPanel::default().show_inside(ui, |ui| match self.ventana {
+        egui::CentralPanel::default().show(ui, |ui| match self.ventana {
             Ventana::Normal => self.view_normal(ui, seed_id),
             Ventana::Graficos => self.grafica(ui, seed_id),
             Ventana::Categorias => self.canvas(ui, seed_id),
@@ -257,10 +257,10 @@ impl IncomeGui {
         } else {
             let available_height = ui.available_height();
 
-            egui::TopBottomPanel::bottom(seed_id.with("controls_bottom"))
+            egui::Panel::bottom(seed_id.with("controls_bottom"))
                 .resizable(true)
-                .default_height(available_height * 0.5)
-                .show_inside(ui, |ui| {
+                .default_size(available_height * 0.5)
+                .show(ui, |ui| {
                     egui::ScrollArea::vertical().id_salt(seed_id.with("ctrl_scroll")).show(ui, |ui| {
                         self.add_record(ui, seed_id);
                         ui.add_space(20.0);
@@ -269,20 +269,20 @@ impl IncomeGui {
                     });
                 });
 
-            egui::CentralPanel::default().show_inside(ui, |ui| {
+            egui::CentralPanel::default().show(ui, |ui| {
                 self.vista_separada(ui, seed_id);
             });
         }
     }
 
     fn header_nav(&mut self, ui: &mut egui::Ui, seed_id: Id) {
-        egui::TopBottomPanel::top(seed_id.with("nav_panel"))
+        egui::Panel::top(seed_id.with("nav_panel"))
             .frame(
                 Frame::default()
                     .fill(ui.visuals().window_fill())
                     .inner_margin(8.0),
             )
-            .show_inside(ui, |ui| {
+            .show(ui, |ui| {
                 ui.horizontal(|ui| {
                     ui.selectable_value(&mut self.ventana, Ventana::Normal, "📋 Transacciones");
                     ui.selectable_value(&mut self.ventana, Ventana::Graficos, "📈 Evolución");

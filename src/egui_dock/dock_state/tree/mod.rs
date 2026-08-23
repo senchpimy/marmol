@@ -27,8 +27,8 @@ pub use node_index::NodeIndex;
 pub use tab_index::TabIndex;
 pub use tab_iter::TabIter;
 
-use egui::ahash::HashSet;
 use egui::Rect;
+use std::collections::HashSet;
 use std::{
     cmp::max,
     fmt,

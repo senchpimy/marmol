@@ -5,4 +5,4 @@ Exec=env -u WAYLAND_DISPLAY -u WAYLAND_SOCKET /bin/marmol
 Type=Application
 Name=Marmol
 GenericName=Marmol
-Icon=/home/plof/Downloads/cubov3.svg
+Icon=/home/plof/Documents/RustProjects/marmol/logo/cubov3.svg

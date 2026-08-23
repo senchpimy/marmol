@@ -101,7 +101,7 @@ impl EasyMarkEditor {
                 let editor_id = ui.id().with("easymark_edit");
                 if let Some(state) = TextEdit::load_state(ui.ctx(), editor_id) {
                     if let Some(range) = state.cursor.char_range() {
-                        let cursor_idx = range.primary.index;
+                        let cursor_idx: usize = range.primary.index.into();
 
                         let mut count_before = 0;
                         let mut temp_text = &text[..cursor_idx];
@@ -165,7 +165,7 @@ impl EasyMarkEditor {
                 let editor_id = ui.id().with("easymark_edit");
                 let cursor_index = TextEdit::load_state(ui.ctx(), editor_id)
                     .and_then(|state| state.cursor.char_range())
-                    .map(|range| range.primary.index)
+                    .map(|range| usize::from(range.primary.index))
                     .unwrap_or_else(|| self.code.len());
                 ui.ctx().data_mut(|d| {
                     d.insert_temp(
@@ -202,7 +202,7 @@ impl EasyMarkEditor {
         let editor_id = ui.id().with("easymark_edit");
         let cursor_index = TextEdit::load_state(ui.ctx(), editor_id)
             .and_then(|state| state.cursor.char_range())
-            .map(|range| range.primary.index);
+            .map(|range| usize::from(range.primary.index));
 
         let mut galley_out = None;
         {
@@ -216,7 +216,7 @@ impl EasyMarkEditor {
                     collapsed_blocks,
                 );
                 layout_job.wrap.max_width = wrap_width;
-                let galley = ui.fonts(|f| f.layout_job(layout_job));
+                let galley = ui.fonts_mut(|f| f.layout_job(layout_job));
                 galley_out = Some(galley.clone());
                 galley
             };
@@ -229,7 +229,7 @@ impl EasyMarkEditor {
                     .desired_width(f32::INFINITY)
                     .font(egui::TextStyle::Monospace)
                     .layouter(&mut layouter)
-                    .frame(false),
+                    .frame(egui::Frame::NONE),
             );
 
             if let Some(galley) = galley_out {
@@ -407,7 +407,7 @@ fn shortcuts(ui: &Ui, editor: &mut EasyMarkEditor, ccursor_range: &mut CCursorRa
 
         // Find start of line
         let mut line_start = primary.index;
-        while line_start > 0 && code.char_range(line_start - 1..line_start) != "\n" {
+        while line_start > egui::text::CharIndex::ZERO && code.char_range(line_start - 1..line_start) != "\n" {
             line_start -= 1;
         }
 
@@ -421,7 +421,7 @@ fn shortcuts(ui: &Ui, editor: &mut EasyMarkEditor, ccursor_range: &mut CCursorRa
 
         // Find start of line
         let mut line_start = primary.index;
-        while line_start > 0 && code.char_range(line_start - 1..line_start) != "\n" {
+        while line_start > egui::text::CharIndex::ZERO && code.char_range(line_start - 1..line_start) != "\n" {
             line_start -= 1;
         }
 
@@ -442,9 +442,9 @@ fn shortcuts(ui: &Ui, editor: &mut EasyMarkEditor, ccursor_range: &mut CCursorRa
     if ui.input(|i| i.key_pressed(Key::Enter) && i.modifiers.is_none()) {
         let [primary, _secondary] = ccursor_range.sorted_cursors();
         let index = primary.index;
-        if index > 0 && code.char_range(index - 1..index) == "\n" {
+        if index > egui::text::CharIndex::ZERO && code.char_range(index - 1..index) == "\n" {
             let mut line_start = index - 1;
-            while line_start > 0 && code.char_range(line_start - 1..line_start) != "\n" {
+            while line_start > egui::text::CharIndex::ZERO && code.char_range(line_start - 1..line_start) != "\n" {
                 line_start -= 1;
             }
 

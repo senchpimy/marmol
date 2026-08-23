@@ -27,7 +27,7 @@ pub enum Screen {
 }
 
 pub fn create_vault_screen(
-    ctx: &egui::Context,
+    ui: &mut egui::Ui,
     current_window: &mut Screen,
     prev_window: &mut Screen,
     nw_vault_str: &mut String,
@@ -37,7 +37,7 @@ pub fn create_vault_screen(
     vault: &mut String,
     vault_changed: &mut bool,
 ) {
-    CentralPanel::default().show(ctx, |ui| {
+    CentralPanel::default().show(ui, |ui| {
         ui.vertical_centered(|ui| {
             ui.add_space(20.0);
             ui.heading("Create New Vault");
@@ -110,7 +110,7 @@ pub fn create_vault_screen(
 }
 
 pub fn default(
-    ctx: &egui::Context,
+    ui: &mut egui::Ui,
     current_window: &mut Screen,
     prev_window: &mut Screen,
     nuevo_vault_name: &mut String,
@@ -126,7 +126,7 @@ pub fn default(
     #[cfg(target_os = "android")]
     android_app: &Option<egui_winit::winit::platform::android::activity::AndroidApp>,
 ) {
-    CentralPanel::default().show(ctx, |ui| {
+    CentralPanel::default().show(ui, |ui| {
         let text = RichText::new("Marmol").strong().size(60.0);
         ui.with_layout(egui::Layout::top_down(egui::Align::Center), |ui| {
             let button_width = window_size.width * 0.5;
@@ -247,14 +247,14 @@ pub fn default(
                                     ui.label("Path:");
                                     ui.text_edit_singleline(parent_folder);
                                 });
-                                ui.label(RichText::new("⚠️ You must grant 'All Files Access' in Android Settings for this to work.").small().color(ui.ctx().style().visuals.warn_fg_color));
+                                ui.label(RichText::new("⚠️ You must grant 'All Files Access' in Android Settings for this to work.").small().color(ui.style().visuals.warn_fg_color));
                             }
                         }
                         ui.add_space(10.0);
                         if !parent_folder.is_empty() {
                             ui.label(format!("Creating in: {}", parent_folder));
                         } else {
-                            ui.label(RichText::new("Please select a storage type").small().color(ui.ctx().style().visuals.warn_fg_color));
+                            ui.label(RichText::new("Please select a storage type").small().color(ui.style().visuals.warn_fg_color));
                         }
                         ui.horizontal(|ui| {
                             ui.label("Name:");
@@ -272,7 +272,7 @@ pub fn default(
                         });
 
                         if !creation_error.is_empty() {
-                            ui.label(RichText::new(creation_error.as_str()).color(ui.ctx().style().visuals.error_fg_color));
+                            ui.label(RichText::new(creation_error.as_str()).color(ui.style().visuals.error_fg_color));
                         }
 
                         ui.horizontal(|ui| {
@@ -323,7 +323,7 @@ pub fn default(
 }
 
 pub fn configuracion(
-    ctx: &egui::Context,
+    ui: &mut egui::Ui,
     prev_window: &mut Screen,
     current_window: &mut Screen,
     vaults: &mut Vec<String>,
@@ -342,7 +342,8 @@ pub fn configuracion(
     icon_manager: &mut IconManager, // AGREGAR ESTO en los argumentos de la función
     _window_size: &MShape,
 ) {
-    CentralPanel::default().show(ctx, |ui| {
+    CentralPanel::default().show(ui, |ui| {
+        let ctx = ui.ctx().clone();
         let button_width = ui.available_width() * 0.5;
         let button_height = 40.0;
         let button_size = [button_width, button_height];
@@ -369,7 +370,7 @@ pub fn configuracion(
 
                 appearance_settings(
                     ui,
-                    ctx,
+                    &ctx,
                     vault,
                     font_size,
                     center_size,
@@ -561,7 +562,7 @@ fn create_new_vault(
             *show = false;
         }
     }
-    ui.label(RichText::new(error.as_str()).color(ui.ctx().style().visuals.error_fg_color));
+    ui.label(RichText::new(error.as_str()).color(ui.style().visuals.error_fg_color));
 }
 
 fn manage_existing_vaults(
@@ -773,10 +774,10 @@ fn appearance_settings_content(
         .add(egui::Slider::new(font_size, 10.0..=80.0).text("Font size"))
         .changed()
     {
-        let mut style = (*ctx.style()).clone();
+        let mut style = (*ctx.style_of(ctx.theme())).clone();
         let font_id = FontId::proportional(*font_size);
         style.override_font_id = Some(font_id);
-        ctx.set_style(style);
+        ctx.set_style_of(ctx.theme(), style);
     }
 }
 

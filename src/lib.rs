@@ -171,7 +171,7 @@ impl Marmol {
             #[cfg(target_os = "android")]
             android_app: None,
             zoom_factor,
-            dock_style: crate::egui_dock::Style::from_egui(ctx.style().as_ref()),
+            dock_style: crate::egui_dock::Style::from_egui(ctx.style_of(ctx.theme()).as_ref()),
         }
     }
 }
@@ -226,7 +226,8 @@ impl Default for Marmol {
 }
 
 impl eframe::App for Marmol {
-    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+    fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
+        let ctx = ui.ctx().clone();
         let zoom_actual = ctx.zoom_factor();
         if (zoom_actual - self.zoom_factor).abs() > 1e-3 {
             self.zoom_factor = zoom_actual;
@@ -234,11 +235,11 @@ impl eframe::App for Marmol {
 
         #[cfg(target_os = "android")]
         {
-            self.keyboard.pump_events(ctx);
-            egui::TopBottomPanel::top("android_top_spacing")
-                .frame(egui::Frame::none().fill(ctx.style().visuals.window_fill))
+            self.keyboard.pump_events(&ctx);
+            egui::Panel::top("android_top_spacing")
+                .frame(egui::Frame::none().fill(ctx.style_of(ctx.theme()).visuals.window_fill))
                 .show_separator_line(false)
-                .show(ctx, |ui| {
+                .show(ui, |ui| {
                     ui.add_space(30.0);
                 });
         }
@@ -249,7 +250,7 @@ impl eframe::App for Marmol {
             let prev_storage = self.android_storage;
             //welcome screen
             screens::default(
-                ctx,
+                ui,
                 &mut self.current_window,
                 &mut self.prev_window,
                 &mut self.new_vault_str,
@@ -273,7 +274,7 @@ impl eframe::App for Marmol {
             }
         } else if self.current_window == screens::Screen::CreateVault {
             screens::create_vault_screen(
-                ctx,
+                ui,
                 &mut self.current_window,
                 &mut self.prev_window,
                 &mut self.new_vault_str,
@@ -327,10 +328,10 @@ impl eframe::App for Marmol {
             }
 
             self.icon_selector
-                .ui(ctx, &self.vault, &mut self.left_controls.icon_manager);
+                .ui(&ctx, &self.vault, &mut self.left_controls.icon_manager);
 
             // Render Command Palette and handle actions
-            match self.command_palette.ui(ctx) {
+            match self.command_palette.ui(&ctx) {
                 CommandAction::OpenIconInstaller => {
                     self.icon_pack_installer.is_open = true;
                 }
@@ -433,11 +434,11 @@ tags: [excalidraw]
 
             // Render Icon Pack Installer
             self.icon_pack_installer
-                .ui(ctx, &self.vault, &mut self.left_controls.icon_manager);
+                .ui(&ctx, &self.vault, &mut self.left_controls.icon_manager);
 
             //Main screen
             self.left_controls.left_side_settings(
-                ctx,
+                ui,
                 &mut self.left_collpased,
                 &mut self.vault,
                 &mut self.current_file,
@@ -449,8 +450,8 @@ tags: [excalidraw]
                 &mut self.command_palette,
             );
             self.left_controls.left_side_menu(
-                ctx,
-                &self.left_collpased,
+                ui,
+                &mut self.left_collpased,
                 &self.vault,
                 &mut self.current_file,
                 &self.sort_files,
@@ -458,7 +459,7 @@ tags: [excalidraw]
                 self.enable_icon_folder,
                 &mut self.icon_selector,
             );
-            CentralPanel::default().show(ctx, |ui| {
+            CentralPanel::default().show(ui, |ui| {
                 if self.prev_current_file != self.current_file {
                     self.content = main_area::content_enum::Content::View;
                     self.prev_current_file = self.current_file.clone();
@@ -472,7 +473,7 @@ tags: [excalidraw]
                     return;
                 }
 
-                if let Some(file_to_open) = self.switcher.ui(ctx, &self.vault) {
+                if let Some(file_to_open) = self.switcher.ui(&ctx, &self.vault) {
                     self.current_file = file_to_open;
                     self.content = crate::main_area::content_enum::Content::View;
                 }
@@ -494,7 +495,7 @@ tags: [excalidraw]
         } else if self.current_window == screens::Screen::Configuracion {
             let prev_win = self.current_window;
             screens::configuracion(
-                ctx,
+                ui,
                 &mut self.prev_window,
                 &mut self.current_window,
                 &mut self.vault_vec,
@@ -518,13 +519,13 @@ tags: [excalidraw]
             }
         } else if self.current_window == screens::Screen::Appearance {
             let prev_win = self.current_window;
-            CentralPanel::default().show(ctx, |ui| {
+            CentralPanel::default().show(ui, |ui| {
                 ui.vertical_centered(|ui| {
                     ui.heading("Appearance");
                     ui.add_space(20.0);
                     screens::appearance_settings(
                         ui,
-                        ctx,
+                        &ctx,
                         &self.vault,
                         &mut self.font_size,
                         &mut self.center_size,
@@ -545,7 +546,7 @@ tags: [excalidraw]
             }
         } else if self.current_window == screens::Screen::Vaults {
             let prev_win = self.current_window;
-            CentralPanel::default().show(ctx, |ui| {
+            CentralPanel::default().show(ui, |ui| {
                 ui.vertical_centered(|ui| {
                     ui.heading("Vaults");
                     ui.add_space(20.0);
@@ -573,16 +574,16 @@ tags: [excalidraw]
                 self.save_to_disk();
             }
         } else if self.current_window == screens::Screen::Server {
-            screens::set_server(ctx);
+            screens::set_server(&ctx);
         };
 
         #[cfg(target_os = "android")]
         {
-            self.keyboard.show(ctx);
+            self.keyboard.show(&ctx);
         }
 
         /////////////////////////////////////////////////////////////////////////////////
-        let rect = ctx.screen_rect();
+        let rect = ctx.content_rect();
         let btn_size = match rect.width() / 45. {
             20.0..=30.0 => rect.width() / 45.,
             ..=20. => 20.,
@@ -595,7 +596,7 @@ tags: [excalidraw]
         };
     }
 
-    fn on_exit(&mut self, _gl: Option<&eframe::glow::Context>) {
+    fn on_exit(&mut self) {
         self.save_to_disk();
     }
 }
@@ -657,7 +658,7 @@ impl Marmol {
             Path::new(&path)
         };
         ui.label(
-            RichText::new(&self.create_file_error).color(ui.ctx().style().visuals.error_fg_color),
+            RichText::new(&self.create_file_error).color(ui.style().visuals.error_fg_color),
         );
         if new_file.exists() {
             self.create_file_error = String::from("File already exist");

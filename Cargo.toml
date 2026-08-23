@@ -12,14 +12,14 @@ crate-type = ["cdylib", "lib"]
 
 [dependencies]
 mermaid-rs-renderer = { git = "https://github.com/1jehuang/mermaid-rs-renderer", tag = "v0.2.0" }
-egui = { version = "0.32", features = ["serde"] }
-egui_plot = "0.33"
+egui = { version = "0.36", features = ["serde"] }
+egui_plot = "0.37"
 chrono = "0.4.23"
 syntect = "5.0"
 base64 = "0.21"
 serde_json = "1.0"
-serde = { version = "=1.0.210", features = ["derive"] }
-egui_extras = { version = "0.32", features = ["image","file","svg","http","svg_text"] }
+serde = { version = "1.0", features = ["derive"] }
+egui_extras = { version = "0.36", features = ["image","file","svg","http","svg_text"] }
 filebuffer = "0.4.0"
 image = { version = "0.25", default-features = false, features = [
   "png",
@@ -33,7 +33,7 @@ rand = "0.9.2"
 walkdir = "2.3.1"
 regex = "1.7.2"
 fstream = "0.1.2"
-egui-twemoji = "0.7"
+egui-twemoji = "0.8"
 rust-embed = "8.9.0"
 zip = "7.0.0"
 reqwest = { version = "0.11", default-features = false, features = ["blocking", "rustls-tls"] }
@@ -50,10 +50,17 @@ typst-render = "0.12"
 time = "0.3"
 vega_lite_5 = "0.8.0"
 flate2 = "1.1.9"
+icu_calendar = "=2.1.1"
+icu_locale = "=2.1.1"
+icu_provider = "=2.1.1"
+icu_properties = "=2.1.2"
+icu_collections = "=2.1.1"
+icu_normalizer = "=2.1.1"
+idna_adapter = "=1.2.1"
 tokio = { version = "1.36.0", features = ["rt", "rt-multi-thread"] }
-tokio-util = "=0.7.10"
-tokio-stream = "=0.1.14"
-vl-convert-rs = "1.9.0"
+tokio-util = "=0.7.19"
+tokio-stream = "=0.1.19"
+vl-convert-rs = { git = "https://github.com/vega/vl-convert", package = "vl-convert-rs", rev = "badf31ba0ccd7098e239f7e4d09d463fc35e88b5" }
 arboard = { version = "3.6.1", features = ["image", "wayland-data-control"] }
 rust_tikz = { git = "https://github.com/siefkenj/rust-tikzjax", package = "rust-tikz", rev = "6489950f25dddecb899b86c6c00f5891b3077dd7" }
 resvg = { version = "0.45", features = ["text", "system-fonts"] }
@@ -72,13 +79,13 @@ env_logger = "0.10"
 font-loader = "0.11"
 directories = "2.0"
 rfd = "0.11.3"
-eframe = { version = "0.32", features = ["wgpu"] }
+eframe = { version = "0.36", features = ["wgpu"] }
 
 [target.'cfg(target_os = "android")'.dependencies]
 android_logger = { version = "0.15", default-features = false }
-eframe = { version = "0.32", default-features = false, features = ["glow", "android-native-activity", "default_fonts"] }
-egui-winit = { version = "0.32", default-features = false, features = ["clipboard", "links"] }
-egui_keyboard = "0.5"
+eframe = { version = "0.36", default-features = false, features = ["glow", "android-native-activity", "default_fonts"] }
+egui-winit = { version = "0.36", default-features = false, features = ["clipboard", "links"] }
+egui_keyboard = "0.8"
 jni = "0.21"
 android-activity = "0.6"
 

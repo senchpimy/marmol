@@ -1,4 +1,4 @@
-use super::data::{CustomGroup, Graph, MarmolPoint, MatchType};
+use super::data::{Graph, MarmolPoint, MatchType};
 use crate::files;
 use egui::{Color32, Vec2};
 use std::collections::hash_map::DefaultHasher;
@@ -33,15 +33,15 @@ impl Graph {
         }
 
         let palette = vec![
-            ctx.style().visuals.error_fg_color,
-            ctx.style().visuals.selection.stroke.color,
-            ctx.style().visuals.widgets.hovered.fg_stroke.color,
-            ctx.style().visuals.warn_fg_color,
+            ctx.style_of(ctx.theme()).visuals.error_fg_color,
+            ctx.style_of(ctx.theme()).visuals.selection.stroke.color,
+            ctx.style_of(ctx.theme()).visuals.widgets.hovered.fg_stroke.color,
+            ctx.style_of(ctx.theme()).visuals.warn_fg_color,
             Color32::LIGHT_GREEN,
             Color32::LIGHT_BLUE,
             Color32::YELLOW,
             Color32::LIGHT_RED,
-            ctx.style().visuals.widgets.noninteractive.fg_stroke.color,
+            ctx.style_of(ctx.theme()).visuals.widgets.noninteractive.fg_stroke.color,
         ];
 
         let mut graph = Self {
@@ -74,16 +74,16 @@ impl Graph {
             line_thickness: 2.0,
 
             dragged_node_index: None,
-            orphan_color: ctx.style().visuals.widgets.inactive.fg_stroke.color.linear_multiply(0.7),
-            ghost_color: ctx.style().visuals.widgets.noninteractive.bg_stroke.color.linear_multiply(0.2),
-            attachment_color: ctx.style().visuals.selection.stroke.color,
+            orphan_color: ctx.style_of(ctx.theme()).visuals.widgets.inactive.fg_stroke.color.linear_multiply(0.7),
+            ghost_color: ctx.style_of(ctx.theme()).visuals.widgets.noninteractive.bg_stroke.color.linear_multiply(0.2),
+            attachment_color: ctx.style_of(ctx.theme()).visuals.selection.stroke.color,
             palette,
             tags_colors,
 
             custom_groups: vec![],
             new_group_type: MatchType::Tag,
             new_group_val: String::new(),
-            new_group_col: ctx.style().visuals.error_fg_color,
+            new_group_col: ctx.style_of(ctx.theme()).visuals.error_fg_color,
             hovered_node_index: None,
         };
 

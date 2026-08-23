@@ -9,7 +9,7 @@ pub fn draw_selection_border<F>(painter: &egui::Painter, el: &ExcalidrawElement,
 where
     F: Fn(Pos2) -> Pos2,
 {
-    let stroke_color = ui.ctx().style().visuals.selection.stroke.color;
+    let stroke_color = ui.style().visuals.selection.stroke.color;
     let handle_visual_size = 10.0 * sc.max(0.5).min(1.5);
 
     if (el.element_type == "line" || el.element_type == "arrow") && el.points.len() >= 2 {

@@ -378,7 +378,7 @@ impl FileTree {
                             2.0,
                             egui::Stroke::new(
                                 2.0,
-                                ui.ctx().style().visuals.selection.stroke.color,
+                                ui.style().visuals.selection.stroke.color,
                             ),
                             egui::StrokeKind::Middle,
                         );

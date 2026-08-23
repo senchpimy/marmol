@@ -65,7 +65,7 @@ pub fn draw_ui(
             let is_hovering = graph.hovered_node_index.is_some();
 
             // --- 1. RENDERIZADO DE LÍNEAS / FLECHAS (CAPA INFERIOR) ---
-            let base_line_color = plot_ui.ctx().style().visuals.window_stroke.color.linear_multiply(100.0 / 255.0);
+            let base_line_color = plot_ui.ctx().style_of(plot_ui.ctx().theme()).visuals.window_stroke.color.linear_multiply(100.0 / 255.0);
 
             if graph.show_arrows {
                 let mut origins = vec![];
@@ -114,7 +114,7 @@ pub fn draw_ui(
 
                         if is_hovering {
                             if is_edge_highlighted || edge_t > 0.0 {
-                                let highlight_color = plot_ui.ctx().style().visuals.widgets.hovered.bg_stroke.color.linear_multiply(180.0 / 255.0);
+                                let highlight_color = plot_ui.ctx().style_of(plot_ui.ctx().theme()).visuals.widgets.hovered.bg_stroke.color.linear_multiply(180.0 / 255.0);
                                 // Mezclar entre base y highlight basado en la animación
                                 line_color = Color32::from_rgba_premultiplied(
                                     lerp(base_line_color.r() as f32..=highlight_color.r() as f32, edge_t) as u8,
@@ -215,14 +215,14 @@ pub fn draw_ui(
                 let diff = bounds.max()[1] - bounds.min()[1];
 
                 if diff < graph.text_zoom_threshold {
-                    let mut text_color = plot_ui.ctx().style().visuals.widgets.inactive.fg_stroke.color;
+                    let mut text_color = plot_ui.ctx().style_of(plot_ui.ctx().theme()).visuals.widgets.inactive.fg_stroke.color;
 
                     let text_multiplier = 0.2 + 0.8 * node_t;
                     text_color = text_color.linear_multiply(text_multiplier);
 
                     if is_hovering && node_t > 0.0 {
                          if connected_indices.contains(&index) {
-                             let target_text_color = plot_ui.ctx().style().visuals.override_text_color.unwrap_or(Color32::WHITE);
+                             let target_text_color = plot_ui.ctx().style_of(plot_ui.ctx().theme()).visuals.override_text_color.unwrap_or(Color32::WHITE);
                              text_color = Color32::from_rgba_premultiplied(
                                 lerp(text_color.r() as f32..=target_text_color.r() as f32, node_t) as u8,
                                 lerp(text_color.g() as f32..=target_text_color.g() as f32, node_t) as u8,

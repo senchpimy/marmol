@@ -6,9 +6,7 @@ use crate::search;
 use crate::MShape;
 
 use chrono::prelude::*;
-use eframe::egui::{
-    Align, Button, Context, Frame, Layout, RichText, ScrollArea, SidePanel, Style, TopBottomPanel,
-};
+use eframe::egui::{Align, Button, Frame, Layout, RichText, ScrollArea, Style};
 use egui::Vec2;
 use egui::{text::LayoutJob, TextFormat, Widget};
 
@@ -53,8 +51,8 @@ impl Default for LeftControls {
 impl LeftControls {
     pub fn left_side_menu(
         &mut self,
-        ctx: &Context,
-        colapse: &bool,
+        ui: &mut egui::Ui,
+        colapse: &mut bool,
         path: &str,
         current_file: &mut String,
         sort_entrys: &bool,
@@ -68,11 +66,11 @@ impl LeftControls {
             self.last_vault_path = path.to_string();
         }
 
-        let left_panel = SidePanel::left("buttons left menu")
-            .default_width(100.)
-            .min_width(100.)
-            .max_width(300.);
-        left_panel.show_animated(ctx, *colapse, |ui| {
+        let left_panel = egui::Panel::left("buttons left menu")
+            .default_size(100.)
+            .min_size(100.)
+            .max_size(300.);
+        left_panel.show_collapsible(ui, colapse, |ui| {
             self.top_panel_menu_left(
                 ui,
                 path,
@@ -97,11 +95,10 @@ impl LeftControls {
         icon_selector: &mut IconSelector,
     ) {
         let vault = path;
-        TopBottomPanel::top("Left Menu").show_inside(ui, |ui| {
+        egui::Panel::top("Left Menu").show(ui, |ui| {
             ui.horizontal(|ui| {
                 let btn_size = Vec2::new(window_size.btn_size, window_size.btn_size);
                 let color = ui
-                    .ctx()
                     .style()
                     .visuals
                     .widgets
@@ -246,7 +243,6 @@ impl LeftControls {
                 ui.add_space((ui.available_width() - window_size.btn_size) / 2.0);
                 let btn_size = Vec2::new(window_size.btn_size, window_size.btn_size);
                 let color = ui
-                    .ctx()
                     .style()
                     .visuals
                     .widgets
@@ -360,7 +356,7 @@ impl LeftControls {
                             &i.path.strip_prefix(&path).unwrap(),
                             0.0,
                             TextFormat {
-                                color: ui.ctx().style().visuals.selection.stroke.color,
+                                color: ui.style().visuals.selection.stroke.color,
                                 ..Default::default()
                             },
                         );
@@ -400,7 +396,7 @@ impl LeftControls {
 
     pub fn left_side_settings(
         &self,
-        ctx: &Context,
+        ui: &mut egui::Ui,
         colapse: &mut bool,
         vault: &mut String,
         current_file: &mut String,
@@ -411,13 +407,13 @@ impl LeftControls {
         window_size: &MShape,
         command_palette: &mut crate::command_palette::CommandPalette,
     ) {
-        let left_panel = SidePanel::left("buttons left")
+        let left_panel = egui::Panel::left("buttons left")
             .resizable(false)
-            .default_width(1.);
+            .default_size(1.);
         let space = window_size.height / 55.;
         let btn_size = Vec2::new(window_size.btn_size, window_size.btn_size);
-        let color = ctx.style().visuals.widgets.noninteractive.fg_stroke.color;
-        left_panel.show(ctx, |ui| {
+        let color = ui.style().visuals.widgets.noninteractive.fg_stroke.color;
+        left_panel.show(ui, |ui| {
             ui.add_space(5.);
             ui.set_max_width(window_size.btn_size);
             ui.vertical(|ui| {
