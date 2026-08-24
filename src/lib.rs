@@ -459,6 +459,97 @@ tags: [excalidraw]
                 self.enable_icon_folder,
                 &mut self.icon_selector,
             );
+
+            // Panel derecho del índice (TOC) al mismo nivel que el explorador.
+            // Siempre visible: conserva su espacio aunque no haya markdown activo.
+            let active_toc = self.tabs.active_view_toc();
+            let (tab_id, headings) = active_toc
+                .map(|(id, h)| (id, h))
+                .unwrap_or((0, Vec::new()));
+            let index_open_id = if tab_id == 0 {
+                egui::Id::new("index_panel_open")
+            } else {
+                egui::Id::new("index_panel_open").with(tab_id)
+            };
+            let mut index_open = ui.ctx().data(|d| {
+                d.get_temp::<bool>(index_open_id).unwrap_or(true)
+            });
+            let toggle_req = std::cell::Cell::new(None::<bool>);
+            let collapsed = egui::Panel::right("index_panel_collapsed")
+                .resizable(false)
+                .exact_size(24.0);
+            let expanded = egui::Panel::right("index_panel_expanded")
+                .resizable(true)
+                .default_size(220.0)
+                .min_size(150.0);
+            egui::Panel::show_switched(ui, &mut index_open, collapsed, expanded, |ui, expanded| {
+                if expanded {
+                    ui.horizontal(|ui| {
+                        ui.add_space(6.0);
+                        ui.label(egui::RichText::new("Índice").strong().size(15.0));
+                        ui.with_layout(
+                            egui::Layout::right_to_left(egui::Align::Center),
+                            |ui| {
+                                if ui
+                                    .small_button("«")
+                                    .on_hover_text("Colapsar índice")
+                                    .clicked()
+                                {
+                                    toggle_req.set(Some(false));
+                                }
+                            },
+                        );
+                    });
+                    ui.separator();
+                    egui::ScrollArea::vertical()
+                        .auto_shrink([false, false])
+                        .show(ui, |ui| {
+                            ui.add_space(8.0);
+                            if headings.is_empty() {
+                                ui.label(
+                                    egui::RichText::new("Sin encabezados")
+                                        .weak()
+                                        .italics(),
+                                );
+                            } else {
+                                for (i, (level, text)) in headings.iter().enumerate() {
+                                    let indent = "  ".repeat(*level);
+                                    let label = format!("{}{}", indent, text);
+                                    let response = ui
+                                        .selectable_label(false, label)
+                                        .on_hover_cursor(egui::CursorIcon::PointingHand);
+                                    if response.clicked() {
+                                        ui.ctx().data_mut(|d| {
+                                            d.insert_temp(
+                                                egui::Id::new("index_nav_target"),
+                                                Some(i),
+                                            );
+                                        });
+                                    }
+                                }
+                            }
+                        });
+                } else {
+                    ui.with_layout(
+                        egui::Layout::top_down(egui::Align::Center),
+                        |ui| {
+                            ui.add_space(6.0);
+                            if ui
+                                .small_button("»")
+                                .on_hover_text("Mostrar índice")
+                                .clicked()
+                            {
+                                toggle_req.set(Some(true));
+                            }
+                        },
+                    );
+                }
+            });
+            if let Some(v) = toggle_req.get() {
+                index_open = v;
+            }
+            ui.ctx().data_mut(|d| d.insert_temp(index_open_id, index_open));
+
             CentralPanel::default().show(ui, |ui| {
                 if self.prev_current_file != self.current_file {
                     self.content = main_area::content_enum::Content::View;

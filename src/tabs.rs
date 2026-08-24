@@ -710,42 +710,6 @@ impl TabViewer for MTabViewer<'_> {
                     if tab.ctype == Content::View {
                         editor.code = files::read_file(&tab.path);
                         let (markdown_content, metadata) = files::contents(&editor.code);
-                        let headings = parse_toc(&markdown_content);
-
-                        let index_open_id = egui::Id::new("index_panel_open");
-                        let mut index_open = ui.ctx().data(|d| {
-                            d.get_temp::<bool>(index_open_id).unwrap_or(true)
-                        });
-                        egui::Panel::right("index_panel")
-                            .default_size(220.0)
-                            .min_size(150.0)
-                            .show_collapsible(ui, &mut index_open, |ui| {
-                                egui::ScrollArea::vertical()
-                                    .auto_shrink([false, false])
-                                    .show(ui, |ui| {
-                                        ui.add_space(14.0);
-                                        ui.label(
-                                            egui::RichText::new("Índice").strong().size(15.0),
-                                        );
-                                        ui.separator();
-                                        for (i, h) in headings.iter().enumerate() {
-                                            let indent = "  ".repeat(h.level);
-                                            let text = format!("{}{}", indent, h.text);
-                                            let response = ui
-                                                .selectable_label(false, text)
-                                                .on_hover_cursor(egui::CursorIcon::PointingHand);
-                                            if response.clicked() {
-                                                ui.ctx().data_mut(|d| {
-                                                    d.insert_temp(
-                                                        egui::Id::new("index_nav_target"),
-                                                        Some(i),
-                                                    );
-                                                });
-                                            }
-                                        }
-                                    });
-                            });
-                        ui.ctx().data_mut(|d| d.insert_temp(index_open_id, index_open));
 
                         let cont = StripBuilder::new(ui)
                             .size(Size::relative(margin_ratio))
@@ -1219,6 +1183,24 @@ impl Tabs {
             self.tree
                 .push_to_focused_leaf(Tabe::new(self.counter, cloned_path));
         });
+    }
+
+    pub fn active_view_toc(&mut self) -> Option<(usize, Vec<(usize, String)>)> {
+        let (_, tab) = self.tree.find_active_focused()?;
+        if tab.ctype != Content::View {
+            return None;
+        }
+        let TabContent::Markdown { editor, .. } = &tab.content else {
+            return None;
+        };
+        let code = if editor.code.is_empty() {
+            files::read_file(&tab.path)
+        } else {
+            editor.code.clone()
+        };
+        let (markdown_content, _metadata) = files::contents(&code);
+        let headings = parse_toc(&markdown_content);
+        Some((tab.id, headings.into_iter().map(|h| (h.level, h.text)).collect()))
     }
 
     pub fn file_changed(&mut self, path: &str) {

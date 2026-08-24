@@ -177,16 +177,32 @@ fn neutralizar_fuentes_tikz(s: &str) -> String {
 pub fn preparar_tikz(content: &str) -> String {
     let content = neutralizar_fuentes_tikz(content);
 
+    // \blacksquare (amssymb) requiere una fuente que no está incluida en
+    // tikzjax, lo que rompe la compilación. Se sustituye por un cuadradito
+    // coloreable equivalente que sí funciona.
+    let content = content.replace("\\blacksquare", "\\rule{1.1ex}{1.1ex}");
+
     let mut input = content.clone();
+    let mut preambulo = String::new();
+    if !input.contains("\\usepackage{xcolor}") {
+        // \textcolor y las mezclas de color (yellow!30, etc.) necesitan xcolor
+        preambulo.push_str("\\usepackage{xcolor}\n");
+    }
     if !input.contains("\\usetikzlibrary") {
         let libs = detectar_librerias_tikz(&input);
         if !libs.is_empty() {
-            let inj = format!("\\usetikzlibrary{{{}}}\n", libs.join(","));
-            if let Some(pos) = input.find("\\begin{document}") {
-                input.insert_str(pos, &inj);
-            } else {
-                input.insert_str(0, &inj);
-            }
+            preambulo.push_str(&format!("\\usetikzlibrary{{{}}}\n", libs.join(",")));
+        }
+    }
+
+    if !preambulo.is_empty() {
+        if let Some(pos) = input.find("\\begin{document}") {
+            input.insert_str(pos, &preambulo);
+        } else {
+            return format!(
+                "\n{}\\begin{{document}}\n{}\n\\end{{document}}\n",
+                preambulo, input
+            );
         }
     }
 
@@ -1109,3 +1125,4 @@ pub fn prepare_show(cache: &mut CommonMarkCache, ctx: &egui::Context) {
 
     cache.deactivate_link_hooks();
 }
+
