@@ -31,6 +31,10 @@ pub struct LeftControls {
     // Gestión de iconos
     pub icon_manager: IconManager,
     pub last_vault_path: String,
+
+    // Caché de starred.json (leído solo cuando cambia su mtime)
+    starred_mtime: Option<std::time::SystemTime>,
+    starred_items: Vec<(String, String)>,
 }
 
 impl Default for LeftControls {
@@ -44,6 +48,8 @@ impl Default for LeftControls {
             file_tree: FileTree::default(),
             icon_manager: IconManager::new(),
             last_vault_path: String::new(),
+            starred_mtime: None,
+            starred_items: Vec::new(),
         }
     }
 }
@@ -60,8 +66,9 @@ impl LeftControls {
         enable_icons: bool,
         icon_selector: &mut IconSelector,
     ) {
-        // Carga perezosa de iconos si cambia el vault o está vacío
-        if enable_icons && (self.last_vault_path != path || self.icon_manager.icons.is_empty()) {
+        // Carga perezosa de iconos SOLO al cambiar de vault (no recargar cada frame
+        // si el vault no tiene iconos).
+        if enable_icons && self.last_vault_path != path {
             self.icon_manager.load_icons(path);
             self.last_vault_path = path.to_string();
         }
@@ -369,29 +376,61 @@ impl LeftControls {
                 }
             });
         } else if self.current_left_tab == LeftTab::Starred {
-            let contents = match fs::read_to_string(format!("{}/.obsidian/starred.json", path)) {
-                Ok(x) => x.as_str().to_owned(),
-                _ => {
-                    ui.label("No starred file found!");
-                    return;
-                }
-            };
-            let parsed = json::parse(&contents).unwrap();
-            for (_key, value) in parsed.entries() {
-                for i in 0..value.len() {
-                    let text = parsed["items"][i]["path"].as_str().unwrap();
-                    let full_path = format!("{}/{}", path, text);
+            if self.load_starred(path) {
+                for (text, full_path) in &self.starred_items {
                     if full_path == current_file.as_str() {
                         ui.label(RichText::new(text).color(ui.style().visuals.selection.bg_fill));
                     } else {
-                        let btn = Button::new(text).frame(false);
+                        let btn = Button::new(text.as_str()).frame(false);
                         if btn.ui(ui).clicked() {
-                            *current_file = Path::new(&full_path).to_str().unwrap().to_owned();
+                            *current_file = Path::new(full_path).to_str().unwrap().to_owned();
                         }
                     }
                 }
+            } else {
+                ui.label("No starred file found!");
             }
         }
+    }
+
+    /// Carga starred.json solo si su fecha de modificación cambió (watcher por mtime).
+    /// Devuelve `false` si no existe el archivo.
+    fn load_starred(&mut self, vault: &str) -> bool {
+        let starred_path = format!("{}/.obsidian/starred.json", vault);
+        let mtime = crate::files::file_modified(&starred_path);
+        if self.starred_mtime.is_some() && self.starred_mtime == mtime {
+            return true;
+        }
+
+        let contents = match fs::read_to_string(&starred_path) {
+            Ok(x) => x,
+            Err(_) => {
+                self.starred_mtime = None;
+                self.starred_items.clear();
+                return false;
+            }
+        };
+
+        let parsed = match json::parse(&contents) {
+            Ok(p) => p,
+            Err(_) => {
+                self.starred_mtime = None;
+                self.starred_items.clear();
+                return true;
+            }
+        };
+
+        let mut items = Vec::new();
+        for item in parsed["items"].members() {
+            if let Some(text) = item["path"].as_str() {
+                let full_path = format!("{}/{}", vault, text);
+                items.push((text.to_string(), full_path));
+            }
+        }
+
+        self.starred_mtime = mtime;
+        self.starred_items = items;
+        true
     }
 
     pub fn left_side_settings(

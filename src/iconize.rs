@@ -2,6 +2,7 @@ use crate::emojis::emojis;
 use eframe::egui;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
+use std::cell::RefCell;
 use std::collections::HashMap;
 use std::fs;
 use std::io::Cursor;
@@ -106,6 +107,7 @@ pub struct IconPackInstaller {
     pub packs: Vec<IconPack>,
     pub status_message: String,
     pub is_downloading: bool,
+    pub installed: HashMap<&'static str, bool>,
 }
 
 impl Default for IconPackInstaller {
@@ -115,6 +117,7 @@ impl Default for IconPackInstaller {
             packs: get_predefined_packs(),
             status_message: String::new(),
             is_downloading: false,
+            installed: HashMap::new(),
         }
     }
 }
@@ -143,12 +146,20 @@ impl IconPackInstaller {
                     ui.spinner();
                     ui.label("Downloading and installing...");
                 } else {
-                    egui::ScrollArea::vertical().max_height(350.0).show(ui, |ui| {
-                        let icons_base_path = Path::new(vault_path).join(".obsidian/icons");
-                        
+                    let icons_base_path = Path::new(vault_path).join(".obsidian/icons");
+
+                    // Cachear el estado de instalación para no hacer `exists()` (stat)
+                    // por cada pack en cada frame.
+                    if self.installed.is_empty() {
                         for pack in &self.packs {
-                            let pack_path = icons_base_path.join(pack.name);
-                            let is_installed = pack_path.exists();
+                            let is_installed = icons_base_path.join(pack.name).exists();
+                            self.installed.insert(pack.name, is_installed);
+                        }
+                    }
+
+                    egui::ScrollArea::vertical().max_height(350.0).show(ui, |ui| {
+                        for pack in &self.packs {
+                            let is_installed = self.installed.get(pack.name).copied().unwrap_or(false);
 
                             ui.horizontal(|ui| {
                                 ui.label(egui::RichText::new(pack.display_name).strong());
@@ -201,6 +212,7 @@ impl IconPackInstaller {
             match self.install_pack(vault_path, &pack) {
                 Ok(_) => {
                     self.status_message = format!("Successfully installed {}!", pack.display_name);
+                    self.installed.clear();
                     icon_manager.load_icons(vault_path); // Reload icons
                 }
                 Err(e) => {
@@ -358,6 +370,7 @@ pub struct IconManager {
     pub svg_cache: HashMap<String, PathBuf>,
     pub legacy_mappings: HashMap<String, String>,
     pub app_assets_path: PathBuf,
+    svg_bytes_cache: RefCell<HashMap<String, Vec<u8>>>,
 }
 
 impl IconManager {
@@ -375,12 +388,14 @@ impl IconManager {
             svg_cache: HashMap::new(),
             legacy_mappings,
             app_assets_path,
+            svg_bytes_cache: RefCell::new(HashMap::new()),
         }
     }
 
     pub fn load_icons(&mut self, vault_path: &str) {
         self.icons.clear();
         self.svg_cache.clear();
+        self.svg_bytes_cache.borrow_mut().clear();
 
         let config_path =
             Path::new(vault_path).join(".obsidian/plugins/obsidian-icon-folder/data.json");
@@ -487,20 +502,35 @@ impl IconManager {
     }
 
     pub fn get_icon_source(&self, icon_name: &str) -> Option<IconSource> {
-        if let Some(path) = self.svg_cache.get(icon_name) {
-            return self.load_svg_bytes(path);
+        {
+            let bytes_cache = self.svg_bytes_cache.borrow();
+            if let Some(bytes) = bytes_cache.get(icon_name) {
+                return Some(IconSource::Bytes(bytes.clone()));
+            }
         }
 
-        // Legacy fallback
-        if let Some(new_name) = self.legacy_mappings.get(icon_name) {
-            if let Some(path) = self.svg_cache.get(new_name) {
-                return self.load_svg_bytes(path);
+        let path = self
+            .svg_cache
+            .get(icon_name)
+            .cloned()
+            .or_else(|| {
+                self.legacy_mappings
+                    .get(icon_name)
+                    .and_then(|new_name| self.svg_cache.get(new_name).cloned())
+            });
+
+        if let Some(path) = path {
+            if let Some(bytes) = Self::load_svg_bytes(&path) {
+                self.svg_bytes_cache
+                    .borrow_mut()
+                    .insert(icon_name.to_string(), bytes.clone());
+                return Some(IconSource::Bytes(bytes));
             }
         }
         None
     }
 
-    fn load_svg_bytes(&self, path: &PathBuf) -> Option<IconSource> {
+    fn load_svg_bytes(path: &PathBuf) -> Option<Vec<u8>> {
         if let Ok(content) = fs::read_to_string(path) {
             // SOLUCIÓN TRIÁNGULOS ROJOS:
             // Solo reemplazamos colores. NO inyectamos atributos en el tag <svg>
@@ -511,7 +541,7 @@ impl IconManager {
                 .replace("#000", "white")
                 .replace("black", "white");
 
-            return Some(IconSource::Bytes(whitened.into_bytes()));
+            return Some(whitened.into_bytes());
         }
         None
     }

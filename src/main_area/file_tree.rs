@@ -5,7 +5,7 @@ use eframe::egui::{self, Id, Popup, PopupCloseBehavior, Sense, Vec2};
 use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
-use std::time::{Duration, SystemTime};
+use std::time::SystemTime;
 
 #[derive(Clone)]
 struct FileEntry {
@@ -64,13 +64,15 @@ impl FileTree {
         let current_indent = depth as f32 * indent_step;
 
         // Caching Logic
-        let now = SystemTime::now();
-        let should_update = if let Some(cached) = self.cache.get(path) {
-            now.duration_since(cached.last_updated)
-                .unwrap_or(Duration::from_secs(0))
-                > Duration::from_secs(2) // Refresh every 2 seconds
-        } else {
-            true
+        // Detectar cambios comparando la mtime del directorio: se actualiza al
+        // instante cuando se agrega/elimina/renombra un archivo o subdirectorio.
+        let dir_mtime = fs::metadata(path).and_then(|m| m.modified()).ok();
+        let should_update = match dir_mtime {
+            Some(mtime) => match self.cache.get(path) {
+                Some(cached) => cached.last_updated != mtime,
+                None => true,
+            },
+            None => !self.cache.contains_key(path),
         };
 
         if should_update {
@@ -87,7 +89,7 @@ impl FileTree {
                         .as_ref()
                         .and_then(|m| m.created().ok())
                         .unwrap_or(SystemTime::UNIX_EPOCH);
-                    let is_dir = path_buf.is_dir();
+                    let is_dir = metadata.as_ref().map(|m| m.is_dir()).unwrap_or(false);
                     let file_name = path_buf
                         .file_name()
                         .and_then(|n| n.to_str())
@@ -106,7 +108,7 @@ impl FileTree {
                     path.to_string(),
                     CachedDir {
                         entries,
-                        last_updated: now,
+                        last_updated: dir_mtime.unwrap_or(SystemTime::UNIX_EPOCH),
                     },
                 );
             } else {

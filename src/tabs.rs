@@ -19,6 +19,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::io::Write;
 use std::path::Path;
+use std::time::SystemTime;
 
 struct TocHeading {
     level: usize,
@@ -661,12 +662,7 @@ impl TabViewer for MTabViewer<'_> {
                     egui::ScrollArea::vertical()
                         .id_salt(seed_id.with("img_scroll"))
                         .show(ui, |ui| {
-                            let p = Path::new(image_path);
-                            let uri = if let Ok(abs) = p.canonicalize() {
-                                format!("file://{}", abs.to_string_lossy())
-                            } else {
-                                format!("file://{}", image_path)
-                            };
+                            let uri = format!("file://{}", crate::files::canonicalize_cached(image_path));
                             let img = Image::from_uri(uri);
                             ui.add(img);
                         });
@@ -708,7 +704,7 @@ impl TabViewer for MTabViewer<'_> {
                     let tab_id = tab.id;
 
                     if tab.ctype == Content::View {
-                        editor.code = files::read_file(&tab.path);
+                        editor.code = files::read_file_cached(&tab.path);
                         let (markdown_content, metadata) = files::contents(&editor.code);
 
                         let cont = StripBuilder::new(ui)
@@ -974,6 +970,7 @@ pub struct Tabs {
     //dock_state: DockState<Tabe>,
     tree: DockState<Tabe>,
     counter: usize,
+    toc_cache: Option<(String, Option<SystemTime>, Vec<(usize, String)>)>,
 }
 
 impl Tabs {
@@ -987,6 +984,7 @@ impl Tabs {
         Self {
             tree: dock_state,
             counter,
+            toc_cache: None,
         }
     }
 
@@ -994,6 +992,7 @@ impl Tabs {
         Self {
             tree: DockState::new(vec![]),
             counter: 0,
+            toc_cache: None,
         }
     }
 
@@ -1193,14 +1192,27 @@ impl Tabs {
         let TabContent::Markdown { editor, .. } = &tab.content else {
             return None;
         };
+        let tab_id = tab.id;
+        let tab_path = tab.path.clone();
+
+        let mtime = files::file_modified(&tab_path);
+        if let Some((cached_path, cached_mtime, cached_headings)) = &self.toc_cache {
+            if *cached_path == tab_path && *cached_mtime == mtime {
+                return Some((tab_id, cached_headings.clone()));
+            }
+        }
+
         let code = if editor.code.is_empty() {
-            files::read_file(&tab.path)
+            files::read_file(&tab_path)
         } else {
             editor.code.clone()
         };
         let (markdown_content, _metadata) = files::contents(&code);
         let headings = parse_toc(&markdown_content);
-        Some((tab.id, headings.into_iter().map(|h| (h.level, h.text)).collect()))
+        let result: Vec<(usize, String)> =
+            headings.into_iter().map(|h| (h.level, h.text)).collect();
+        self.toc_cache = Some((tab_path, mtime, result.clone()));
+        Some((tab_id, result))
     }
 
     pub fn file_changed(&mut self, path: &str) {
