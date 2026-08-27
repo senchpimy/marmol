@@ -103,4 +103,8 @@ pub struct Graph {
     pub new_group_val: String,
     pub new_group_col: Color32,
     pub hovered_node_index: Option<usize>,
+
+    // Caché del contenido de los archivos (abs_path -> contenido) para que los
+    // filtros Content/Section no lean disco en el hot path de renderizado/física.
+    pub content_cache: HashMap<String, String>,
 }

@@ -85,6 +85,7 @@ impl Graph {
             new_group_val: String::new(),
             new_group_col: ctx.style_of(ctx.theme()).visuals.error_fg_color,
             hovered_node_index: None,
+            content_cache: HashMap::new(),
         };
 
         graph.update_vault(Path::new(vault));
@@ -108,22 +109,22 @@ impl Graph {
                 if point.is_attachment || point.is_tag {
                     return false;
                 }
-                if let Ok(c) = fs::read_to_string(&point.abs_path) {
-                    c.to_lowercase().contains(&search)
-                } else {
-                    false
-                }
+                self.content_cache
+                    .get(&point.abs_path)
+                    .map(|c| c.to_lowercase().contains(&search))
+                    .unwrap_or(false)
             }
             MatchType::Section => {
                 if point.is_attachment || point.is_tag {
                     return false;
                 }
-                if let Ok(c) = fs::read_to_string(&point.abs_path) {
-                    c.lines()
-                        .any(|l| l.trim().starts_with('#') && l.to_lowercase().contains(&search))
-                } else {
-                    false
-                }
+                self.content_cache
+                    .get(&point.abs_path)
+                    .map(|c| {
+                        c.lines()
+                            .any(|l| l.trim().starts_with('#') && l.to_lowercase().contains(&search))
+                    })
+                    .unwrap_or(false)
             }
         }
     }
@@ -132,12 +133,15 @@ impl Graph {
         let mut new_points = vec![];
         let mut elements = 0;
 
+        self.content_cache.clear();
+
         // 1. Obtener Archivos
         get_data(
             vault,
             &mut new_points,
             &mut elements,
             vault.to_str().unwrap(),
+            &mut self.content_cache,
         );
 
         // 2. Generar Nodos Fantasma
@@ -277,14 +281,16 @@ impl Graph {
             if !p.exists || p.is_attachment || p.is_tag {
                 return false;
             }
-            if let Ok(content) = fs::read_to_string(&p.abs_path) {
-                if !content
-                    .to_lowercase()
-                    .contains(&self.filter_line.to_lowercase())
-                {
-                    return false;
-                }
-            } else {
+            let matches = self
+                .content_cache
+                .get(&p.abs_path)
+                .map(|content| {
+                    content
+                        .to_lowercase()
+                        .contains(&self.filter_line.to_lowercase())
+                })
+                .unwrap_or(false);
+            if !matches {
                 return false;
             }
         }
@@ -293,15 +299,17 @@ impl Graph {
             if !p.exists || p.is_attachment || p.is_tag {
                 return false;
             }
-            if let Ok(content) = fs::read_to_string(&p.abs_path) {
-                let search = self.filter_section.to_lowercase();
-                if !content
-                    .lines()
-                    .any(|l| l.trim().starts_with('#') && l.to_lowercase().contains(&search))
-                {
-                    return false;
-                }
-            } else {
+            let search = self.filter_section.to_lowercase();
+            let matches = self
+                .content_cache
+                .get(&p.abs_path)
+                .map(|content| {
+                    content
+                        .lines()
+                        .any(|l| l.trim().starts_with('#') && l.to_lowercase().contains(&search))
+                })
+                .unwrap_or(false);
+            if !matches {
                 return false;
             }
         }
@@ -567,7 +575,13 @@ fn build_edges(points: &Vec<MarmolPoint>, show_tags: bool) -> Vec<(usize, usize)
     edges
 }
 
-fn get_data(dir: &Path, marmol_vec: &mut Vec<MarmolPoint>, total_entries: &mut i32, vault: &str) {
+fn get_data(
+    dir: &Path,
+    marmol_vec: &mut Vec<MarmolPoint>,
+    total_entries: &mut i32,
+    vault: &str,
+    content_cache: &mut HashMap<String, String>,
+) {
     if !Path::new(vault).exists() {
         return;
     }
@@ -576,7 +590,7 @@ fn get_data(dir: &Path, marmol_vec: &mut Vec<MarmolPoint>, total_entries: &mut i
             let entry = entry.unwrap();
             let path = entry.path();
             if path.is_dir() {
-                get_data(&path, marmol_vec, total_entries, vault);
+                get_data(&path, marmol_vec, total_entries, vault, content_cache);
             } else {
                 if let Some(ext) = path
                     .extension()
@@ -594,6 +608,7 @@ fn get_data(dir: &Path, marmol_vec: &mut Vec<MarmolPoint>, total_entries: &mut i
                     if ext == "md" {
                         *total_entries += 1;
                         let raw_content = files::read_file(&abs_path);
+                        content_cache.insert(abs_path.clone(), raw_content.clone());
                         let mut tag_vecs = vec![];
                         if let Some(yaml_str) = extract_frontmatter(&raw_content) {
                             if let Ok(docs) = YamlLoader::load_from_str(&yaml_str) {
