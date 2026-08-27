@@ -10,6 +10,7 @@ pub struct QuickSwitcher {
     filtered_results: Vec<String>,
     selected_index: usize,
     initialized: bool,
+    scanned_vault: String,
 }
 
 impl Default for QuickSwitcher {
@@ -21,6 +22,7 @@ impl Default for QuickSwitcher {
             filtered_results: Vec::new(),
             selected_index: 0,
             initialized: false,
+            scanned_vault: String::new(),
         }
     }
 }
@@ -31,8 +33,13 @@ impl QuickSwitcher {
         self.query.clear();
         self.selected_index = 0;
 
-        self.all_files.clear();
-        self.scan_dir(vault_path);
+        // Solo re-escanear el vault si cambió (evita un WalkDir bloqueante
+        // en cada apertura del switcher).
+        if self.scanned_vault != vault_path {
+            self.all_files.clear();
+            self.scan_dir(vault_path);
+            self.scanned_vault = vault_path.to_string();
+        }
         self.update_filter();
         self.initialized = true;
     }
@@ -156,8 +163,9 @@ impl QuickSwitcher {
                                 if let Err(e) = file.write_all(default_content.as_bytes()) {
                                     eprintln!("Failed to write to new file: {}", e);
                                 } else {
-                                    selected_file =
-                                        Some(new_file_path.to_string_lossy().to_string());
+                                    let new_path_str = new_file_path.to_string_lossy().to_string();
+                                    self.all_files.push(new_path_str.clone());
+                                    selected_file = Some(new_path_str);
                                     self.close();
                                 }
                             }
