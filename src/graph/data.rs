@@ -107,4 +107,8 @@ pub struct Graph {
     // Caché del contenido de los archivos (abs_path -> contenido) para que los
     // filtros Content/Section no lean disco en el hot path de renderizado/física.
     pub content_cache: HashMap<String, String>,
+
+    // Indica si ya se indexó el vault. Permite cargar los datos de forma
+    // perezosa (solo al mostrar el grafo) en vez de leer todo el vault al iniciar.
+    pub loaded: bool,
 }

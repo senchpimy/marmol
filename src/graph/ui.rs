@@ -14,6 +14,9 @@ pub fn draw_ui(
     vault: &str,
     seed_id: Id,
 ) -> Response {
+    if !graph.loaded {
+        graph.update_vault(Path::new(vault));
+    }
     graph.simulate_physics();
     ui.ctx().request_repaint();
 

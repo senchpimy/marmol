@@ -10,7 +10,7 @@ use std::path::Path;
 use yaml_rust::YamlLoader;
 
 impl Graph {
-    pub fn new(vault: &str, ctx: &egui::Context) -> Self {
+    pub fn new(_vault: &str, ctx: &egui::Context) -> Self {
         let mut tags_colors = HashMap::new();
         if let Ok(file_content) = fs::read_to_string("./test.json") {
             if let Ok(parsed) = json::parse(&file_content) {
@@ -86,9 +86,9 @@ impl Graph {
             new_group_col: ctx.style_of(ctx.theme()).visuals.error_fg_color,
             hovered_node_index: None,
             content_cache: HashMap::new(),
+            loaded: false,
         };
 
-        graph.update_vault(Path::new(vault));
         graph
     }
 
@@ -228,6 +228,7 @@ impl Graph {
             }
         }
         self.dragged_node_index = None;
+        self.loaded = true;
     }
 
     pub fn is_visible(&self, index: usize) -> bool {
@@ -608,7 +609,6 @@ fn get_data(
                     if ext == "md" {
                         *total_entries += 1;
                         let raw_content = files::read_file(&abs_path);
-                        content_cache.insert(abs_path.clone(), raw_content.clone());
                         let mut tag_vecs = vec![];
                         if let Some(yaml_str) = extract_frontmatter(&raw_content) {
                             if let Ok(docs) = YamlLoader::load_from_str(&yaml_str) {
@@ -636,6 +636,9 @@ fn get_data(
                                 links_vec.push(target.trim().to_string());
                             }
                         }
+                        // Guardar el contenido (moviéndolo, sin clonarlo) para los
+                        // filtros Content/Section.
+                        content_cache.insert(abs_path.clone(), raw_content);
                         marmol_vec.push(MarmolPoint::new(
                             &node_name, tag_vecs, links_vec, rel_path, abs_path, false, false, true,
                         ));
