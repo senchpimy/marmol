@@ -10,6 +10,9 @@ use crate::egui_commonmark_backend::elements::*;
 use crate::egui_commonmark_backend::misc::*;
 use crate::egui_commonmark_backend::pulldown::*;
 use pulldown_cmark::{CowStr, HeadingLevel};
+use std::collections::hash_map::DefaultHasher;
+use std::hash::{Hash, Hasher};
+use std::sync::Arc;
 
 /// Newline logic is constructed by the following:
 /// All elements try to insert a newline before them (if they are allowed)
@@ -118,6 +121,42 @@ fn parser_options_math(_is_math_enabled: bool) -> pulldown_cmark::Options {
     parser_options() | pulldown_cmark::Options::ENABLE_MATH
 }
 
+/// Clave de caché para el parseo de markdown (basada en el contenido del texto).
+fn parse_cache_key(text: &str, math: bool) -> u64 {
+    let mut h = DefaultHasher::new();
+    text.hash(&mut h);
+    math.hash(&mut h);
+    h.finish()
+}
+
+/// Devuelve los eventos parseados del markdown, cacheados en `CommonMarkCache`.
+/// Evita re-parsear el documento completo en cada frame.
+fn cached_events(
+    cache: &mut CommonMarkCache,
+    text: &str,
+) -> Arc<Vec<(pulldown_cmark::Event<'static>, Range<usize>)>> {
+    let math = true;
+    let key = parse_cache_key(text, math);
+    if let Some((len, events)) = cache.parsed_events.get(&key) {
+        if *len == text.len() {
+            return events.clone();
+        }
+    }
+
+    let events: Vec<(pulldown_cmark::Event<'static>, Range<usize>)> =
+        pulldown_cmark::Parser::new_ext(text, parser_options_math(math))
+            .into_offset_iter()
+            .map(|(e, r)| (e.into_static(), r))
+            .collect();
+
+    let arc = Arc::new(events);
+    if cache.parsed_events.len() > 128 {
+        cache.parsed_events.clear();
+    }
+    cache.parsed_events.insert(key, (text.len(), arc.clone()));
+    arc
+}
+
 impl CommonMarkViewerInternal {
     /// Be aware that this acquires egui::Context internally.
     /// If split Id is provided then split points will be populated
@@ -137,13 +176,8 @@ impl CommonMarkViewerInternal {
             let height = ui.text_style_height(&TextStyle::Body);
             ui.set_row_height(height);
 
-            let mut events = pulldown_cmark::Parser::new_ext(
-                text,
-                parser_options_math(options.math_fn.is_some()),
-            )
-            .into_offset_iter()
-            .enumerate()
-            .peekable();
+            let cached = cached_events(cache, text);
+            let mut events = cached.iter().cloned().enumerate().peekable();
 
             while let Some((index, (e, src_span))) = events.next() {
                 let start_position = ui.next_widget_position();

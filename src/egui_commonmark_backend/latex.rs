@@ -79,6 +79,9 @@ pub fn render(ui: &mut Ui, cache: &mut CommonMarkCache, latex: &str, inline: boo
 
     let svg_content = if let Some(svg) = cache.latex_cache.get(&cache_key) {
         Some(svg.clone())
+    } else if let Some(err) = cache.latex_error_cache.get(&cache_key) {
+        ui.label(RichText::new(format!("LaTeX error: {}", err)).color(Color32::RED));
+        None
     } else {
         match render_to_svg(latex, inline, &color_hex, font_size) {
             Ok(svg) => {
@@ -86,6 +89,9 @@ pub fn render(ui: &mut Ui, cache: &mut CommonMarkCache, latex: &str, inline: boo
                 Some(svg)
             }
             Err(err) => {
+                cache
+                    .latex_error_cache
+                    .insert(cache_key.clone(), err.clone());
                 ui.label(RichText::new(format!("LaTeX error: {}", err)).color(Color32::RED));
                 None
             }

@@ -64,12 +64,17 @@ impl EasyMarkEditor {
     pub fn ui(&mut self, ui: &mut egui::Ui) -> egui::Response {
         let mut changed_programmatically = false;
 
-        // Handle Ctrl+V before TextEdit
-        let has_image = self.has_image_in_clipboard();
-        if has_image {
-            let ctrl_v = egui::KeyboardShortcut::new(egui::Modifiers::CTRL, egui::Key::V);
-            let cmd_v = egui::KeyboardShortcut::new(egui::Modifiers::COMMAND, egui::Key::V);
-            if ui.input_mut(|i| i.consume_shortcut(&ctrl_v) || i.consume_shortcut(&cmd_v)) {
+        // Handle Ctrl+V before TextEdit. Solo consultar el portapapeles cuando
+        // realmente se presiona el atajo (antes se hacía cada frame).
+        let paste_pressed = ui.input(|i| i.modifiers.command && i.key_pressed(Key::V));
+        if paste_pressed {
+            if self.has_image_in_clipboard() {
+                let ctrl_v = egui::KeyboardShortcut::new(egui::Modifiers::CTRL, egui::Key::V);
+                let cmd_v = egui::KeyboardShortcut::new(egui::Modifiers::COMMAND, egui::Key::V);
+                ui.input_mut(|i| {
+                    i.consume_shortcut(&ctrl_v);
+                    i.consume_shortcut(&cmd_v);
+                });
                 if self.try_paste_image(ui.ctx()) {
                     changed_programmatically = true;
                 }

@@ -951,6 +951,15 @@ pub struct CommonMarkCache {
     pub vega_cache: HashMap<String, String>,
     pub scg_cache: HashMap<String, String>,
     pub latex_cache: HashMap<String, String>,
+    pub latex_error_cache: HashMap<String, String>,
+
+    pub parsed_events: HashMap<
+        u64,
+        (
+            usize,
+            Arc<Vec<(pulldown_cmark::Event<'static>, std::ops::Range<usize>)>>,
+        ),
+    >,
 }
 
 #[allow(clippy::derivable_impls)]
@@ -968,6 +977,8 @@ impl Default for CommonMarkCache {
             vega_cache: HashMap::new(),
             scg_cache: HashMap::new(),
             latex_cache: HashMap::new(),
+            latex_error_cache: HashMap::new(),
+            parsed_events: HashMap::new(),
         }
     }
 }

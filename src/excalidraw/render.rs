@@ -86,16 +86,18 @@ fn draw_stroke(painter: &egui::Painter, pts: Vec<Pos2>, s: Stroke, st: &str, sc:
     if pts.len() < 2 {
         return;
     }
-    let mut fp = pts.clone();
-    if cl {
-        fp.push(pts[0]);
-    }
     match st {
-        "dashed" => {
-            painter.add(Shape::dashed_line(&fp, s, 10.0 * sc, 10.0 * sc));
-        }
-        "dotted" => {
-            painter.add(Shape::dashed_line(&fp, s, 2.0 * sc, 6.0 * sc));
+        "dashed" | "dotted" => {
+            let dash_len = if st == "dashed" { 10.0 * sc } else { 2.0 * sc };
+            let gap_len = if st == "dashed" { 10.0 * sc } else { 6.0 * sc };
+            if cl {
+                let first = pts[0];
+                let mut fp = pts;
+                fp.push(first);
+                painter.add(Shape::dashed_line(&fp, s, dash_len, gap_len));
+            } else {
+                painter.add(Shape::dashed_line(&pts, s, dash_len, gap_len));
+            }
         }
         _ => {
             if cl {
@@ -104,7 +106,7 @@ fn draw_stroke(painter: &egui::Painter, pts: Vec<Pos2>, s: Stroke, st: &str, sc:
                 painter.add(Shape::line(pts, s));
             }
         }
-    };
+    }
 }
 
 fn draw_arrow_head(painter: &egui::Painter, end: Pos2, prev: Pos2, sc: f32, s: Stroke) {
@@ -198,14 +200,22 @@ pub fn draw_element<F>(
         }
         "line" | "arrow" | "draw" | "freedraw" => {
             if !el.points.is_empty() {
-                let raw: Vec<Pos2> = el.points.iter().map(|p| Pos2::new(p[0], p[1])).collect();
-                let sp = tr(&raw);
-                draw_stroke(painter, sp.clone(), s, &el.stroke_style, sc, false);
+                let sp: Vec<Pos2> = el
+                    .points
+                    .iter()
+                    .map(|p| to_screen(cw + rot * (Pos2::new(p[0], p[1]) - Pos2::new(cl.x, cl.y))))
+                    .collect();
+
                 if let Some(at) = &el.end_arrowhead {
                     if at == "arrow" && sp.len() >= 2 {
-                        draw_arrow_head(painter, sp[sp.len() - 1], sp[sp.len() - 2], sc, s);
+                        let last = sp[sp.len() - 1];
+                        let prev = sp[sp.len() - 2];
+                        draw_stroke(painter, sp, s, &el.stroke_style, sc, false);
+                        draw_arrow_head(painter, last, prev, sc, s);
+                        return;
                     }
                 }
+                draw_stroke(painter, sp, s, &el.stroke_style, sc, false);
             }
         }
         "text" => {
