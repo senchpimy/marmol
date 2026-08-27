@@ -1,10 +1,68 @@
 use json::{object, JsonValue};
+use std::collections::HashMap;
 use std::fs;
 use std::fs::File;
 use std::io::Read;
 use std::io::Write;
 use std::path::Path;
+use std::sync::{Mutex, OnceLock};
+use std::time::SystemTime;
 use walkdir::WalkDir;
+
+fn content_cache() -> &'static Mutex<HashMap<String, (SystemTime, String)>> {
+    static CACHE: OnceLock<Mutex<HashMap<String, (SystemTime, String)>>> = OnceLock::new();
+    CACHE.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
+/// Devuelve la fecha de modificación de un archivo (None si no existe o falla el stat).
+pub fn file_modified(file_name: &str) -> Option<SystemTime> {
+    fs::metadata(file_name).and_then(|m| m.modified()).ok()
+}
+
+/// Lee un archivo pero solo lo vuelve a leer de disco si su fecha de modificación cambió.
+/// Actúa como un "watcher" ligero basado en mtime: el I/O de disco solo ocurre cuando
+/// el archivo fue modificado realmente, no en cada frame.
+pub fn read_file_cached(file_name: &str) -> String {
+    let modified = file_modified(file_name);
+    if let Some(m) = modified {
+        let cache = content_cache();
+        {
+            let guard = cache.lock().unwrap();
+            if let Some((cached_m, content)) = guard.get(file_name) {
+                if *cached_m == m {
+                    return content.clone();
+                }
+            }
+        }
+        let content = read_file(file_name);
+        cache
+            .lock()
+            .unwrap()
+            .insert(file_name.to_string(), (m, content.clone()));
+        content
+    } else {
+        read_file(file_name)
+    }
+}
+
+/// Devuelve la ruta canónica de un archivo, cacheando el resultado (evita
+/// syscalls `canonicalize` repetidas en cada frame).
+pub fn canonicalize_cached(path: &str) -> String {
+    static CACHE: OnceLock<Mutex<HashMap<String, String>>> = OnceLock::new();
+    let cache = CACHE.get_or_init(|| Mutex::new(HashMap::new()));
+    if let Some(c) = cache.lock().unwrap().get(path) {
+        return c.clone();
+    }
+    let canon = Path::new(path)
+        .canonicalize()
+        .map(|p| p.to_string_lossy().to_string())
+        .unwrap_or_else(|_| path.to_string());
+    cache
+        .lock()
+        .unwrap()
+        .insert(path.to_string(), canon.clone());
+    canon
+}
 
 pub fn delete_file(trgt: &str) -> bool {
     //let path_to_delete = trgt.to_string();
