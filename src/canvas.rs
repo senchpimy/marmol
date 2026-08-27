@@ -210,6 +210,7 @@ pub struct CanvasGui {
     color_cache: ColorCache,
     node_index: HashMap<String, usize>, // Para búsquedas O(1)
     visible_nodes: Vec<usize>,          // Nodos visibles en el viewport
+    dragging: bool,
 }
 
 impl Default for CanvasGui {
@@ -229,6 +230,7 @@ impl Default for CanvasGui {
             color_cache: ColorCache::new(),
             node_index: HashMap::new(),
             visible_nodes: Vec::new(),
+            dragging: false,
         }
     }
 }
@@ -343,6 +345,9 @@ impl CanvasGui {
                 // 3. NODES (solo los visibles)
                 let interactions = self.draw_nodes_optimized(ui, vault);
 
+                if interactions.dragging {
+                    self.dragging = true;
+                }
                 if interactions.moved {
                     moved = true;
                 }
@@ -472,6 +477,13 @@ impl CanvasGui {
 
         if moved {
             self.is_dirty = true;
+            let pointer_down = ui.input(|i| i.pointer.primary_down());
+            if !self.dragging && !pointer_down {
+                self.save();
+            }
+        }
+        if self.dragging && !ui.input(|i| i.pointer.primary_down()) {
+            self.dragging = false;
             self.save();
         }
 
@@ -601,6 +613,7 @@ impl CanvasGui {
 
                     if interact.dragged_by(PointerButton::Primary) && !curr_drag {
                         let delta = interact.drag_delta();
+                        result_ref.dragging = true;
                         if is_selected {
                             result_ref.drag_delta = Some(delta);
                         } else {
@@ -926,6 +939,7 @@ impl CanvasGui {
 #[derive(Default)]
 struct NodeInteractions {
     moved: bool,
+    dragging: bool,
     new_drag: Option<(String, String)>,
     new_selection: Option<String>,
     new_editing: Option<String>,

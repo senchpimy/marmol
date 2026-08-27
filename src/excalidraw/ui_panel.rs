@@ -64,13 +64,10 @@ pub fn show_properties_panel(ui: &mut Ui, selected_element: Option<&mut Excalidr
 
             // Grosor
             ui.label("Grosor:");
-            if ui
-                .add(
-                    egui::Slider::new(&mut props.stroke_width, 1..=20)
-                        .show_value(true),
-                )
-                .changed()
-            {
+            let stroke_resp = ui.add(
+                egui::Slider::new(&mut props.stroke_width, 1..=20).show_value(true),
+            );
+            if stroke_resp.drag_stopped() || (stroke_resp.changed() && !stroke_resp.dragged()) {
                 ch = true;
             }
             ui.end_row();
@@ -151,14 +148,12 @@ pub fn show_properties_panel(ui: &mut Ui, selected_element: Option<&mut Excalidr
 
             // Opacidad
             ui.label("Opacidad:");
-            if ui
-                .add(
-                    egui::Slider::new(&mut props.opacity, 0..=100)
-                        .show_value(true)
-                        .suffix("%"),
-                )
-                .changed()
-            {
+            let opacity_resp = ui.add(
+                egui::Slider::new(&mut props.opacity, 0..=100)
+                    .show_value(true)
+                    .suffix("%"),
+            );
+            if opacity_resp.drag_stopped() || (opacity_resp.changed() && !opacity_resp.dragged()) {
                 ch = true;
             }
             ui.end_row();

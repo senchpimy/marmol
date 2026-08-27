@@ -104,6 +104,7 @@ pub struct IncomeGui {
     gastos_cat: HashMap<usize, f32>,
     ingresos_cat_tot: f32,
     gastos_cat_tot: f32,
+    dirty: bool,
 }
 
 impl Default for IncomeGui {
@@ -137,6 +138,7 @@ impl Default for IncomeGui {
             gastos_cat: HashMap::new(),
             ingresos_cat_tot: 0.0,
             gastos_cat_tot: 0.0,
+            dirty: false,
         }
     }
 }
@@ -240,7 +242,9 @@ impl IncomeGui {
             Ventana::Categorias => self.canvas(ui, seed_id),
         });
 
-        self.save();
+        if self.dirty {
+            self.save();
+        }
     }
 
     fn view_normal(&mut self, ui: &mut egui::Ui, seed_id: Id) {
@@ -317,13 +321,22 @@ impl IncomeGui {
             // ... (rest of function remains same, just passing seed_id if called internally)
 
             ui.horizontal(|ui| {
-                egui::widgets::color_picker::color_edit_button_rgb(
+                if egui::widgets::color_picker::color_edit_button_rgb(
                     ui,
                     &mut self.json_content.colores[self.valor],
-                );
-                ui.add(egui::TextEdit::singleline(
-                    &mut self.json_content.categorias[self.valor],
-                ));
+                )
+                .changed()
+                {
+                    self.dirty = true;
+                }
+                if ui
+                    .add(egui::TextEdit::singleline(
+                        &mut self.json_content.categorias[self.valor],
+                    ))
+                    .changed()
+                {
+                    self.dirty = true;
+                }
             });
 
             ui.separator();
@@ -343,6 +356,7 @@ impl IncomeGui {
                     self.categorias_string = String::new();
 
                     self.valor = self.json_content.categorias.len() - 1;
+                    self.dirty = true;
                 }
             }
 
@@ -361,6 +375,7 @@ impl IncomeGui {
                         }
                     }
                     self.valor = 0;
+                    self.dirty = true;
                 }
                 self.editar_index = -1;
             }
@@ -453,6 +468,7 @@ impl IncomeGui {
             self.get_points();
             self.update_categorias();
             self.cambiar = false;
+            self.dirty = true;
         }
 
         ui.separator();
@@ -472,7 +488,7 @@ impl IncomeGui {
         });
     }
 
-    pub fn save(&self) {
+    pub fn save(&mut self) {
         if self.path.is_empty() || !Path::new(&self.path).exists() {
             return;
         }
@@ -482,6 +498,7 @@ impl IncomeGui {
                 let _ = file2.write_all(conts.as_bytes());
             }
         }
+        self.dirty = false;
     }
 
     pub fn add_record(&mut self, ui: &mut egui::Ui, seed_id: Id) {
@@ -580,6 +597,7 @@ impl IncomeGui {
                 self.error = String::new();
                 self.update_categorias();
                 self.get_points();
+                self.dirty = true;
             }
             Err(_) => self.error = String::from("El monto debe ser numérico"),
         }
