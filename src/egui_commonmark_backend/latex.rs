@@ -149,7 +149,8 @@ fn render_to_svg(latex_input: &str, inline: bool, color_hex: &str, font_size: f3
 
     let world = MinimalWorld::new(typst_code, font_data);
 
-    match typst::compile(&world).output {
+    let t_compile = std::time::Instant::now();
+    let out = match typst::compile(&world).output {
         Ok(document) => {
             if document.pages.is_empty() {
                 return Err("No se generaron páginas".to_string());
@@ -164,5 +165,11 @@ fn render_to_svg(latex_input: &str, inline: bool, color_hex: &str, font_size: f3
             }
             Err(msg)
         }
-    }
+    };
+    eprintln!(
+        "[TIMING] typst compile {:?} for '{}'",
+        t_compile.elapsed(),
+        &latex_input[..latex_input.len().min(40)]
+    );
+    out
 }

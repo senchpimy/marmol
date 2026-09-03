@@ -12,6 +12,8 @@ use std::path::Path;
 extern crate json;
 extern crate log;
 
+static FIRST_UI: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(true);
+
 pub mod command_palette;
 pub mod configuraciones;
 pub mod canvas;
@@ -107,14 +109,19 @@ pub struct Marmol {
 
 impl Marmol {
     pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
+        let t0 = std::time::Instant::now();
         let font_size = configuraciones::load_context();
+        eprintln!("[TIMING] load_context: {:?}", t0.elapsed());
 
         let dock_style = crate::theme::load_and_apply_theme(&cc.egui_ctx);
+        eprintln!("[TIMING] load_and_apply_theme: {:?}", t0.elapsed());
 
         // Load the full program state
         let (initial_state, config_dir_path) = configuraciones::load_program_state();
+        eprintln!("[TIMING] load_program_state: {:?}", t0.elapsed());
 
         let mut app = Self::from_program_state(initial_state, &cc.egui_ctx);
+        eprintln!("[TIMING] from_program_state: {:?}", t0.elapsed());
         app.font_size = font_size; // Set font_size after loading state
         app.config_path = config_dir_path; // Set config_path after loading state
         app.dock_style = dock_style;
@@ -227,6 +234,8 @@ impl Default for Marmol {
 
 impl eframe::App for Marmol {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
+        let t_frame = std::time::Instant::now();
+        let is_first = FIRST_UI.load(std::sync::atomic::Ordering::Relaxed);
         let ctx = ui.ctx().clone();
         let zoom_actual = ctx.zoom_factor();
         if (zoom_actual - self.zoom_factor).abs() > 1e-3 {
@@ -459,10 +468,16 @@ tags: [excalidraw]
                 self.enable_icon_folder,
                 &mut self.icon_selector,
             );
+            if is_first {
+                eprintln!("[TIMING] after left_side_menu: {:?}", t_frame.elapsed());
+            }
 
             // Panel derecho del índice (TOC) al mismo nivel que el explorador.
             // Siempre visible: conserva su espacio aunque no haya markdown activo.
             let active_toc = self.tabs.active_view_toc();
+            if is_first {
+                eprintln!("[TIMING] after active_view_toc: {:?}", t_frame.elapsed());
+            }
             let (tab_id, headings) = active_toc
                 .map(|(id, h)| (id, h))
                 .unwrap_or((0, Vec::new()));
@@ -578,6 +593,9 @@ tags: [excalidraw]
                     &mut self.left_controls.icon_manager,
                     &self.dock_style,
                 );
+                if is_first {
+                    eprintln!("[TIMING] after tabs.ui: {:?}", t_frame.elapsed());
+                }
                 ctx.send_viewport_cmd(egui::ViewportCommand::Title(format!(
                     "Marmol - {}",
                     self.current_file.split("/").last().unwrap()
@@ -685,6 +703,14 @@ tags: [excalidraw]
             height: rect.height(),
             btn_size,
         };
+
+        {
+            static FIRST_UI: std::sync::atomic::AtomicBool =
+                std::sync::atomic::AtomicBool::new(true);
+            if FIRST_UI.swap(false, std::sync::atomic::Ordering::Relaxed) {
+                eprintln!("[TIMING] first ui() frame duration: {:?}", t_frame.elapsed());
+            }
+        }
     }
 
     fn on_exit(&mut self) {

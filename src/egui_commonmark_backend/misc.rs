@@ -1116,6 +1116,7 @@ pub fn scroll_cache<'a>(cache: &'a mut CommonMarkCache, id: &egui::Id) -> &'a mu
 /// Should be called before any rendering
 pub fn prepare_show(cache: &mut CommonMarkCache, ctx: &egui::Context) {
     if !cache.has_installed_loaders {
+        let t = std::time::Instant::now();
         // Even though the install function can be called multiple times, its not the cheapest
         // so we ensure that we only call it once.
         // This could be done at the creation of the cache, however it is better to keep the
@@ -1126,11 +1127,13 @@ pub fn prepare_show(cache: &mut CommonMarkCache, ctx: &egui::Context) {
         crate::egui_commonmark_backend::data_url_loader::install_loader(ctx);
 
         egui_extras::install_image_loaders(ctx);
+        eprintln!("[TIMING] prepare_show: install_image_loaders {:?}", t.elapsed());
         // Nuestro loader de SVG se instala después para que egui lo pruebe primero
         // (egui recorre los loaders en orden inverso de registro). Configura un
         // fontdb que resuelve las familias genéricas CSS de las fuentes del
         // sistema, algo que el SvgLoader de egui_extras no hace.
         crate::egui_commonmark_backend::svg_loader::install_svg_loader(ctx);
+        eprintln!("[TIMING] prepare_show: install_svg_loader {:?}", t.elapsed());
         cache.has_installed_loaders = true;
     }
 
