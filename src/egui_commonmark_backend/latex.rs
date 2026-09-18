@@ -2,6 +2,7 @@ use crate::egui_commonmark_backend::misc::CommonMarkCache;
 use egui::{Color32, RichText, Ui};
 use rust_embed::RustEmbed;
 use std::path::PathBuf;
+use std::sync::OnceLock;
 use time::OffsetDateTime;
 use typst::diag::{FileError, FileResult};
 use typst::foundations::{Bytes, Datetime};
@@ -14,26 +15,46 @@ use typst::{Library, World};
 #[folder = "assets/fonts/"]
 struct Asset;
 
-struct MinimalWorld {
+/// Partes del `World` de Typst que son idénticas para todas las fórmulas:
+/// la librería estándar, el índice de fuentes y la fuente ya parseada.
+///
+/// Se construyen una sola vez. Antes se reconstruían por cada fórmula, lo que
+/// en debug costaba ~24ms por fórmula (descomprimir y parsear la fuente +
+/// `Library::default()`), haciendo que un documento con muchas fórmulas tardara
+/// varios segundos en el primer render.
+struct TypstParts {
     library: LazyHash<Library>,
     book: LazyHash<FontBook>,
-    fonts: Vec<Font>,
+    font: Font,
+}
+
+fn typst_parts() -> &'static TypstParts {
+    static PARTS: OnceLock<TypstParts> = OnceLock::new();
+    PARTS.get_or_init(|| {
+        let font_file = Asset::get("NotoSansMath-Regular.ttf")
+            .expect("No se encontró la fuente NotoSansMath en el binario");
+        let font_data = font_file.data.to_vec();
+        let font = Font::new(Bytes::from(font_data), 0).expect("Fuente inválida");
+        let book = FontBook::from_fonts(std::slice::from_ref(&font));
+        TypstParts {
+            library: LazyHash::new(Library::default()),
+            book: LazyHash::new(book),
+            font,
+        }
+    })
+}
+
+struct MinimalWorld {
+    parts: &'static TypstParts,
     source: Source,
     time: time::OffsetDateTime,
 }
 
 impl MinimalWorld {
-    fn new(source_text: String, font_data: Vec<u8>) -> Self {
-        let font = Font::new(Bytes::from(font_data), 0).expect("Fuente inválida");
-        let fonts = vec![font];
-        let book = FontBook::from_fonts(&fonts);
-        let source = Source::detached(source_text);
-
+    fn new(source_text: String) -> Self {
         Self {
-            library: LazyHash::new(Library::default()),
-            book: LazyHash::new(book),
-            fonts,
-            source,
+            parts: typst_parts(),
+            source: Source::detached(source_text),
             time: OffsetDateTime::now_utc(),
         }
     }
@@ -41,10 +62,10 @@ impl MinimalWorld {
 
 impl World for MinimalWorld {
     fn library(&self) -> &LazyHash<Library> {
-        &self.library
+        &self.parts.library
     }
     fn book(&self) -> &LazyHash<FontBook> {
-        &self.book
+        &self.parts.book
     }
     fn main(&self) -> FileId {
         self.source.id()
@@ -60,7 +81,11 @@ impl World for MinimalWorld {
         Err(FileError::NotFound(PathBuf::new()))
     }
     fn font(&self, index: usize) -> Option<Font> {
-        self.fonts.get(index).cloned()
+        if index == 0 {
+            Some(self.parts.font.clone())
+        } else {
+            None
+        }
     }
     fn today(&self, _offset: Option<i64>) -> Option<Datetime> {
         Some(Datetime::Date(self.time.date()))
@@ -120,16 +145,14 @@ pub fn render(ui: &mut Ui, cache: &mut CommonMarkCache, latex: &str, inline: boo
 }
 
 fn render_to_svg(latex_input: &str, inline: bool, color_hex: &str, font_size: f32) -> Result<String, String> {
-    let font_file = Asset::get("NotoSansMath-Regular.ttf")
-        .ok_or("No se encontró la fuente NotoSansMath en el binario")?;
-    let font_data = font_file.data.to_vec();
+    // Fuente + librería + índice de fuentes se reutilizan (se construyen una vez).
+    let parts = typst_parts();
 
     // Convertir LaTeX a Typst Math
     let clean_latex = latex_input.replace('\n', "");
     let typst_math = crate::format::latex_a_typst(&clean_latex);
 
-    let font = Font::new(Bytes::from(font_data.clone()), 0).ok_or("Fuente inválida")?;
-    let font_family = font.info().family.clone();
+    let font_family = parts.font.info().family.clone();
 
     let margin = if inline {
         "0.5pt"
@@ -147,10 +170,9 @@ fn render_to_svg(latex_input: &str, inline: bool, color_hex: &str, font_size: f3
         margin, font_family, font_size, color_hex, font_family, color_hex, typst_math
     );
 
-    let world = MinimalWorld::new(typst_code, font_data);
+    let world = MinimalWorld::new(typst_code);
 
-    let t_compile = std::time::Instant::now();
-    let out = match typst::compile(&world).output {
+    match typst::compile(&world).output {
         Ok(document) => {
             if document.pages.is_empty() {
                 return Err("No se generaron páginas".to_string());
@@ -165,11 +187,5 @@ fn render_to_svg(latex_input: &str, inline: bool, color_hex: &str, font_size: f3
             }
             Err(msg)
         }
-    };
-    eprintln!(
-        "[TIMING] typst compile {:?} for '{}'",
-        t_compile.elapsed(),
-        &latex_input[..latex_input.len().min(40)]
-    );
-    out
+    }
 }
