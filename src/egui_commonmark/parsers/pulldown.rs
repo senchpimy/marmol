@@ -168,7 +168,6 @@ impl CommonMarkViewerInternal {
         text: &str,
         split_points_id: Option<Id>,
     ) -> (egui::InnerResponse<()>, Vec<CheckboxClickEvent>) {
-        let t_show = std::time::Instant::now();
         let max_width = options.max_width(ui);
         let layout = egui::Layout::left_to_right(egui::Align::BOTTOM).with_main_wrap(true);
 
@@ -177,12 +176,9 @@ impl CommonMarkViewerInternal {
             let height = ui.text_style_height(&TextStyle::Body);
             ui.set_row_height(height);
 
-            let t_parse = std::time::Instant::now();
             let cached = cached_events(cache, text);
             let mut events = cached.iter().cloned().enumerate().peekable();
-            eprintln!("[TIMING] cached_events: {:?}", t_parse.elapsed());
 
-            let t_loop = std::time::Instant::now();
             while let Some((index, (e, src_span))) = events.next() {
                 let start_position = ui.next_widget_position();
                 let is_element_end = matches!(e, pulldown_cmark::Event::End(_));
@@ -216,15 +212,12 @@ impl CommonMarkViewerInternal {
                     self.line.should_not_start_newline_forced = false;
                 }
             }
-            eprintln!("[TIMING] events loop: {:?}", t_loop.elapsed());
 
             if let Some(source_id) = split_points_id {
                 scroll_cache(cache, &source_id).page_size =
                     Some(ui.next_widget_position().to_vec2());
             }
         });
-
-        eprintln!("[TIMING] commonmark show: {:?}", t_show.elapsed());
 
         (re, std::mem::take(&mut self.checkbox_events))
     }

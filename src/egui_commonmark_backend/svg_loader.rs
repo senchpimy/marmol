@@ -144,7 +144,6 @@ fn load_svg_bytes_with_size(
 ) -> Result<ColorImage, String> {
     use egui::Vec2;
 
-    let t = std::time::Instant::now();
     let rtree = Tree::from_data(svg_bytes, options).map_err(|err| err.to_string())?;
 
     let source_size = Vec2::new(rtree.size().width(), rtree.size().height());
@@ -181,14 +180,6 @@ fn load_svg_bytes_with_size(
         &rtree,
         Transform::from_scale(w as f32 / source_size.x, h as f32 / source_size.y),
         &mut pixmap.as_mut(),
-    );
-
-    eprintln!(
-        "[TIMING] svg rasterize {:?} ({}x{}, {} bytes svg)",
-        t.elapsed(),
-        w,
-        h,
-        svg_bytes.len()
     );
 
     Ok(ColorImage::from_rgba_premultiplied([w as _, h as _], pixmap.data())
