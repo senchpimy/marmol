@@ -30,10 +30,10 @@ fn get_tokio_runtime() -> &'static tokio::runtime::Runtime {
     })
 }
 
-static SCG_RESULTS: OnceLock<Arc<Mutex<HashMap<String, String>>>> = OnceLock::new();
+static TIKZ_RESULTS: OnceLock<Arc<Mutex<HashMap<String, String>>>> = OnceLock::new();
 
-fn get_scg_results() -> Arc<Mutex<HashMap<String, String>>> {
-    SCG_RESULTS
+fn get_tikz_results() -> Arc<Mutex<HashMap<String, String>>> {
+    TIKZ_RESULTS
         .get_or_init(|| Arc::new(Mutex::new(HashMap::new())))
         .clone()
 }
@@ -46,8 +46,22 @@ fn detectar_librerias_tikz(content: &str) -> Vec<&'static str> {
         }
     };
 
-    if content.contains("cylinder") || content.contains("diamond") {
+    const GEOMETRIC_SHAPES: &[&str] = &[
+        "cylinder", "diamond", "ellipse", "regular polygon", "trapezium", "semicircle",
+        "isosceles triangle", "kite", "dart", "star",
+    ];
+    if GEOMETRIC_SHAPES.iter().any(|s| content.contains(s)) {
         push(&mut libs, "shapes.geometric");
+    }
+    const SYMBOL_SHAPES: &[&str] = &[
+        "cloud", "starburst", "signal", "tape", "magnetic tape",
+    ];
+    if SYMBOL_SHAPES.iter().any(|s| content.contains(s)) {
+        push(&mut libs, "shapes.symbols");
+    }
+    const MISC_SHAPES: &[&str] = &["rounded rectangle", "cross out", "strike out"];
+    if MISC_SHAPES.iter().any(|s| content.contains(s)) {
+        push(&mut libs, "shapes.misc");
     }
     if content.contains("=of") || content.contains(" of ") || content.contains("node distance") {
         push(&mut libs, "positioning");
@@ -103,6 +117,10 @@ fn neutralizar_fuentes_tikz(s: &str) -> String {
     const TEXT_CMDS: &[&str] = &[
         "\\textbf", "\\textit", "\\texttt", "\\emph", "\\textsc", "\\textsl", "\\textrm",
         "\\textsf", "\\textmd", "\\textup",
+        // La negrita matemática (\mathbf) y \boldsymbol usan la fuente cmbx10,
+        // que no está incluida en tikzjax. Se deja solo el contenido para que
+        // el diagrama no falle (mismo criterio que \textbf).
+        "\\mathbf", "\\boldsymbol",
     ];
     const DECL_CMDS: &[&str] = &[
         "\\bfseries", "\\itshape", "\\ttfamily", "\\scshape", "\\slshape", "\\sffamily",
@@ -124,6 +142,40 @@ fn neutralizar_fuentes_tikz(s: &str) -> String {
                 j += 1;
             }
             let name: String = chars[i..j].iter().collect();
+
+            // \text{...} (amsmath) no está disponible: cargar amsmath rompe
+            // tikzjax porque falta la fuente cmex7. Se traduce a \mbox{...},
+            // que es LaTeX base, respeta espacios y admite acentos.
+            if name == "\\text" {
+                let mut k = j;
+                while k < chars.len() && chars[k] == ' ' {
+                    k += 1;
+                }
+                if k < chars.len() && chars[k] == '{' {
+                    let mut depth = 0;
+                    let mut m = k;
+                    while m < chars.len() {
+                        if chars[m] == '{' {
+                            depth += 1;
+                        } else if chars[m] == '}' {
+                            depth -= 1;
+                            if depth == 0 {
+                                break;
+                            }
+                        }
+                        m += 1;
+                    }
+                    if depth == 0 && m < chars.len() {
+                        let inner: String = chars[k + 1..m].iter().collect();
+                        let inner = neutralizar_fuentes_tikz(&inner);
+                        out.push_str("\\mbox{");
+                        out.push_str(&inner);
+                        out.push('}');
+                        i = m + 1;
+                        continue;
+                    }
+                }
+            }
 
             if TEXT_CMDS.contains(&name.as_str()) {
                 let mut k = j;
@@ -174,8 +226,53 @@ fn neutralizar_fuentes_tikz(s: &str) -> String {
     out
 }
 
+fn calcular_spec_columnas(cuerpo: &str) -> String {
+    let max_ampersand = cuerpo.lines().map(|l| l.matches('&').count()).max().unwrap_or(0);
+    let columnas = max_ampersand + 1;
+    let mut spec = String::new();
+    for c in 0..columnas {
+        spec.push(if c % 2 == 0 { 'r' } else { 'l' });
+    }
+    if spec.is_empty() {
+        "rl".to_string()
+    } else {
+        spec
+    }
+}
+
+/// Los entornos de amsmath (`aligned`, `gathered`, `cases`) no están
+/// disponibles porque cargar amsmath rompe tikzjax (falta cmex7). Se traducen
+/// a `array`, que forma parte del LaTeX base y sí funciona.
+fn reescribir_entornos_amsmath(input: &str) -> String {
+    let mut s = input.to_string();
+
+    while let Some(start) = s.find("\\begin{aligned}") {
+        let Some(rel) = s[start..].find("\\end{aligned}") else {
+            break;
+        };
+        let cuerpo_inicio = start + "\\begin{aligned}".len();
+        let cuerpo_fin = start + rel;
+        let spec = calcular_spec_columnas(&s[cuerpo_inicio..cuerpo_fin]);
+        s.replace_range(
+            start..cuerpo_inicio,
+            &format!("\\begin{{array}}{{{}}}", spec),
+        );
+        if let Some(e) = s.find("\\end{aligned}") {
+            s.replace_range(e..e + "\\end{aligned}".len(), "\\end{array}");
+        }
+    }
+
+    s = s.replace("\\begin{gathered}", "\\begin{array}{c}");
+    s = s.replace("\\end{gathered}", "\\end{array}");
+    s = s.replace("\\begin{cases}", "\\left\\{\\begin{array}{ll}");
+    s = s.replace("\\end{cases}", "\\end{array}\\right.");
+
+    s
+}
+
 pub fn preparar_tikz(content: &str) -> String {
     let content = neutralizar_fuentes_tikz(content);
+    let content = reescribir_entornos_amsmath(&content);
 
     // \blacksquare (amssymb) requiere una fuente que no está incluida en
     // tikzjax, lo que rompe la compilación. Se sustituye por un cuadradito
@@ -556,15 +653,16 @@ impl CodeBlock {
     ) {
         if let Some(lang) = &self.lang {
             let lang_lower = lang.to_lowercase();
+            let is_tikz = lang_lower == "tikz" || lang_lower == "latex";
             if lang_lower == "mermaid"
                 || lang_lower == "vega"
                 || lang_lower == "vega-lite"
-                || lang_lower == "scg"
+                || is_tikz
             {
                 let cache_map = if lang_lower == "mermaid" {
                     &mut cache.mermaid_cache
-                } else if lang_lower == "scg" {
-                    &mut cache.scg_cache
+                } else if is_tikz {
+                    &mut cache.tikz_cache
                 } else {
                     &mut cache.vega_cache
                 };
@@ -576,8 +674,8 @@ impl CodeBlock {
                     if let Some(svg) = results_lock.remove(&self.content) {
                         cache_map.insert(self.content.clone(), svg);
                     }
-                } else if lang_lower == "scg" {
-                    let results = get_scg_results();
+                } else if is_tikz {
+                    let results = get_tikz_results();
                     let mut results_lock = results.lock().unwrap();
                     if let Some(svg) = results_lock.remove(&self.content) {
                         cache_map.insert(self.content.clone(), svg);
@@ -624,13 +722,13 @@ impl CodeBlock {
                                 None
                             }
                         }
-                    } else if lang_lower == "scg" {
+                    } else if is_tikz {
                         // Marcar como cargando para evitar peticiones infinitas cada frame
                         cache_map.insert(self.content.clone(), "LOADING".to_string());
 
                         // TikZ rendering local via rust_tikz (tikzjax)
                         let content = self.content.clone();
-                        let results = get_scg_results();
+                        let results = get_tikz_results();
                         let rt = get_tokio_runtime();
                         let ctx = ui.ctx().clone();
 
@@ -949,7 +1047,7 @@ pub struct CommonMarkCache {
     pub(self) has_installed_loaders: bool,
     pub mermaid_cache: HashMap<String, String>,
     pub vega_cache: HashMap<String, String>,
-    pub scg_cache: HashMap<String, String>,
+    pub tikz_cache: HashMap<String, String>,
     pub latex_cache: HashMap<String, String>,
     pub latex_error_cache: HashMap<String, String>,
 
@@ -975,7 +1073,7 @@ impl Default for CommonMarkCache {
             has_installed_loaders: false,
             mermaid_cache: HashMap::new(),
             vega_cache: HashMap::new(),
-            scg_cache: HashMap::new(),
+            tikz_cache: HashMap::new(),
             latex_cache: HashMap::new(),
             latex_error_cache: HashMap::new(),
             parsed_events: HashMap::new(),
