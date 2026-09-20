@@ -65,6 +65,7 @@ impl LeftControls {
         window_size: &MShape,
         enable_icons: bool,
         icon_selector: &mut IconSelector,
+        left_panel_width: &mut f32,
     ) {
         // Carga perezosa de iconos SOLO al cambiar de vault (no recargar cada frame
         // si el vault no tiene iconos).
@@ -74,7 +75,7 @@ impl LeftControls {
         }
 
         let left_panel = egui::Panel::left("buttons left menu")
-            .default_size(100.)
+            .default_size(*left_panel_width)
             .min_size(100.)
             .max_size(300.);
         left_panel.show_collapsible(ui, colapse, |ui| {
@@ -88,6 +89,17 @@ impl LeftControls {
                 icon_selector,
             );
         });
+
+        // Persistir el ancho actual: `PanelState` conserva el último tamaño
+        // expandido (no se sobrescribe cuando el panel está colapsado).
+        if let Some(state) =
+            egui::PanelState::load(ui.ctx(), egui::Id::new("buttons left menu"))
+        {
+            let width = state.size().x;
+            if width.is_finite() && width > 0.0 {
+                *left_panel_width = width;
+            }
+        }
     }
 
     #[allow(clippy::too_many_arguments)]

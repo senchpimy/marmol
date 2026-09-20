@@ -84,6 +84,7 @@ pub struct Marmol {
     font_size: f32,
     center_size: f32,
     center_size_remain: f32,
+    left_panel_width: f32,
     sort_files: bool,
     tabs: tabs::Tabs,
 
@@ -136,6 +137,7 @@ impl Marmol {
             tabs: tabs::Tabs::new_from_dock_state(state.dock_state),
             center_size: state.center_size,
             center_size_remain: (1.0 - state.center_size) / 2.0,
+            left_panel_width: state.left_panel_width,
             font_size: 12.0,
             marker: Graph::new(&state.vault, ctx),
             new_file_str: String::new(),
@@ -188,6 +190,7 @@ impl Default for Marmol {
             tabs: tabs::Tabs::new_empty(),
             center_size: 0.8,
             center_size_remain: 0.1,
+            left_panel_width: 100.0,
             font_size: 12.0,
             marker: Graph::new("", &egui::Context::default()), // Default empty vault
             new_file_str: String::new(),
@@ -458,6 +461,7 @@ tags: [excalidraw]
                 &self.window_size,
                 self.enable_icon_folder,
                 &mut self.icon_selector,
+                &mut self.left_panel_width,
             );
 
             // Panel derecho del índice (TOC) al mismo nivel que el explorador.
@@ -706,6 +710,7 @@ impl Marmol {
             enable_icon_folder: self.enable_icon_folder,
             android_storage: Some(self.android_storage),
             zoom_factor: self.zoom_factor,
+            left_panel_width: self.left_panel_width,
         };
         configuraciones::save_program_state(&state);
 

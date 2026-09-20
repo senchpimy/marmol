@@ -35,10 +35,16 @@ pub struct MarmolProgramState {
     pub android_storage: Option<AndroidStorage>,
     #[serde(default = "default_zoom_factor")]
     pub zoom_factor: f32,
+    #[serde(default = "default_left_panel_width")]
+    pub left_panel_width: f32,
 }
 
 fn default_zoom_factor() -> f32 {
     1.0
+}
+
+fn default_left_panel_width() -> f32 {
+    100.0
 }
 
 impl Default for MarmolProgramState {
@@ -65,6 +71,7 @@ impl Default for MarmolProgramState {
             enable_icon_folder: default_enable_icon_folder,
             android_storage: Some(AndroidStorage::Unselected),
             zoom_factor: default_zoom_factor(),
+            left_panel_width: default_left_panel_width(),
         }
     }
 }
