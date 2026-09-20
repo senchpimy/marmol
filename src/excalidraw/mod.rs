@@ -1435,6 +1435,10 @@ tags: [excalidraw]
 
                                                                                                                             let c_idx = p_idx - 100;
 
+                                                                                                                            let old_w = el.width;
+
+                                                                                                                            let old_h = el.height;
+
                                                                                                                             let rot =
 
                                                                                                                                 egui::emath::Rot2::from_angle(el.angle);
@@ -1586,6 +1590,17 @@ tags: [excalidraw]
                                                                                                                             el.width = new_width;
 
                                                                                                                             el.height = new_height;
+
+                                                                                                                            // Escalar los puntos del trazo (line/arrow/freedraw) junto
+                                                                                                                            // con la caja de selección; si no, la caja crece pero el trazo no.
+                                                                                                                            if !el.points.is_empty() {
+                                                                                                                                let sx = if old_w > 0.0 { el.width / old_w } else { 1.0 };
+                                                                                                                                let sy = if old_h > 0.0 { el.height / old_h } else { 1.0 };
+                                                                                                                                for p in &mut el.points {
+                                                                                                                                    p[0] *= sx;
+                                                                                                                                    p[1] *= sy;
+                                                                                                                                }
+                                                                                                                            }
 
                                                                     
 
@@ -1948,7 +1963,6 @@ tags: [excalidraw]
                         dirty = true;
                         save = true;
                     }
-                    self.active_tool = Some(Tool::Selection);
                 }
                 if dirty && !self.selected_indices.is_empty() {
                     save = true;
