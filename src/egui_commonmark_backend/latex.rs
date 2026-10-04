@@ -144,7 +144,7 @@ pub fn render(ui: &mut Ui, cache: &mut CommonMarkCache, latex: &str, inline: boo
     }
 }
 
-fn render_to_svg(latex_input: &str, inline: bool, color_hex: &str, font_size: f32) -> Result<String, String> {
+pub fn render_to_svg(latex_input: &str, inline: bool, color_hex: &str, font_size: f32) -> Result<String, String> {
     // Fuente + librería + índice de fuentes se reutilizan (se construyen una vez).
     let parts = typst_parts();
 

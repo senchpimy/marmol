@@ -279,6 +279,13 @@ pub fn preparar_tikz(content: &str) -> String {
     // coloreable equivalente que sí funciona.
     let content = content.replace("\\blacksquare", "\\rule{1.1ex}{1.1ex}");
 
+    // Símbolos de amsmath no disponibles (cargar amsmath rompe tikzjax por la
+    // fuente cmex7): se traducen a sus equivalentes de LaTeX base.
+    let content = content
+        .replace("\\implies", "\\Rightarrow")
+        .replace("\\impliedby", "\\Leftarrow")
+        .replace("\\iff", "\\Leftrightarrow");
+
     let mut input = content.clone();
     let mut preambulo = String::new();
     if !input.contains("\\usepackage{xcolor}") {

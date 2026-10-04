@@ -41,6 +41,65 @@ pub fn indent(content:&str)->String {
     format!("{}{}",content,ind)
 }
 
+/// Lee un grupo balanceado que empieza en `start` (que debe ser `open`) y
+/// devuelve `(contenido, índice justo después del cierre)`.
+fn leer_grupo(s: &str, start: usize, open: u8, close: u8) -> (String, usize) {
+    let b = s.as_bytes();
+    let mut depth = 0usize;
+    let mut i = start;
+    while i < b.len() {
+        if b[i] == open {
+            depth += 1;
+        } else if b[i] == close {
+            depth -= 1;
+            if depth == 0 {
+                return (s[start + 1..i].to_string(), i + 1);
+            }
+        }
+        i += 1;
+    }
+    (s[start + 1..].to_string(), b.len())
+}
+
+/// `\xrightarrow{etiqueta}` / `\xleftarrow{...}` (amsmath) no los reconoce
+/// tex2typst. Se traducen a `\overset{etiqueta}{\longrightarrow|leftarrow}`,
+/// que sí produce una flecha con la etiqueta encima.
+fn convertir_xarrows(input: &str) -> String {
+    let mut out = String::with_capacity(input.len());
+    let mut i = 0;
+    while i < input.len() {
+        let cmd = if input[i..].starts_with("\\xrightarrow") {
+            Some(("\\xrightarrow".len(), "\\longrightarrow"))
+        } else if input[i..].starts_with("\\xleftarrow") {
+            Some(("\\xleftarrow".len(), "\\longleftarrow"))
+        } else {
+            None
+        };
+
+        if let Some((len, arrow)) = cmd {
+            let mut j = i + len;
+            while j < input.len() && input.as_bytes()[j] == b' ' {
+                j += 1;
+            }
+            if j < input.len() && input.as_bytes()[j] == b'{' {
+                let (etiqueta, end) = leer_grupo(input, j, b'{', b'}');
+                let etiqueta = convertir_xarrows(&etiqueta);
+                out.push_str(&format!("\\overset{{{}}}{{{}}}", etiqueta, arrow));
+                i = end;
+                continue;
+            }
+            out.push_str(arrow);
+            i = j;
+            continue;
+        }
+
+        let ch = input[i..].chars().next().unwrap();
+        out.push(ch);
+        i += ch.len_utf8();
+    }
+    out
+}
+
 pub fn normalizar_latex(latex: &str) -> String {
     let s = latex.replace("\\stackrel", "\\overset");
     let s = buildrel_regex()
@@ -51,6 +110,18 @@ pub fn normalizar_latex(latex: &str) -> String {
     // nombres que tex2typst sí reconoce:
     let s = s.replace("\\blacksquare", "\\mdlgblksquare"); // -> square.filled
     let s = s.replace("\\square", "\\mdlgwhtsquare"); // -> square.stroked
+
+    // \xrightarrow / \xleftarrow -> \overset + flecha larga.
+    let s = convertir_xarrows(&s);
+
+    // \boxed (amsmath) no existe en Typst Math: se deja solo el contenido.
+    let s = s.replace("\\boxed", "");
+
+    // Relaciones no cubiertas por tex2typst.
+    let s = s.replace("\\centernot\\implies", "\\nRightarrow");
+    let s = s.replace("\\centernot\\iff", "\\nLeftrightarrow");
+    let s = s.replace("\\impliedby", "\\Longleftarrow");
+    let s = s.replace("\\centernot", "\\not");
 
     // \pmod{X} -> (mod X). \operatorname{mod} -> op("mod") en Typst.
     let s = pmod_braced_regex()
@@ -126,11 +197,18 @@ fn convertir_big_familia_typst(typst: &str) -> String {
     };
 
     while i < n {
+        // No confundir el sufijo de un símbolo (`union.big`, `sect.big`) con la
+        // palabra de tamaño `\big`: solo se procesan si no van precedidas de `.`
+        // (o de un identificador).
+        let precedido_de_ident = i > 0
+            && (b[i - 1].is_ascii_alphanumeric() || b[i - 1] == b'_' || b[i - 1] == b'.');
         let mut word: Option<&str> = None;
-        for w in BIG_WORDS {
-            if i + w.len() <= n && &b[i..i + w.len()] == w.as_bytes() {
-                word = Some(w);
-                break;
+        if !precedido_de_ident {
+            for w in BIG_WORDS {
+                if i + w.len() <= n && &b[i..i + w.len()] == w.as_bytes() {
+                    word = Some(w);
+                    break;
+                }
             }
         }
         if let Some(w) = word {
@@ -209,21 +287,26 @@ fn convertir_big_familia_typst(typst: &str) -> String {
     out
 }
 
-pub fn latex_a_typst(latex: &str) -> String {
-    // \displaystyle fuerza estilo de visualización: en Typst se traduce a la
-    // función math `display(...)` envolviendo toda la expresión.
-    let has_displaystyle = latex.contains("\\displaystyle");
+fn typst_in_regex() -> &'static regex::Regex {
+    // `\in` se convierte en `in`, y Typst lo parsea como función si va pegado
+    // a un `(` (p. ej. intervalos `(0, 1]`). Se separa con un espacio.
+    static RE: LazyLock<regex::Regex> =
+        LazyLock::new(|| regex::Regex::new(r"(^|[^A-Za-z0-9_])in\(").unwrap());
+    &RE
+}
 
+/// Corrige salidas de tex2typst que Typst no compila:
+/// - `in(` pegado -> `in (` (Typst lo interpretaría como llamada a función).
+fn arreglar_simbolos_typst(typst: &str) -> String {
+    typst_in_regex().replace_all(typst, "${1}in (").into_owned()
+}
+
+pub fn latex_a_typst(latex: &str) -> String {
     let norm = normalizar_latex(latex);
     let out = tex2typst_rs::tex2typst(&norm).unwrap_or(norm);
     let out = out.replace("limits: true", "limits: #true");
-    let out = convertir_big_familia_typst(&out);
-
-    if has_displaystyle {
-        format!("display({})", out)
-    } else {
-        out
-    }
+    let out = arreglar_simbolos_typst(&out);
+    convertir_big_familia_typst(&out)
 }
 
 #[cfg(test)]
