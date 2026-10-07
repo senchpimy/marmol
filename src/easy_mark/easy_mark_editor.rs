@@ -23,6 +23,9 @@ pub struct EasyMarkEditor {
 
     #[serde(skip)]
     highlighter: super::MemoizedEasymarkHighlighter,
+
+    #[serde(skip)]
+    latex_preview_cache: Option<(String, Result<String, String>)>,
 }
 
 impl PartialEq for EasyMarkEditor {
@@ -56,6 +59,7 @@ impl Default for EasyMarkEditor {
             file_path: String::new(),
             collapsed_blocks: HashSet::new(),
             highlighter: Default::default(),
+            latex_preview_cache: None,
         }
     }
 }
@@ -210,6 +214,7 @@ impl EasyMarkEditor {
             .map(|range| usize::from(range.primary.index));
 
         let mut galley_out = None;
+        let mut preview_anchor: Option<(egui::Rect, usize)> = None;
         {
             let highlighter = &mut self.highlighter;
             let collapsed_blocks = &self.collapsed_blocks;
@@ -242,10 +247,12 @@ impl EasyMarkEditor {
                     if let Some(mut ccursor_range) = state.cursor.char_range() {
                         let any_change = shortcuts(ui, self, &mut ccursor_range);
 
+                        let cursor_pos_rect = galley.pos_from_cursor(ccursor_range.primary);
+                        let cursor_rect = cursor_pos_rect.translate(response.rect.min.to_vec2());
+                        preview_anchor =
+                            Some((cursor_rect, usize::from(ccursor_range.primary.index)));
+
                         if response.changed() || any_change {
-                            let cursor_pos_rect = galley.pos_from_cursor(ccursor_range.primary);
-                            let cursor_rect =
-                                cursor_pos_rect.translate(response.rect.min.to_vec2());
                             ui.scroll_to_rect(cursor_rect, Some(egui::Align::Center));
                         }
 
@@ -261,8 +268,53 @@ impl EasyMarkEditor {
             if changed_programmatically {
                 response.mark_changed();
             }
+
+            self.mostrar_preview_latex(ui, &response, preview_anchor);
+
             response
         }
+    }
+
+    /// Mientras el cursor está dentro de una fórmula (`$...$` o `$$...$$`),
+    /// muestra una previsualización de cómo se verá justo debajo del cursor.
+    fn mostrar_preview_latex(
+        &mut self,
+        ui: &egui::Ui,
+        response: &egui::Response,
+        anchor: Option<(egui::Rect, usize)>,
+    ) {
+        if !response.has_focus() {
+            return;
+        }
+        let Some((cursor_rect, char_idx)) = anchor else {
+            return;
+        };
+        let byte_pos = char_a_byte(&self.code, char_idx);
+        let Some(formula) = latex_bajo_cursor(&self.code, byte_pos) else {
+            return;
+        };
+        if formula.trim().is_empty() {
+            return;
+        }
+
+        let pos = egui::pos2(cursor_rect.left(), cursor_rect.bottom() + 6.0);
+        egui::Area::new(egui::Id::new("easymark_latex_preview"))
+            .order(egui::Order::Foreground)
+            .fixed_pos(pos)
+            .constrain(true)
+            .interactable(false)
+            .show(ui.ctx(), |ui| {
+                egui::Frame::popup(ui.style())
+                    .inner_margin(egui::Margin::same(6))
+                    .show(ui, |ui| {
+                        ui.set_max_width(420.0);
+                        crate::sketch::preview::mostrar_preview(
+                            ui,
+                            &mut self.latex_preview_cache,
+                            &formula,
+                        );
+                    });
+            });
     }
 
     fn has_image_in_clipboard(&self) -> bool {
@@ -532,4 +584,51 @@ fn toggle_surrounding(
         ccursor_range.primary.index += advance;
         ccursor_range.secondary.index += advance;
     }
+}
+
+/// Convierte un índice de carácter a un desplazamiento en bytes.
+fn char_a_byte(code: &str, char_idx: usize) -> usize {
+    code.char_indices()
+        .nth(char_idx)
+        .map(|(i, _)| i)
+        .unwrap_or(code.len())
+}
+
+/// Si el cursor está dentro de una fórmula delimitada por `$...$` o `$$...$$`,
+/// devuelve el contenido de la fórmula (aunque todavía no se haya cerrado).
+fn latex_bajo_cursor(code: &str, cursor_byte: usize) -> Option<String> {
+    let bytes = code.as_bytes();
+    let mut i = 0;
+    let mut abierto: Option<(usize, bool)> = None; // (inicio del contenido, es_bloque)
+    while i < bytes.len() {
+        if bytes[i] == b'$' {
+            let start = i;
+            while i < bytes.len() && bytes[i] == b'$' {
+                i += 1;
+            }
+            let run = i - start;
+            match abierto {
+                Some((content_start, es_bloque)) => {
+                    let cierra = if es_bloque { run >= 2 } else { run >= 1 };
+                    if cierra {
+                        if cursor_byte >= content_start && cursor_byte <= start {
+                            return Some(code[content_start..start].to_string());
+                        }
+                        abierto = None;
+                    }
+                }
+                None => {
+                    abierto = Some((i, run >= 2));
+                }
+            }
+        } else {
+            i += 1;
+        }
+    }
+    if let Some((content_start, _)) = abierto {
+        if cursor_byte >= content_start {
+            return Some(code[content_start..].to_string());
+        }
+    }
+    None
 }

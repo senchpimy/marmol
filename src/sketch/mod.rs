@@ -1,6 +1,6 @@
 mod config;
 mod llm;
-mod preview;
+pub mod preview;
 
 use egui::{Color32, PointerButton, Pos2, Rect, Sense, Shape, Stroke, Ui, Vec2};
 use std::sync::{mpsc, Mutex};
