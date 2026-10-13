@@ -210,6 +210,29 @@ pub fn resolve_path(vault: &str, current_file_path: &str, target: &str) -> Optio
         }
     }
 
+    // 2b. Ruta relativa a la raíz del vault (enlaces tipo `Carpeta/Nota`).
+    if !clean_target.starts_with('/') {
+        let base = Path::new(vault);
+        let joined = base.join(clean_target);
+        if joined.exists() && joined.is_file() {
+            if let Ok(abs) = joined.canonicalize() {
+                return Some(abs.to_string_lossy().to_string());
+            }
+            return Some(joined.to_string_lossy().to_string());
+        }
+        for ext in &[".md", ".excalidraw.md"] {
+            if !clean_target.to_lowercase().ends_with(ext) {
+                let joined_ext = base.join(format!("{}{}", clean_target, ext));
+                if joined_ext.exists() && joined_ext.is_file() {
+                    if let Ok(abs) = joined_ext.canonicalize() {
+                        return Some(abs.to_string_lossy().to_string());
+                    }
+                    return Some(joined_ext.to_string_lossy().to_string());
+                }
+            }
+        }
+    }
+
     // 3. Búsqueda global en el vault (por nombre de archivo, case-insensitive)
     let mut targets = vec![clean_target.to_lowercase()];
     if !clean_target.to_lowercase().ends_with(".md") {

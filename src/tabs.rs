@@ -783,23 +783,44 @@ impl TabViewer for MTabViewer<'_> {
                                                     });
                                                 }
                                             }))
-                                            .process_link(Some(&|ui, url, layout| {
-                                                let response = ui.link(layout);
+                                            .process_link(Some(&|ui, url, mut layout| {
+                                                let decoded_url = percent_encoding::percent_decode_str(url).decode_utf8_lossy().to_string();
+                                                let clean_url = decoded_url.split('|').next().unwrap_or(&decoded_url).trim().to_string();
+
+                                                // Enlaces externos: abrir en el navegador.
+                                                if clean_url.starts_with("http://")
+                                                    || clean_url.starts_with("https://")
+                                                    || clean_url.starts_with("mailto:")
+                                                {
+                                                    ui.hyperlink_to(layout, &clean_url);
+                                                    return true;
+                                                }
+
+                                                // Marcar visualmente el enlace: color de hipervínculo
+                                                // y subrayado, para que se note que es clickeable.
+                                                let link_color = ui.visuals().hyperlink_color;
+                                                for section in &mut layout.sections {
+                                                    section.format.color = link_color;
+                                                    section.format.underline = egui::Stroke::new(1.0, link_color);
+                                                }
+
+                                                let response = ui
+                                                    .add(egui::Label::new(layout).sense(egui::Sense::click()))
+                                                    .on_hover_cursor(egui::CursorIcon::PointingHand)
+                                                    .on_hover_text(format!("Abrir «{}»", clean_url));
+
                                                 if response.clicked() {
                                                     let ctx = ui.ctx();
                                                     let vault: String = ctx.data(|d| d.get_temp(egui::Id::new("nav_vault")).unwrap_or_default());
                                                     let current_path: String = ctx.data(|d| d.get_temp(egui::Id::new("nav_current_path")).unwrap_or_default());
-                                                    
-                                                    let decoded_url = percent_encoding::percent_decode_str(url).decode_utf8_lossy().to_string();
-                                                    let clean_url = decoded_url.split('|').next().unwrap_or(&decoded_url).trim();
-                                                    
-                                                    let resolved = crate::files::resolve_path(&vault, &current_path, clean_url);
+
+                                                    let resolved = crate::files::resolve_path(&vault, &current_path, &clean_url);
 
                                                     if let Some(path) = resolved {
                                                         ctx.data_mut(|d| d.insert_temp(egui::Id::new("global_nav_request"), Some(path)));
                                                     }
                                                 }
-                                                true 
+                                                true
                                             }))
                                             .render_excalidraw_fn(Some(&|ui, filename, size| {
                                                 let ctx = ui.ctx();

@@ -2,8 +2,9 @@ use arboard::Clipboard;
 use egui::{text::CCursorRange, Key, KeyboardShortcut, Modifiers, TextBuffer, TextEdit, Ui};
 use image::{DynamicImage, ImageBuffer, Rgba};
 use std::collections::HashSet;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
+use walkdir::WalkDir;
 
 #[derive(serde::Deserialize, serde::Serialize)]
 #[serde(default)]
@@ -26,6 +27,27 @@ pub struct EasyMarkEditor {
 
     #[serde(skip)]
     latex_preview_cache: Option<(String, Result<String, String>)>,
+
+    #[serde(skip)]
+    wiki_files: Vec<String>,
+    #[serde(skip)]
+    wiki_scanned_vault: String,
+    #[serde(skip)]
+    wiki_open: bool,
+    #[serde(skip)]
+    wiki_query: String,
+    #[serde(skip)]
+    wiki_open_byte: usize,
+    #[serde(skip)]
+    wiki_close_byte: Option<usize>,
+    #[serde(skip)]
+    wiki_cursor_byte: usize,
+    #[serde(skip)]
+    wiki_selected: usize,
+    #[serde(skip)]
+    wiki_scroll: bool,
+    #[serde(skip)]
+    pending_cursor: Option<usize>,
 }
 
 impl PartialEq for EasyMarkEditor {
@@ -60,6 +82,16 @@ impl Default for EasyMarkEditor {
             collapsed_blocks: HashSet::new(),
             highlighter: Default::default(),
             latex_preview_cache: None,
+            wiki_files: Vec::new(),
+            wiki_scanned_vault: String::new(),
+            wiki_open: false,
+            wiki_query: String::new(),
+            wiki_open_byte: 0,
+            wiki_close_byte: None,
+            wiki_cursor_byte: 0,
+            wiki_selected: 0,
+            wiki_scroll: false,
+            pending_cursor: None,
         }
     }
 }
@@ -67,6 +99,12 @@ impl Default for EasyMarkEditor {
 impl EasyMarkEditor {
     pub fn ui(&mut self, ui: &mut egui::Ui) -> egui::Response {
         let mut changed_programmatically = false;
+
+        // Autocompletado de wikilinks: procesar teclas antes del TextEdit para
+        // que Enter/Flechas/Tab no lleguen al editor.
+        if self.wiki_manejar_teclas(ui) {
+            changed_programmatically = true;
+        }
 
         // Handle Ctrl+V before TextEdit. Solo consultar el portapapeles cuando
         // realmente se presiona el atajo (antes se hacía cada frame).
@@ -242,6 +280,20 @@ impl EasyMarkEditor {
                     .frame(egui::Frame::NONE),
             );
 
+            // Reposicionar el cursor tras una inserción programática (wikilink).
+            if let Some(byte) = self.pending_cursor.take() {
+                let char_idx = byte_a_char(&self.code, byte);
+                if let Some(mut state) = TextEdit::load_state(ui.ctx(), response.id) {
+                    state
+                        .cursor
+                        .set_char_range(Some(CCursorRange::one(egui::text::CCursor::new(
+                            char_idx,
+                        ))));
+                    state.store(ui.ctx(), response.id);
+                    response.mark_changed();
+                }
+            }
+
             if let Some(galley) = galley_out {
                 if let Some(mut state) = TextEdit::load_state(ui.ctx(), response.id) {
                     if let Some(mut ccursor_range) = state.cursor.char_range() {
@@ -265,14 +317,262 @@ impl EasyMarkEditor {
                 }
             }
 
-            if changed_programmatically {
-                response.mark_changed();
+            if self.wiki_actualizar_y_mostrar(ui, &response, preview_anchor) {
+                changed_programmatically = true;
             }
 
             self.mostrar_preview_latex(ui, &response, preview_anchor);
 
+            if changed_programmatically {
+                response.mark_changed();
+            }
+
             response
         }
+    }
+
+    /// Detecta si el cursor está dentro de un wikilink `[[...` y, en ese caso,
+    /// muestra el popup de autocompletado con los archivos del vault.
+    fn wiki_actualizar_y_mostrar(
+        &mut self,
+        ui: &egui::Ui,
+        response: &egui::Response,
+        anchor: Option<(egui::Rect, usize)>,
+    ) -> bool {
+        if !response.has_focus() {
+            self.wiki_open = false;
+            return false;
+        }
+        let Some((cursor_rect, char_idx)) = anchor else {
+            self.wiki_open = false;
+            return false;
+        };
+
+        let cursor_byte = char_a_byte(&self.code, char_idx);
+        self.wiki_actualizar(cursor_byte);
+        if !self.wiki_open {
+            return false;
+        }
+
+        let resultados = self.wiki_resultados();
+        if resultados.is_empty() {
+            return false;
+        }
+        self.wiki_selected = self.wiki_selected.min(resultados.len() - 1);
+
+        let pos = egui::pos2(cursor_rect.left(), cursor_rect.bottom() + 4.0);
+        let mut elegido: Option<String> = None;
+        egui::Popup::new(
+            egui::Id::new("easymark_wiki_autocomplete"),
+            ui.ctx().clone(),
+            egui::PopupAnchor::Position(pos),
+            ui.layer_id(),
+        )
+        .open(true)
+        .align(egui::RectAlign::BOTTOM_START)
+        .gap(2.0)
+        .show(|ui| {
+            ui.set_min_width(240.0);
+            ui.set_max_width(420.0);
+            let hacer_scroll = self.wiki_scroll;
+            egui::ScrollArea::vertical()
+                .max_height(240.0)
+                .auto_shrink([false, true])
+                .show(ui, |ui| {
+                    for (i, ruta) in resultados.iter().enumerate() {
+                        let resp = ui.selectable_label(i == self.wiki_selected, ruta);
+                        if resp.hovered() {
+                            self.wiki_selected = i;
+                        }
+                        if resp.clicked() {
+                            elegido = Some(ruta.clone());
+                        }
+                        if i == self.wiki_selected && hacer_scroll {
+                            resp.scroll_to_me(Some(egui::Align::Center));
+                        }
+                    }
+                });
+        });
+        self.wiki_scroll = false;
+
+        if let Some(nombre) = elegido {
+            return self.wiki_aceptar(&nombre);
+        }
+        false
+    }
+
+    /// Actualiza el estado del autocompletado a partir de la posición del cursor.
+    fn wiki_actualizar(&mut self, cursor_byte: usize) {
+        if let Some((open, query, close)) = wiki_context(&self.code, cursor_byte) {
+            if !self.wiki_open || self.wiki_open_byte != open {
+                self.wiki_selected = 0;
+                self.wiki_scroll = true;
+            }
+            self.wiki_escanear();
+            self.wiki_open = true;
+            self.wiki_open_byte = open;
+            self.wiki_query = query;
+            self.wiki_close_byte = close;
+            self.wiki_cursor_byte = cursor_byte;
+        } else {
+            self.wiki_open = false;
+        }
+    }
+
+    /// Escanea el vault una sola vez por vault para listar los archivos enlazables.
+    fn wiki_escanear(&mut self) {
+        if self.wiki_scanned_vault == self.vault_path && !self.wiki_files.is_empty() {
+            return;
+        }
+        self.wiki_files.clear();
+        if self.vault_path.is_empty() {
+            return;
+        }
+        // No descender en carpetas ocultas (.obsidian, .git, .venv, ...) ni en
+        // carpetas de dependencias, para no inundar el autocompletado.
+        let walker = WalkDir::new(&self.vault_path)
+            .into_iter()
+            .filter_entry(|e| {
+                if e.file_type().is_dir() {
+                    let name = e.file_name().to_string_lossy();
+                    !name.starts_with('.') && name != "node_modules" && name != "target"
+                } else {
+                    true
+                }
+            });
+        for entry in walker.filter_map(|e| e.ok()) {
+            if !entry.file_type().is_file() {
+                continue;
+            }
+            let p = entry.path().to_string_lossy().to_string();
+            let lower = p.to_lowercase();
+            if lower.ends_with(".md")
+                || lower.ends_with(".markdown")
+                || lower.ends_with(".canvas")
+                || lower.ends_with(".graph")
+                || lower.ends_with(".inc")
+            {
+                self.wiki_files.push(p);
+            }
+        }
+        self.wiki_scanned_vault = self.vault_path.clone();
+    }
+
+    /// Archivos filtrados por la consulta actual, como su ruta relativa al vault
+    /// sin extensión (p. ej. `Base De Datos/Readme`). La consulta se compara tanto
+    /// con el nombre como con la ruta, de modo que escribir la carpeta también filtra.
+    fn wiki_resultados(&self) -> Vec<String> {
+        let q = self.wiki_query.to_lowercase();
+        let mut v: Vec<String> = Vec::new();
+        for p in &self.wiki_files {
+            let rel = Path::new(p)
+                .strip_prefix(&self.vault_path)
+                .unwrap_or_else(|_| Path::new(p));
+            let nombre = wiki_nombre(p);
+            let carpeta = rel
+                .parent()
+                .map(|d| d.to_string_lossy().replace('\\', "/"))
+                .filter(|s| !s.is_empty())
+                .unwrap_or_default();
+            let ruta_rel = if carpeta.is_empty() {
+                nombre.clone()
+            } else {
+                format!("{}/{}", carpeta, nombre)
+            };
+            if q.is_empty()
+                || nombre.to_lowercase().contains(&q)
+                || ruta_rel.to_lowercase().contains(&q)
+            {
+                v.push(ruta_rel);
+            }
+        }
+        // Prioriza los nombres que empiezan con la consulta, luego alfabético.
+        v.sort_by(|a, b| {
+            let na = nombre_de_ruta(a);
+            let nb = nombre_de_ruta(b);
+            let pa = !na.starts_with(&q);
+            let pb = !nb.starts_with(&q);
+            pa.cmp(&pb)
+                .then_with(|| na.cmp(&nb))
+                .then_with(|| a.to_lowercase().cmp(&b.to_lowercase()))
+        });
+        v.dedup();
+        v.truncate(30);
+        v
+    }
+
+    /// Reemplaza el wikilink en curso por `[[nombre]]`.
+    fn wiki_aceptar(&mut self, nombre: &str) -> bool {
+        let open = self.wiki_open_byte;
+        if open > self.code.len() || !self.code.is_char_boundary(open) {
+            self.wiki_open = false;
+            return false;
+        }
+        let end = ajustar_a_limite(
+            &self.code,
+            self.wiki_close_byte
+                .unwrap_or(self.wiki_cursor_byte)
+                .max(open + 2)
+                .min(self.code.len()),
+        );
+        let reemplazo = format!("[[{}]]", nombre);
+        self.code = format!("{}{}{}", &self.code[..open], reemplazo, &self.code[end..]);
+        self.pending_cursor = Some(open + reemplazo.len());
+        self.wiki_open = false;
+        true
+    }
+
+    /// Maneja Flechas/Enter/Tab/Escape mientras el popup está abierto.
+    fn wiki_manejar_teclas(&mut self, ui: &egui::Ui) -> bool {
+        if !self.wiki_open {
+            return false;
+        }
+        let editor_id = ui.id().with("easymark_edit");
+        if !ui.memory(|m| m.has_focus(editor_id)) {
+            return false;
+        }
+        let resultados = self.wiki_resultados();
+        if resultados.is_empty() {
+            return false;
+        }
+
+        let (bajar, subir, aceptar, escapar) = ui.input(|i| {
+            (
+                i.key_pressed(Key::ArrowDown),
+                i.key_pressed(Key::ArrowUp),
+                (i.key_pressed(Key::Enter) || i.key_pressed(Key::Tab)) && i.modifiers.is_none(),
+                i.key_pressed(Key::Escape),
+            )
+        });
+
+        if bajar || subir {
+            if bajar {
+                self.wiki_selected = (self.wiki_selected + 1) % resultados.len();
+            } else {
+                self.wiki_selected = (self.wiki_selected + resultados.len() - 1) % resultados.len();
+            }
+            self.wiki_scroll = true;
+            ui.input_mut(|i| {
+                i.consume_key(Modifiers::NONE, Key::ArrowDown);
+                i.consume_key(Modifiers::NONE, Key::ArrowUp);
+            });
+        }
+
+        if aceptar {
+            let ruta = resultados[self.wiki_selected.min(resultados.len() - 1)].clone();
+            ui.input_mut(|i| {
+                i.consume_key(Modifiers::NONE, Key::Enter);
+                i.consume_key(Modifiers::NONE, Key::Tab);
+            });
+            return self.wiki_aceptar(&ruta);
+        }
+
+        if escapar {
+            self.wiki_open = false;
+            ui.input_mut(|i| i.consume_key(Modifiers::NONE, Key::Escape));
+        }
+
+        false
     }
 
     /// Mientras el cursor está dentro de una fórmula (`$...$` o `$$...$$`),
@@ -631,4 +931,97 @@ fn latex_bajo_cursor(code: &str, cursor_byte: usize) -> Option<String> {
         }
     }
     None
+}
+
+/// Convierte un desplazamiento en bytes a un índice de carácter.
+fn byte_a_char(code: &str, byte: usize) -> usize {
+    code[..byte.min(code.len())].chars().count()
+}
+
+/// Ajusta un desplazamiento en bytes al siguiente límite de carácter válido.
+fn ajustar_a_limite(code: &str, mut byte: usize) -> usize {
+    while byte < code.len() && !code.is_char_boundary(byte) {
+        byte += 1;
+    }
+    byte
+}
+
+/// Nombre visible de un archivo para un wikilink (sin la extensión).
+fn wiki_nombre(path: &str) -> String {
+    let fname = Path::new(path)
+        .file_name()
+        .map(|s| s.to_string_lossy().to_string())
+        .unwrap_or_default();
+    for sufijo in [
+        ".excalidraw.md",
+        ".markdown",
+        ".canvas",
+        ".graph",
+        ".inc",
+        ".md",
+    ] {
+        if let Some(stripped) = fname.strip_suffix(sufijo) {
+            return stripped.to_string();
+        }
+    }
+    fname
+}
+
+/// Nombre (minúsculas) de una ruta relativa ya sin extensión. Para ordenar.
+fn nombre_de_ruta(ruta_rel: &str) -> String {
+    Path::new(ruta_rel)
+        .file_name()
+        .map(|s| s.to_string_lossy().to_lowercase())
+        .unwrap_or_default()
+}
+
+/// Si el cursor está dentro de un wikilink `[[...`, devuelve
+/// `(inicio_del_wikilink, consulta, fin_tras_]] )`.
+fn wiki_context(code: &str, cursor_byte: usize) -> Option<(usize, String, Option<usize>)> {
+    let before = &code[..cursor_byte];
+    let open = before.rfind("[[")?;
+    let between = &code[open + 2..cursor_byte];
+    if between.contains("]]") || between.contains('\n') {
+        return None;
+    }
+    let query = between.to_string();
+    let after = &code[cursor_byte..];
+    let close = after.find("]]").map(|i| cursor_byte + i + 2);
+    Some((open, query, close))
+}
+
+#[cfg(test)]
+mod tests_wikilink {
+    use super::*;
+
+    #[test]
+    fn detecta_wikilink_sin_cerrar() {
+        let code = "texto [[No";
+        let ctx = wiki_context(code, code.len()).unwrap();
+        assert_eq!(ctx.0, 6);
+        assert_eq!(ctx.1, "No");
+        assert_eq!(ctx.2, None);
+    }
+
+    #[test]
+    fn detecta_wikilink_cerrado_con_cursor_dentro() {
+        let code = "[[Nota]]";
+        let ctx = wiki_context(code, 4).unwrap();
+        assert_eq!(ctx.0, 0);
+        assert_eq!(ctx.1, "No");
+        assert_eq!(ctx.2, Some(8));
+    }
+
+    #[test]
+    fn no_detecta_fuera_de_wikilink() {
+        assert!(wiki_context("texto normal", 5).is_none());
+        assert!(wiki_context("[[Uno]] y [[Dos]]", 8).is_none());
+    }
+
+    #[test]
+    fn nombre_sin_extension() {
+        assert_eq!(wiki_nombre("/v/Nota.md"), "Nota");
+        assert_eq!(wiki_nombre("/v/Dibujo.excalidraw.md"), "Dibujo");
+        assert_eq!(wiki_nombre("/v/tablero.canvas"), "tablero");
+    }
 }
