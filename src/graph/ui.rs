@@ -1,9 +1,9 @@
-use super::data::{CustomGroup, Graph, MatchType};
+use super::data::{CustomGroup, Graph};
 use crate::main_area::content_enum::Content;
 use std::collections::HashSet;
 
 use egui::*;
-use egui_plot::{Arrows, Line, MarkerShape, Plot, PlotPoint, Points, Text};
+use egui_plot::{Arrows, Line, MarkerShape, Plot, PlotBounds, PlotPoint, Points, Text};
 use std::path::Path;
 
 pub fn draw_ui(
@@ -20,9 +20,20 @@ pub fn draw_ui(
     graph.simulate_physics();
     ui.ctx().request_repaint();
 
+    let animation_duration = 0.5;
+
+    // Igual que Obsidian: sólo se hace pan cuando el puntero no está sobre un
+    // nodo (el estado del hover se conserva del frame anterior).
+    let allow_pan = graph.dragged_node_index.is_none() && graph.hovered_node_index.is_none();
+
     let markers_plot = Plot::new(seed_id.with("markers_plot"))
         .data_aspect(1.0)
-        .allow_drag(graph.dragged_node_index.is_none())
+        .allow_drag(allow_pan)
+        .allow_zoom(false)
+        .allow_scroll(false)
+        .allow_boxed_zoom(false)
+        .allow_double_click_reset(false)
+        .show_crosshair(false)
         .show_axes([false, false])
         .show_grid([false, false])
         .include_x(100.0)
@@ -30,28 +41,56 @@ pub fn draw_ui(
         .include_y(100.0)
         .include_y(-100.0);
 
-    let animation_duration = 0.5;
-
     let response = markers_plot
         .show(ui, |plot_ui| {
             if graph.points.is_empty() {
                 return;
             }
 
-            let pointer_pos = plot_ui.pointer_coordinate();
+            // --- Zoom con la rueda (paridad con Obsidian) ---
+            // Sólo cuando el puntero está sobre el propio grafo, para no hacer
+            // zoom mientras se desplaza el panel de controles.
+            let scroll = if plot_ui.response().contains_pointer() {
+                plot_ui.ctx().input(|i| i.smooth_scroll_delta.y)
+            } else {
+                0.0
+            };
+            if scroll.abs() > 0.1 {
+                let factor = (scroll * 0.0015).exp();
+                plot_ui.zoom_bounds_around_hovered(Vec2::splat(factor));
+            }
 
-            graph.hovered_node_index = None;
-            if let Some(ptr) = pointer_pos {
-                for (index, _) in graph.points.iter().enumerate() {
+            // --- Fit-to-view ---
+            if graph.pending_fit {
+                fit_to_view(graph, plot_ui);
+                graph.pending_fit = false;
+            }
+
+            let transform = plot_ui.transform();
+
+            // --- Hit testing en espacio de pantalla ---
+            let pointer_screen = plot_ui.ctx().input(|i| i.pointer.hover_pos());
+            let mut hovered: Option<(usize, f32)> = None;
+            if let Some(ps) = pointer_screen {
+                for index in 0..graph.points.len() {
                     if !graph.is_visible(index) {
                         continue;
                     }
-                    if is_close(ptr, graph.points_coord[index], 1.5) {
-                        graph.hovered_node_index = Some(index);
-                        break;
+                    let node_screen = transform.position_from_point(&PlotPoint::new(
+                        graph.points_coord[index].0 as f64,
+                        graph.points_coord[index].1 as f64,
+                    ));
+                    let dist = ps.distance(node_screen);
+                    if dist <= graph.node_radius(index) + 4.0 {
+                        if hovered.map_or(true, |(_, d)| dist < d) {
+                            hovered = Some((index, dist));
+                        }
                     }
                 }
             }
+            graph.hovered_node_index = hovered.map(|(i, _)| i);
+
+            let dvalue_dy = transform.dvalue_dpos()[1].abs();
 
             let mut connected_indices = HashSet::new();
             if let Some(hovered_idx) = graph.hovered_node_index {
@@ -68,12 +107,24 @@ pub fn draw_ui(
             let is_hovering = graph.hovered_node_index.is_some();
 
             // --- 1. RENDERIZADO DE LÍNEAS / FLECHAS (CAPA INFERIOR) ---
-            let base_line_color = plot_ui.ctx().style_of(plot_ui.ctx().theme()).visuals.window_stroke.color.linear_multiply(100.0 / 255.0);
+            let theme = plot_ui.ctx().theme();
+            let visuals = plot_ui.ctx().style_of(theme).visuals.clone();
+            let base_line_color = visuals.window_stroke.color.linear_multiply(100.0 / 255.0);
+            let highlight_color = visuals.widgets.hovered.bg_stroke.color.linear_multiply(220.0 / 255.0);
 
-            if graph.show_arrows {
+            let edge_is_highlighted = |a: usize, b: usize| -> bool {
+                match graph.hovered_node_index {
+                    Some(h) => {
+                        (a == h && connected_indices.contains(&b))
+                            || (b == h && connected_indices.contains(&a))
+                    }
+                    None => false,
+                }
+            };
+
+            if graph.show_arrows && !is_hovering {
                 let mut origins = vec![];
                 let mut tips = vec![];
-
                 for &(idx_a, idx_b) in &graph.edges {
                     if graph.is_visible(idx_a) && graph.is_visible(idx_b) {
                         origins.push([
@@ -86,59 +137,43 @@ pub fn draw_ui(
                         ]);
                     }
                 }
-
-                let mut arrows = Arrows::new("".to_string(), origins, tips).tip_length(25.0);
-                
-                // Animación para el desvanecimiento de las flechas cuando hay un hover
-                let arrows_anim_id = seed_id.with("arrows_hover_anim");
-                let arrows_t = plot_ui.ctx().animate_bool_with_time(arrows_anim_id, !is_hovering, animation_duration);
-                let arrows_multiplier = 0.2 + 0.8 * arrows_t;
-                
-                arrows = arrows.color(base_line_color.linear_multiply(arrows_multiplier));
-                plot_ui.arrows(arrows);
+                plot_ui.arrows(
+                    Arrows::new("".to_string(), origins, tips)
+                        .tip_length(12.0)
+                        .color(base_line_color),
+                );
             } else {
                 for (edge_idx, &(idx_a, idx_b)) in graph.edges.iter().enumerate() {
-                    if graph.is_visible(idx_a) && graph.is_visible(idx_b) {
-                        let p1 = graph.points_coord[idx_a];
-                        let p2 = graph.points_coord[idx_b];
-
-                        let mut line_color = base_line_color;
-
-                        let is_edge_highlighted = if is_hovering {
-                            let a_connected = connected_indices.contains(&idx_a);
-                            let b_connected = connected_indices.contains(&idx_b);
-                            a_connected && b_connected && (idx_a == graph.hovered_node_index.unwrap() || idx_b == graph.hovered_node_index.unwrap())
-                        } else {
-                            false
-                        };
-
-                        let edge_anim_id = seed_id.with("edge_h").with(edge_idx);
-                        let edge_t = plot_ui.ctx().animate_bool_with_time(edge_anim_id, is_edge_highlighted, animation_duration);
-
-                        if is_hovering {
-                            if is_edge_highlighted || edge_t > 0.0 {
-                                let highlight_color = plot_ui.ctx().style_of(plot_ui.ctx().theme()).visuals.widgets.hovered.bg_stroke.color.linear_multiply(180.0 / 255.0);
-                                // Mezclar entre base y highlight basado en la animación
-                                line_color = Color32::from_rgba_premultiplied(
-                                    lerp(base_line_color.r() as f32..=highlight_color.r() as f32, edge_t) as u8,
-                                    lerp(base_line_color.g() as f32..=highlight_color.g() as f32, edge_t) as u8,
-                                    lerp(base_line_color.b() as f32..=highlight_color.b() as f32, edge_t) as u8,
-                                    lerp(base_line_color.a() as f32..=highlight_color.a() as f32, edge_t) as u8,
-                                );
-                            } else {
-                                line_color = line_color.linear_multiply(0.1);
-                            }
-                        }
-
-                        plot_ui.line(
-                            Line::new(
-                                "".to_string(),
-                                vec![[p1.0 as f64, p1.1 as f64], [p2.0 as f64, p2.1 as f64]],
-                            )
-                            .color(line_color)
-                            .width(graph.line_thickness),
-                        );
+                    if !(graph.is_visible(idx_a) && graph.is_visible(idx_b)) {
+                        continue;
                     }
+                    let p1 = graph.points_coord[idx_a];
+                    let p2 = graph.points_coord[idx_b];
+
+                    let highlighted = edge_is_highlighted(idx_a, idx_b);
+                    let edge_anim_id = seed_id.with("edge_h").with(edge_idx);
+                    let edge_t =
+                        plot_ui.ctx().animate_bool_with_time(edge_anim_id, highlighted, animation_duration);
+
+                    let mut line_color = base_line_color;
+                    let mut width = graph.line_thickness;
+                    if is_hovering {
+                        if highlighted || edge_t > 0.0 {
+                            line_color = lerp_color(base_line_color, highlight_color, edge_t);
+                            width = graph.line_thickness * (1.0 + 0.8 * edge_t);
+                        } else {
+                            line_color = line_color.linear_multiply(0.1);
+                        }
+                    }
+
+                    plot_ui.line(
+                        Line::new(
+                            "".to_string(),
+                            vec![[p1.0 as f64, p1.1 as f64], [p2.0 as f64, p2.1 as f64]],
+                        )
+                        .color(line_color)
+                        .width(width),
+                    );
                 }
             }
 
@@ -150,6 +185,17 @@ pub fn draw_ui(
             if is_drag_released {
                 graph.dragged_node_index = None;
             }
+
+            let span = {
+                let bounds = plot_ui.plot_bounds();
+                (bounds.max()[1] - bounds.min()[1]).max(0.001)
+            };
+
+            let text_visible_alpha = if graph.text_zoom_threshold <= 0.0 {
+                1.0
+            } else {
+                (1.0 - span / graph.text_zoom_threshold).clamp(0.0, 1.0) as f32
+            };
 
             for (index, point) in graph.points.iter().enumerate() {
                 if !graph.is_visible(index) {
@@ -163,10 +209,12 @@ pub fn draw_ui(
                 };
 
                 let node_anim_id = seed_id.with("node_h").with(index);
-                let node_t = plot_ui.ctx().animate_bool_with_time(node_anim_id, is_node_highlighted, animation_duration);
+                let node_t = plot_ui
+                    .ctx()
+                    .animate_bool_with_time(node_anim_id, is_node_highlighted, animation_duration);
 
                 let mut point_color = graph.get_color_for_node(point);
-                let point_multiplier = 0.3 + 0.7 * node_t;
+                let point_multiplier = 0.25 + 0.75 * node_t;
                 point_color = point_color.linear_multiply(point_multiplier);
 
                 let coords = [
@@ -174,30 +222,16 @@ pub fn draw_ui(
                     graph.points_coord[index].1 as f64,
                 ];
 
-                let mut radius = graph.node_size;
-                if point.is_tag {
-                    let degree = graph.node_degrees[index] as f32;
-                    radius = (graph.node_size * 1.5 + degree * 0.5).min(50.0);
-                } else if point.is_attachment {
-                    radius = graph.node_size * 0.7;
-                } else if !point.exists {
-                    radius = graph.node_size * 0.85;
-                }
+                let radius = graph.node_radius(index);
 
-                let mut shape = MarkerShape::Circle;
-                if point.is_attachment {
-                    shape = MarkerShape::Square;
-                }
-                if point.is_tag {
-                    shape = MarkerShape::Diamond;
-                }
+                let shape = MarkerShape::Circle;
 
-                // Efecto de borde rojo para nodos fantasma (archivos que no existen)
+                // Borde para nodos fantasma (archivos que no existen).
                 if !point.exists {
                     plot_ui.points(
                         Points::new("".to_string(), coords)
                             .radius(radius + 1.0)
-                            .color(Color32::RED)
+                            .color(visuals.error_fg_color)
                             .shape(shape),
                     );
                 }
@@ -214,54 +248,48 @@ pub fn draw_ui(
                         .shape(shape),
                 );
 
-                let bounds = plot_ui.plot_bounds();
-                let diff = bounds.max()[1] - bounds.min()[1];
+                // Etiqueta: se desvanece al alejar el zoom, pero siempre visible
+                // para el nodo bajo el cursor y sus vecinos.
+                let mut text_alpha = text_visible_alpha;
+                if is_hovering && connected_indices.contains(&index) {
+                    text_alpha = text_alpha.max(node_t);
+                }
+                if text_alpha > 0.01 {
+                    let text_color = visuals
+                        .override_text_color
+                        .unwrap_or(visuals.widgets.inactive.fg_stroke.color)
+                        .linear_multiply(text_alpha.max(0.15));
 
-                if diff < graph.text_zoom_threshold {
-                    let mut text_color = plot_ui.ctx().style_of(plot_ui.ctx().theme()).visuals.widgets.inactive.fg_stroke.color;
-
-                    let text_multiplier = 0.2 + 0.8 * node_t;
-                    text_color = text_color.linear_multiply(text_multiplier);
-
-                    if is_hovering && node_t > 0.0 {
-                         if connected_indices.contains(&index) {
-                             let target_text_color = plot_ui.ctx().style_of(plot_ui.ctx().theme()).visuals.override_text_color.unwrap_or(Color32::WHITE);
-                             text_color = Color32::from_rgba_premultiplied(
-                                lerp(text_color.r() as f32..=target_text_color.r() as f32, node_t) as u8,
-                                lerp(text_color.g() as f32..=target_text_color.g() as f32, node_t) as u8,
-                                lerp(text_color.b() as f32..=target_text_color.b() as f32, node_t) as u8,
-                                lerp(text_color.a() as f32..=target_text_color.a() as f32, node_t) as u8,
-                            );
-                         }
-                    }
-
+                    let dy = (radius + 4.0) as f64 * dvalue_dy;
                     let texto = Text::new(
                         "".to_string(),
                         PlotPoint::new(
                             graph.points_coord[index].0 as f64,
-                            (graph.points_coord[index].1 as f64) - (diff * 0.02),
+                            (graph.points_coord[index].1 as f64) - dy,
                         ),
-                        RichText::new(&point.text).size(12.0).color(text_color),
-                    );
+                        RichText::new(&point.text)
+                            .size(12.0)
+                            .color(text_color),
+                    )
+                    .anchor(Align2::CENTER_TOP);
                     plot_ui.text(texto);
                 }
-                if let Some(hovered) = graph.hovered_node_index {
-                    if hovered == index {
-                        if is_double_click && graph.dragged_node_index.is_none() {
-                            if point.exists && !point.is_attachment && !point.is_tag {
-                                *current_file = point.abs_path.clone();
-                                *content = Content::View;
-                            }
+
+                if graph.hovered_node_index == Some(index) {
+                    if is_double_click && graph.dragged_node_index.is_none() {
+                        if point.exists && !point.is_attachment && !point.is_tag {
+                            *current_file = point.abs_path.clone();
+                            *content = Content::View;
                         }
-                        if is_drag_started {
-                            graph.dragged_node_index = Some(index);
-                        }
+                    }
+                    if is_drag_started {
+                        graph.dragged_node_index = Some(index);
                     }
                 }
             }
 
             if let Some(idx) = graph.dragged_node_index {
-                if let Some(ptr) = pointer_pos {
+                if let Some(ptr) = pointer_screen.map(|p| plot_ui.plot_from_screen(p)) {
                     graph.points_coord[idx].0 = ptr.x as f32;
                     graph.points_coord[idx].1 = ptr.y as f32;
                     graph.velocities[idx] = Vec2::ZERO;
@@ -269,6 +297,45 @@ pub fn draw_ui(
             }
         })
         .response;
+
+    // --- Menú contextual sobre un nodo (paridad con Obsidian) ---
+    // Al abrir con clic derecho fijamos el nodo objetivo para que el menú siga
+    // mostrándose aunque el puntero se mueva sobre el propio menú.
+    if response.secondary_clicked() {
+        graph.selected_node_index = graph.hovered_node_index;
+    }
+    response.context_menu(|ui| {
+        if let Some(idx) = graph.selected_node_index.or(graph.hovered_node_index) {
+            if idx < graph.points.len() {
+                let point = graph.points[idx].clone();
+                ui.label(RichText::new(&point.text).strong());
+                if !point.exists {
+                    ui.label(RichText::new("(no existe)").italics().weak());
+                }
+                ui.separator();
+
+                let openable = point.exists && !point.is_attachment && !point.is_tag;
+                if ui
+                    .add_enabled(openable, egui::Button::new("Abrir"))
+                    .clicked()
+                {
+                    *current_file = point.abs_path.clone();
+                    *content = Content::View;
+                    ui.close();
+                }
+                if ui.button("Copiar ruta").clicked() {
+                    ui.ctx().copy_text(point.abs_path.clone());
+                    ui.close();
+                }
+                if !point.links.is_empty() {
+                    ui.separator();
+                    ui.label(format!("{} enlaces salientes", point.links.len()));
+                }
+            }
+        } else {
+            ui.close();
+        }
+    });
 
     let plot_rect = response.rect;
     let mut controls_changed = false;
@@ -283,112 +350,181 @@ pub fn draw_ui(
                 .stroke(ui.style().visuals.window_stroke())
                 .inner_margin(8.0)
                 .show(ui, |ui| {
-                    ui.set_max_width(220.0);
+                    ui.set_max_width(240.0);
                     ui.set_max_height(plot_rect.height() - 40.0);
 
-                    egui::ScrollArea::vertical().id_salt(seed_id.with("graph_ctrl_scroll")).show(ui, |ui| {
-                        if draw_controls(graph, ui, seed_id) {
+                    // Barra superior con acciones rápidas.
+                    ui.horizontal(|ui| {
+                        ui.toggle_value(&mut graph.show_controls, "⚙");
+                        if ui.button("Ajustar").clicked() {
+                            graph.pending_fit = true;
+                        }
+                        if ui
+                            .button("⟳")
+                            .on_hover_text("Recargar el grafo desde el vault")
+                            .clicked()
+                        {
+                            graph.loaded = false;
+                        }
+                        if ui.button("Restablecer").on_hover_text("Ajustes por defecto").clicked() {
+                            reset_settings(graph);
                             controls_changed = true;
                         }
                     });
+
+                    if graph.show_controls {
+                        ui.separator();
+                        egui::ScrollArea::vertical()
+                            .id_salt(seed_id.with("graph_ctrl_scroll"))
+                            .show(ui, |ui| {
+                                if draw_controls(graph, ui, seed_id) {
+                                    controls_changed = true;
+                                }
+                            });
+                    }
                 });
         });
 
     if controls_changed {
-        graph.update_vault(Path::new(vault));
+        graph.settings_dirty = true;
+    }
+    // Guardar al soltar el puntero, para no escribir en disco en cada frame
+    // mientras se arrastra un slider.
+    if graph.settings_dirty && !ui.ctx().input(|i| i.pointer.primary_down()) {
+        graph.save_settings();
+        graph.settings_dirty = false;
     }
 
     response
+}
+
+fn fit_to_view(graph: &Graph, plot_ui: &mut egui_plot::PlotUi<'_>) {
+    let mut min = (f32::INFINITY, f32::INFINITY);
+    let mut max = (f32::NEG_INFINITY, f32::NEG_INFINITY);
+    let mut any = false;
+    for index in 0..graph.points.len() {
+        if !graph.is_visible(index) {
+            continue;
+        }
+        let (x, y) = graph.points_coord[index];
+        if !x.is_finite() || !y.is_finite() {
+            continue;
+        }
+        min.0 = min.0.min(x);
+        min.1 = min.1.min(y);
+        max.0 = max.0.max(x);
+        max.1 = max.1.max(y);
+        any = true;
+    }
+    if !any {
+        return;
+    }
+    let pad_x = ((max.0 - min.0) * 0.15).max(20.0);
+    let pad_y = ((max.1 - min.1) * 0.15).max(20.0);
+    plot_ui.set_plot_bounds(PlotBounds::from_min_max(
+        [(min.0 - pad_x) as f64, (min.1 - pad_y) as f64],
+        [(max.0 + pad_x) as f64, (max.1 + pad_y) as f64],
+    ));
+}
+
+fn reset_settings(graph: &mut Graph) {
+    graph.center_force = 0.15;
+    graph.repel_force = 30.0;
+    graph.link_force = 0.8;
+    graph.link_distance = 30.0;
+    graph.filter_query.clear();
+    graph.show_attachments = true;
+    graph.show_existing_only = false;
+    graph.show_orphans = true;
+    graph.show_tags = false;
+    graph.show_arrows = false;
+    graph.text_zoom_threshold = 500.0;
+    graph.node_size = 7.0;
+    graph.line_thickness = 2.0;
+    graph.custom_groups.clear();
 }
 
 fn draw_controls(graph: &mut Graph, ui: &mut Ui, seed_id: Id) -> bool {
     let mut changed = false;
 
     ui.push_id(seed_id, |ui| {
-        ui.collapsing("Configuración Física", |ui| {
-            ui.add(egui::Slider::new(&mut graph.repel_force, 1.0..=100.0).text("Repulsión"));
-            ui.add(egui::Slider::new(&mut graph.link_force, 0.1..=3.0).text("Links"));
-            ui.add(egui::Slider::new(&mut graph.group_force, 0.0..=5.0).text("Agrupación"));
-            ui.add(egui::Slider::new(&mut graph.center_force, 0.01..=1.0).text("Gravedad"));
-            ui.add(egui::Slider::new(&mut graph.tag_force, 0.1..=10.0).text("Atracción Tags"));
-
+        ui.collapsing("Filtros", |ui| {
             ui.horizontal(|ui| {
-                color_picker::color_edit_button_srgba(
-                    ui,
-                    &mut graph.orphan_color,
-                    egui::widgets::color_picker::Alpha::Opaque,
-                );
-                ui.label("Color Huérfanos");
+                ui.label("🔍");
+                if ui
+                    .add(
+                        egui::TextEdit::singleline(&mut graph.filter_query)
+                            .hint_text("file:, path:, tag:, line:, section:")
+                            .desired_width(f32::INFINITY),
+                    )
+                    .changed()
+                {
+                    changed = true;
+                }
             });
+            if ui
+                .add_enabled(!graph.filter_query.is_empty(), egui::Button::new("Limpiar"))
+                .clicked()
+            {
+                graph.filter_query.clear();
+                changed = true;
+            }
+
+            ui.separator();
+            if ui.checkbox(&mut graph.show_tags, "Tags").changed() {
+                changed = true;
+            }
+            if ui.checkbox(&mut graph.show_attachments, "Adjuntos").changed() {
+                changed = true;
+            }
+            if ui
+                .checkbox(&mut graph.show_existing_only, "Sólo archivos existentes")
+                .changed()
+            {
+                changed = true;
+            }
+            if ui.checkbox(&mut graph.show_orphans, "Huérfanos").changed() {
+                changed = true;
+            }
         });
 
-        ui.collapsing("Visualización", |ui| {
-            ui.checkbox(&mut graph.show_arrows, "Mostrar Flechas (Dirección)");
-
-            ui.add(egui::Slider::new(&mut graph.node_size, 2.0..=20.0).text("Tamaño Nodo"));
-            ui.add(egui::Slider::new(&mut graph.line_thickness, 0.5..=10.0).text("Grosor Línea"));
-
-            ui.label("Visibilidad de Texto (Zoom):");
-            ui.add(
-                egui::Slider::new(&mut graph.text_zoom_threshold, 10.0..=2000.0)
-                    .text("Umbral")
-                    .logarithmic(true),
-            );
-        });
-
-        ui.collapsing("Crear Grupos", |ui| {
+        ui.collapsing("Grupos", |ui| {
             ui.horizontal(|ui| {
-                egui::ComboBox::from_id_salt(seed_id.with("group_type_combo"))
-                    .selected_text(match graph.new_group_type {
-                        MatchType::Tag => "Tag",
-                        MatchType::Filename => "Filename",
-                        MatchType::Path => "Path",
-                        MatchType::Content => "Content",
-                        MatchType::Section => "Section",
-                    })
-                    .show_ui(ui, |ui| {
-                        ui.selectable_value(&mut graph.new_group_type, MatchType::Tag, "Tag");
-                        ui.selectable_value(&mut graph.new_group_type, MatchType::Filename, "Filename");
-                        ui.selectable_value(&mut graph.new_group_type, MatchType::Path, "Path");
-                        ui.selectable_value(&mut graph.new_group_type, MatchType::Content, "Content");
-                        ui.selectable_value(&mut graph.new_group_type, MatchType::Section, "Section");
-                    });
-
                 color_picker::color_edit_button_srgba(
                     ui,
                     &mut graph.new_group_col,
                     egui::widgets::color_picker::Alpha::Opaque,
                 );
-            });
-
-            ui.text_edit_singleline(&mut graph.new_group_val)
-                .on_hover_text("Valor a buscar");
-
-            if ui.button("Agregar Grupo").clicked() {
-                if !graph.new_group_val.is_empty() {
-                    graph.custom_groups.push(CustomGroup {
-                        match_type: graph.new_group_type,
-                        value: std::mem::take(&mut graph.new_group_val),
-                        color: graph.new_group_col,
-                    });
+                if ui
+                    .add(
+                        egui::TextEdit::singleline(&mut graph.new_group_query)
+                            .hint_text("file:, path:, tag:, line:, section:")
+                            .desired_width(f32::INFINITY),
+                    )
+                    .changed()
+                {
+                    changed = true;
                 }
+            });
+            if ui.button("Agregar grupo").clicked() && !graph.new_group_query.is_empty() {
+                graph.custom_groups.push(CustomGroup::new(
+                    std::mem::take(&mut graph.new_group_query),
+                    graph.new_group_col,
+                ));
+                changed = true;
             }
 
             ui.separator();
-            ui.label("Grupos Activos:");
             let mut index_to_remove = None;
-            for (i, group) in graph.custom_groups.iter().enumerate() {
+            for (i, group) in graph.custom_groups.iter_mut().enumerate() {
                 ui.horizontal(|ui| {
-                    let (rect, _) = ui.allocate_exact_size(egui::vec2(12.0, 12.0), Sense::hover());
+                    if ui.checkbox(&mut group.enabled, "").changed() {
+                        changed = true;
+                    }
+                    let (rect, _) =
+                        ui.allocate_exact_size(egui::vec2(12.0, 12.0), Sense::hover());
                     ui.painter().rect_filled(rect, 2.0, group.color);
-                    let type_str = match group.match_type {
-                        MatchType::Tag => "Tag",
-                        MatchType::Filename => "File",
-                        MatchType::Path => "Path",
-                        MatchType::Content => "Cont",
-                        MatchType::Section => "Sect",
-                    };
-                    ui.label(format!("{}: '{}'", type_str, group.value));
+                    ui.label(group.query.clone());
                     if ui.button("x").clicked() {
                         index_to_remove = Some(i);
                     }
@@ -396,48 +532,108 @@ fn draw_controls(graph: &mut Graph, ui: &mut Ui, seed_id: Id) -> bool {
             }
             if let Some(i) = index_to_remove {
                 graph.custom_groups.remove(i);
+                changed = true;
+            }
+            if graph.custom_groups.is_empty() {
+                ui.weak("Sin grupos");
             }
         });
 
-        ui.collapsing("Filtros", |ui| {
-            ui.label("Filename:");
-            ui.text_edit_singleline(&mut graph.filter_filename);
-            ui.label("Tag:");
-            ui.text_edit_singleline(&mut graph.filter_tag);
-            ui.label("Path:");
-            ui.text_edit_singleline(&mut graph.filter_path);
-            ui.label("Line:");
-            ui.text_edit_singleline(&mut graph.filter_line);
-            ui.label("Section:");
-            ui.text_edit_singleline(&mut graph.filter_section);
-
-            ui.separator();
-            ui.checkbox(&mut graph.show_attachments, "Mostrar Adjuntos");
-            ui.checkbox(&mut graph.show_existing_only, "Ocultar Nodos Fantasma");
-            ui.checkbox(&mut graph.show_orphans, "Mostrar Huérfanos");
-
+        ui.collapsing("Visualización", |ui| {
+            if ui.checkbox(&mut graph.show_arrows, "Flechas").changed() {
+                changed = true;
+            }
             if ui
-                .checkbox(&mut graph.show_tags, "Mostrar Nodos de Tags")
+                .add(
+                    egui::Slider::new(&mut graph.text_zoom_threshold, 0.0..=2000.0)
+                        .text("Umbral de texto")
+                        .logarithmic(true),
+                )
+                .changed()
+            {
+                changed = true;
+            }
+            if ui
+                .add(egui::Slider::new(&mut graph.node_size, 2.0..=20.0).text("Tamaño de nodo"))
+                .changed()
+            {
+                changed = true;
+            }
+            if ui
+                .add(
+                    egui::Slider::new(&mut graph.line_thickness, 0.5..=10.0)
+                        .text("Grosor de enlace"),
+                )
+                .changed()
+            {
+                changed = true;
+            }
+        });
+
+        ui.collapsing("Fuerzas", |ui| {
+            if ui
+                .add(egui::Slider::new(&mut graph.center_force, 0.0..=1.0).text("Fuerza central"))
+                .changed()
+            {
+                changed = true;
+            }
+            if ui
+                .add(egui::Slider::new(&mut graph.repel_force, 0.0..=100.0).text("Fuerza de repulsión"))
+                .changed()
+            {
+                changed = true;
+            }
+            if ui
+                .add(egui::Slider::new(&mut graph.link_force, 0.0..=3.0).text("Fuerza de enlace"))
+                .changed()
+            {
+                changed = true;
+            }
+            if ui
+                .add(egui::Slider::new(&mut graph.link_distance, 0.0..=300.0).text("Distancia de enlace"))
                 .changed()
             {
                 changed = true;
             }
 
-            if ui.button("Limpiar Todo").clicked() {
-                graph.filter_filename.clear();
-                graph.filter_tag.clear();
-                graph.filter_path.clear();
-                graph.filter_line.clear();
-                graph.filter_section.clear();
+            ui.separator();
+            ui.weak("Avanzado");
+            if ui
+                .add(egui::Slider::new(&mut graph.group_force, 0.0..=5.0).text("Agrupación"))
+                .changed()
+            {
+                changed = true;
             }
+            if ui
+                .add(egui::Slider::new(&mut graph.tag_force, 0.1..=10.0).text("Atracción de tags"))
+                .changed()
+            {
+                changed = true;
+            }
+            ui.horizontal(|ui| {
+                if color_picker::color_edit_button_srgba(
+                    ui,
+                    &mut graph.orphan_color,
+                    egui::widgets::color_picker::Alpha::Opaque,
+                )
+                .changed()
+                {
+                    changed = true;
+                }
+                ui.label("Color de huérfanos");
+            });
         });
     });
 
     changed
 }
 
-fn is_close(delta: PlotPoint, point_pos: (f32, f32), tol: f32) -> bool {
-    let dx = (delta.x as f32 - point_pos.0).abs();
-    let dy = (delta.y as f32 - point_pos.1).abs();
-    dx < tol && dy < tol
+fn lerp_color(a: Color32, b: Color32, t: f32) -> Color32 {
+    let t = t.clamp(0.0, 1.0);
+    Color32::from_rgba_premultiplied(
+        (a.r() as f32 + (b.r() as f32 - a.r() as f32) * t) as u8,
+        (a.g() as f32 + (b.g() as f32 - a.g() as f32) * t) as u8,
+        (a.b() as f32 + (b.b() as f32 - a.b() as f32) * t) as u8,
+        (a.a() as f32 + (b.a() as f32 - a.a() as f32) * t) as u8,
+    )
 }

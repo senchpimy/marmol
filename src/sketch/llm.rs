@@ -6,8 +6,9 @@ use std::time::Duration;
 pub fn reconocer(cfg: &ConfigLlm, png_bytes: &[u8]) -> Result<String, String> {
     let clave = cfg.api_key.trim();
     if clave.is_empty() {
-        return Err("No hay API key configurada (⚙ en la barra o DEFAULT_API_KEY en config.rs)"
-            .to_string());
+        return Err(
+            "No hay API key configurada (⚙ en la barra o DEFAULT_API_KEY en config.rs)".to_string(),
+        );
     }
 
     let b64 = general_purpose::STANDARD.encode(png_bytes);
@@ -53,7 +54,11 @@ pub fn reconocer(cfg: &ConfigLlm, png_bytes: &[u8]) -> Result<String, String> {
         .map_err(|e| format!("Error leyendo respuesta: {}", e))?;
 
     if !status.is_success() {
-        return Err(format!("HTTP {}: {}", status.as_u16(), recortar(&texto, 300)));
+        return Err(format!(
+            "HTTP {}: {}",
+            status.as_u16(),
+            recortar(&texto, 300)
+        ));
     }
 
     let v: serde_json::Value = serde_json::from_str(&texto)
