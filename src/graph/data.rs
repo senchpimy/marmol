@@ -178,7 +178,9 @@ pub struct Graph {
 
     // Caché del contenido de los archivos (abs_path -> contenido) para que los
     // filtros Content/Section no lean disco en el hot path de renderizado/física.
+    // Se acota por bytes para no retener el vault completo en memoria.
     pub content_cache: HashMap<String, String>,
+    pub content_cache_bytes: usize,
 
     // Ruta del vault, para persistir los ajustes del grafo.
     pub vault_path: String,

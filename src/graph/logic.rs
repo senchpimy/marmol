@@ -95,6 +95,7 @@ impl Graph {
             new_group_col: ctx.style_of(ctx.theme()).visuals.error_fg_color,
 
             content_cache: HashMap::new(),
+            content_cache_bytes: 0,
             vault_path: vault.to_string(),
             settings_dirty: false,
             loaded: false,
@@ -226,6 +227,7 @@ impl Graph {
 
     pub fn update_vault(&mut self, vault: &Path) {
         self.content_cache.clear();
+        self.content_cache_bytes = 0;
         self.vault_path = vault.to_str().unwrap_or("").to_string();
 
         let mut points: Vec<MarmolPoint> = vec![];
@@ -237,6 +239,7 @@ impl Graph {
             &mut total,
             vault_str,
             &mut self.content_cache,
+            &mut self.content_cache_bytes,
         );
 
         // Índices de resolución de enlaces.
@@ -766,12 +769,37 @@ fn strip_code_blocks(content: &str) -> String {
     out
 }
 
+/// Presupuesto máximo de la caché de contenido del grafo (32 MiB).
+const CONTENT_CACHE_BUDGET: usize = 32 * 1024 * 1024;
+
+fn cache_content(
+    cache: &mut HashMap<String, String>,
+    cache_bytes: &mut usize,
+    key: String,
+    value: String,
+) {
+    let new_len = value.len();
+    // Un archivo que por sí solo supera el presupuesto no se cachea.
+    if new_len > CONTENT_CACHE_BUDGET {
+        return;
+    }
+    if *cache_bytes + new_len > CONTENT_CACHE_BUDGET && !cache.is_empty() {
+        cache.clear();
+        *cache_bytes = 0;
+    }
+    if let Some(old) = cache.insert(key, value) {
+        *cache_bytes = (*cache_bytes).saturating_sub(old.len());
+    }
+    *cache_bytes += new_len;
+}
+
 fn get_data(
     dir: &Path,
     marmol_vec: &mut Vec<MarmolPoint>,
     total_entries: &mut i32,
     vault: &str,
     content_cache: &mut HashMap<String, String>,
+    content_cache_bytes: &mut usize,
 ) {
     if !Path::new(vault).exists() {
         return;
@@ -785,7 +813,14 @@ fn get_data(
             if name.starts_with('.') {
                 continue;
             }
-            get_data(&path, marmol_vec, total_entries, vault, content_cache);
+            get_data(
+                &path,
+                marmol_vec,
+                total_entries,
+                vault,
+                content_cache,
+                content_cache_bytes,
+            );
         } else if let Some(ext) = path
             .extension()
             .and_then(|s| s.to_str())
@@ -835,7 +870,12 @@ fn get_data(
                 }
 
                 let links_vec = extract_links(&raw_content);
-                content_cache.insert(abs_path.clone(), raw_content);
+                cache_content(
+                    content_cache,
+                    content_cache_bytes,
+                    abs_path.clone(),
+                    raw_content,
+                );
                 marmol_vec.push(MarmolPoint::new(
                     &node_name, tag_vecs, links_vec, rel_path, abs_path, false, false, true,
                 ));
