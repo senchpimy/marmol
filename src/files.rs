@@ -5,12 +5,12 @@ use std::fs::File;
 use std::io::Read;
 use std::io::Write;
 use std::path::Path;
-use std::sync::{Mutex, OnceLock};
+use std::sync::{Arc, Mutex, OnceLock};
 use std::time::SystemTime;
 use walkdir::WalkDir;
 
-fn content_cache() -> &'static Mutex<HashMap<String, (SystemTime, String)>> {
-    static CACHE: OnceLock<Mutex<HashMap<String, (SystemTime, String)>>> = OnceLock::new();
+fn content_cache() -> &'static Mutex<HashMap<String, (SystemTime, Arc<str>)>> {
+    static CACHE: OnceLock<Mutex<HashMap<String, (SystemTime, Arc<str>)>>> = OnceLock::new();
     CACHE.get_or_init(|| Mutex::new(HashMap::new()))
 }
 
@@ -22,7 +22,7 @@ pub fn file_modified(file_name: &str) -> Option<SystemTime> {
 /// Lee un archivo pero solo lo vuelve a leer de disco si su fecha de modificación cambió.
 /// Actúa como un "watcher" ligero basado en mtime: el I/O de disco solo ocurre cuando
 /// el archivo fue modificado realmente, no en cada frame.
-pub fn read_file_cached(file_name: &str) -> String {
+pub fn read_file_cached_arc(file_name: &str) -> Arc<str> {
     let modified = file_modified(file_name);
     if let Some(m) = modified {
         let cache = content_cache();
@@ -34,15 +34,25 @@ pub fn read_file_cached(file_name: &str) -> String {
                 }
             }
         }
-        let content = read_file(file_name);
-        cache
-            .lock()
-            .unwrap()
-            .insert(file_name.to_string(), (m, content.clone()));
+        let content: Arc<str> = Arc::from(read_file(file_name));
+        let mut guard = cache.lock().unwrap();
+        // Caché acotada: al abrir muchos archivos no crece indefinidamente.
+        if guard.len() >= 256 && !guard.contains_key(file_name) {
+            guard.clear();
+        }
+        guard.insert(file_name.to_string(), (m, content.clone()));
+        drop(guard);
         content
     } else {
-        read_file(file_name)
+        Arc::from(read_file(file_name))
     }
+}
+
+/// Igual que [`read_file_cached_arc`] pero devuelve un `String`. Preferir la
+/// versión `Arc` en rutas calientes (render por frame) para no clonar el
+/// documento completo en cada frame.
+pub fn read_file_cached(file_name: &str) -> String {
+    read_file_cached_arc(file_name).to_string()
 }
 
 /// Devuelve la ruta canónica de un archivo, cacheando el resultado (evita
@@ -157,15 +167,20 @@ pub fn read_file(file_name: &str) -> String {
     contents
 }
 
-pub fn contents(contents: &String) -> (String, String) {
-    let metadata = String::new();
-    if contents.starts_with("---") {
-        let test = contents.splitn(3, "---");
-        let test: Vec<&str> = test.collect();
-        return (test[2].to_string(), test[1].to_string());
-    } else {
-        return (contents.to_string(), metadata);
+/// Separa frontmatter y cuerpo sin asignar memoria.
+pub fn contents_borrowed(contents: &str) -> (&str, &str) {
+    if let Some(rest) = contents.strip_prefix("---") {
+        if let Some((metadata, body)) = rest.split_once("---") {
+            return (body, metadata);
+        }
     }
+    (contents, "")
+}
+
+/// Versión que asigna memoria. En rutas calientes usar [`contents_borrowed`].
+pub fn contents(contents: &str) -> (String, String) {
+    let (body, metadata) = contents_borrowed(contents);
+    (body.to_string(), metadata.to_string())
 }
 
 pub fn resolve_path(vault: &str, current_file_path: &str, target: &str) -> Option<String> {
