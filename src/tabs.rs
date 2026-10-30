@@ -1005,6 +1005,11 @@ pub struct Tabs {
     tree: DockState<Tabe>,
     counter: usize,
     toc_cache: Option<(String, Option<SystemTime>, Vec<(usize, String)>)>,
+    /// URIs de texturas que pertenecen a cada pestaña, junto a una firma barata
+    /// del contenido/cachés para no recalcularlas en cada frame. egui/egui_extras
+    /// no liberan las imágenes al cerrar una pestaña, así que las olvidamos
+    /// explícitamente cuando la pestaña desaparece.
+    tracked_textures: HashMap<usize, (usize, Vec<String>)>,
 }
 
 impl Tabs {
@@ -1019,6 +1024,7 @@ impl Tabs {
             tree: dock_state,
             counter,
             toc_cache: None,
+            tracked_textures: HashMap::new(),
         }
     }
 
@@ -1027,6 +1033,138 @@ impl Tabs {
             tree: DockState::new(vec![]),
             counter: 0,
             toc_cache: None,
+            tracked_textures: HashMap::new(),
+        }
+    }
+
+    /// URIs de las texturas generadas por una pestaña Markdown: diagramas y
+    /// fórmulas cacheados (`bytes://...`) e imágenes locales (`file://...`).
+    fn texture_uris_for_tab(tab: &Tabe, vault: &str) -> Vec<String> {
+        let mut uris = Vec::new();
+        let TabContent::Markdown { editor, cache, .. } = &tab.content else {
+            return uris;
+        };
+
+        for key in cache.latex_cache.keys().chain(cache.latex_error_cache.keys()) {
+            uris.push(format!("bytes://latex_{}.svg", egui::Id::new(key).value()));
+        }
+        for key in cache
+            .mermaid_cache
+            .keys()
+            .chain(cache.vega_cache.keys())
+            .chain(cache.tikz_cache.keys())
+        {
+            uris.push(format!("bytes://vega_{}.svg", egui::Id::new(key).value()));
+        }
+
+        // Imágenes locales referenciadas por el documento.
+        let dir = Path::new(&tab.path).parent();
+        let mut rest = editor.code.as_str();
+        while let Some(start) = rest.find("![") {
+            rest = &rest[start + 2..];
+            let Some(close) = rest.find(']') else { break };
+            let after = rest[close + 1..].trim_start();
+            if !after.starts_with('(') {
+                continue;
+            }
+            let Some(end) = after.find(')') else { break };
+            let mut dest = after[1..end].trim();
+            if let Some(space) = dest.find(char::is_whitespace) {
+                dest = &dest[..space];
+            }
+            let dest = dest.trim_matches(|c| c == '<' || c == '>');
+            if dest.is_empty()
+                || dest.starts_with("http")
+                || dest.starts_with("data:")
+                || dest.starts_with("bytes:")
+            {
+                continue;
+            }
+            if let Some(path) = dest.strip_prefix("file://") {
+                uris.push(format!("file://{}", path));
+            } else {
+                // `files::resolve_path` prueba primero junto al documento y
+                // después respecto a la raíz del vault.
+                if let Some(dir) = dir {
+                    uris.push(format!("file://{}", dir.join(dest).to_string_lossy()));
+                }
+                if !vault.is_empty() {
+                    uris.push(format!(
+                        "file://{}",
+                        Path::new(vault).join(dest).to_string_lossy()
+                    ));
+                }
+                if !dest.contains('/') && !dest.contains('\\') {
+                    uris.push(format!("file://{}", dest));
+                }
+            }
+        }
+
+        uris
+    }
+
+    /// Firma barata para detectar cambios en el contenido o en las cachés de
+    /// render de una pestaña sin recorrer el documento.
+    fn texture_signature(tab: &Tabe) -> usize {
+        let TabContent::Markdown { editor, cache, .. } = &tab.content else {
+            return 0;
+        };
+        editor
+            .code
+            .len()
+            .wrapping_add(cache.latex_cache.len().wrapping_mul(31))
+            .wrapping_add(cache.latex_error_cache.len().wrapping_mul(37))
+            .wrapping_add(cache.mermaid_cache.len().wrapping_mul(41))
+            .wrapping_add(cache.vega_cache.len().wrapping_mul(43))
+            .wrapping_add(cache.tikz_cache.len().wrapping_mul(47))
+    }
+
+    /// Libera las texturas de las pestañas que ya no existen.
+    pub fn sync_texture_lifetimes(&mut self, ctx: &egui::Context, vault: &str) {
+        let mut alive: HashSet<usize> = HashSet::new();
+        for (_, tab) in self.tree.iter_all_tabs() {
+            alive.insert(tab.id);
+            let signature = Self::texture_signature(tab);
+            let needs_refresh = self
+                .tracked_textures
+                .get(&tab.id)
+                .map_or(true, |(cached, _)| *cached != signature);
+            if needs_refresh {
+                let uris = Self::texture_uris_for_tab(tab, vault);
+                if uris.is_empty() {
+                    self.tracked_textures.remove(&tab.id);
+                } else {
+                    self.tracked_textures.insert(tab.id, (signature, uris));
+                }
+            }
+        }
+
+        let dead: Vec<usize> = self
+            .tracked_textures
+            .keys()
+            .copied()
+            .filter(|id| !alive.contains(id))
+            .collect();
+        if dead.is_empty() {
+            return;
+        }
+
+        // Solo cuando hay pestañas cerradas calculamos el conjunto de URIs vivas.
+        let mut alive_uris: HashSet<String> = HashSet::new();
+        for id in &alive {
+            if let Some((_, uris)) = self.tracked_textures.get(id) {
+                alive_uris.extend(uris.iter().cloned());
+            }
+        }
+        for id in dead {
+            if let Some((_, uris)) = self.tracked_textures.remove(&id) {
+                for uri in uris {
+                    // Otra pestaña puede estar mostrando el mismo diagrama/imagen.
+                    if !alive_uris.contains(uri.as_str()) {
+                        ctx.forget_image(&uri);
+                    }
+                }
+            }
         }
     }
 
@@ -1216,6 +1354,8 @@ impl Tabs {
             self.tree
                 .push_to_focused_leaf(Tabe::new(self.counter, cloned_path));
         });
+
+        self.sync_texture_lifetimes(ui.ctx(), vault);
     }
 
     pub fn active_view_toc(&mut self) -> Option<(usize, Vec<(usize, String)>)> {
