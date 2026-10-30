@@ -5,7 +5,11 @@ use eframe::egui::{self, Id, Popup, PopupCloseBehavior, Sense, Vec2};
 use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
-use std::time::SystemTime;
+use std::time::{Duration, Instant, SystemTime};
+
+/// Intervalo mínimo entre comprobaciones de `mtime` de un directorio. Evita
+/// hacer un `stat` por frame para cada carpeta visible sin perder reactividad.
+const DIR_RECHECK_INTERVAL: Duration = Duration::from_millis(250);
 
 #[derive(Clone)]
 struct FileEntry {
@@ -19,6 +23,7 @@ struct FileEntry {
 struct CachedDir {
     entries: Vec<FileEntry>,
     last_updated: SystemTime,
+    last_check: Instant,
 }
 
 pub struct FileTree {
@@ -66,12 +71,19 @@ impl FileTree {
         // Caching Logic
         // Detectar cambios comparando la mtime del directorio: se actualiza al
         // instante cuando se agrega/elimina/renombra un archivo o subdirectorio.
-        let dir_mtime = fs::metadata(path).and_then(|m| m.modified()).ok();
+        let now = Instant::now();
+        let needs_check = self
+            .cache
+            .get(path)
+            .map_or(true, |c| now.duration_since(c.last_check) >= DIR_RECHECK_INTERVAL);
+        let cached_mtime = self.cache.get(path).map(|c| c.last_updated);
+        let dir_mtime = if needs_check {
+            fs::metadata(path).and_then(|m| m.modified()).ok()
+        } else {
+            cached_mtime
+        };
         let should_update = match dir_mtime {
-            Some(mtime) => match self.cache.get(path) {
-                Some(cached) => cached.last_updated != mtime,
-                None => true,
-            },
+            Some(mtime) => cached_mtime.map_or(true, |cached| cached != mtime),
             None => !self.cache.contains_key(path),
         };
 
@@ -109,6 +121,7 @@ impl FileTree {
                     CachedDir {
                         entries,
                         last_updated: dir_mtime.unwrap_or(SystemTime::UNIX_EPOCH),
+                        last_check: now,
                     },
                 );
             } else {
@@ -117,6 +130,10 @@ impl FileTree {
                      ui.label("Unable to read directory");
                      return;
                 }
+            }
+        } else if needs_check {
+            if let Some(cached) = self.cache.get_mut(path) {
+                cached.last_check = now;
             }
         }
 
