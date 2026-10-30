@@ -670,6 +670,11 @@ impl CanvasGui {
             CanvasNode::File { file, .. } => {
                 if let Some(p) = crate::files::resolve_path(vault, path, file) {
                     if p.ends_with(".md") {
+                        // Caché acotada: un canvas grande no debe retener todos
+                        // los documentos referenciados indefinidamente.
+                        if !file_cache.contains_key(&p) && file_cache.len() >= 128 {
+                            file_cache.clear();
+                        }
                         let content = file_cache
                             .entry(p.clone())
                             .or_insert_with(|| fs::read_to_string(&p).unwrap_or_default());
