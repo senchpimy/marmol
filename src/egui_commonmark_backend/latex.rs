@@ -1,6 +1,5 @@
 use crate::egui_commonmark_backend::misc::CommonMarkCache;
 use egui::{Color32, RichText, Ui};
-use rust_embed::RustEmbed;
 use std::path::PathBuf;
 use std::sync::OnceLock;
 use time::OffsetDateTime;
@@ -11,37 +10,56 @@ use typst::text::{Font, FontBook};
 use typst::utils::LazyHash;
 use typst::{Library, World};
 
-#[derive(RustEmbed)]
-#[folder = "assets/fonts/"]
-struct Asset;
-
 /// Partes del `World` de Typst que son idénticas para todas las fórmulas:
 /// la librería estándar, el índice de fuentes y la fuente ya parseada.
 ///
-/// Se construyen una sola vez. Antes se reconstruían por cada fórmula, lo que
-/// en debug costaba ~24ms por fórmula (descomprimir y parsear la fuente +
-/// `Library::default()`), haciendo que un documento con muchas fórmulas tardara
-/// varios segundos en el primer render.
+/// Se construyen una sola vez. La fuente se busca en el sistema (igual que hace
+/// Tinta con Cambria Math); si no existe, `font` es `None` y las fórmulas se
+/// muestran como texto.
 struct TypstParts {
     library: LazyHash<Library>,
     book: LazyHash<FontBook>,
-    font: Font,
+    font: Option<Font>,
 }
 
 fn typst_parts() -> &'static TypstParts {
     static PARTS: OnceLock<TypstParts> = OnceLock::new();
     PARTS.get_or_init(|| {
-        let font_file = Asset::get("NotoSansMath-Regular.ttf")
-            .expect("No se encontró la fuente NotoSansMath en el binario");
-        let font_data = font_file.data.to_vec();
-        let font = Font::new(Bytes::from(font_data), 0).expect("Fuente inválida");
-        let book = FontBook::from_fonts(std::slice::from_ref(&font));
+        let font = crate::math_font::system_math_font().cloned();
+        let book = match &font {
+            Some(font) => FontBook::from_fonts(std::slice::from_ref(font)),
+            None => FontBook::new(),
+        };
         TypstParts {
             library: LazyHash::new(Library::default()),
             book: LazyHash::new(book),
             font,
         }
     })
+}
+
+/// Indica si hay una fuente matemática disponible para renderizar LaTeX.
+pub fn has_math_font() -> bool {
+    crate::math_font::system_math_font().is_some()
+}
+
+/// Muestra el LaTeX sin renderizar cuando no hay fuente matemática.
+fn render_as_text(ui: &mut Ui, latex: &str, inline: bool) {
+    let text = if inline {
+        format!("${latex}$")
+    } else {
+        format!("$$ {latex} $$")
+    };
+    let label = RichText::new(text)
+        .monospace()
+        .color(ui.visuals().weak_text_color());
+    if inline {
+        ui.label(label);
+    } else {
+        ui.vertical_centered(|ui| {
+            ui.label(label);
+        });
+    }
 }
 
 struct MinimalWorld {
@@ -82,7 +100,7 @@ impl World for MinimalWorld {
     }
     fn font(&self, index: usize) -> Option<Font> {
         if index == 0 {
-            Some(self.parts.font.clone())
+            self.parts.font.clone()
         } else {
             None
         }
@@ -93,6 +111,11 @@ impl World for MinimalWorld {
 }
 
 pub fn render(ui: &mut Ui, cache: &mut CommonMarkCache, latex: &str, inline: bool, font_size: f32) {
+    if !has_math_font() {
+        render_as_text(ui, latex, inline);
+        return;
+    }
+
     let text_color = ui.visuals().text_color();
     let color_hex = format!(
         "#{:02x}{:02x}{:02x}",
@@ -149,12 +172,15 @@ pub fn render(ui: &mut Ui, cache: &mut CommonMarkCache, latex: &str, inline: boo
 pub fn render_to_svg(latex_input: &str, inline: bool, color_hex: &str, font_size: f32) -> Result<String, String> {
     // Fuente + librería + índice de fuentes se reutilizan (se construyen una vez).
     let parts = typst_parts();
+    let Some(font) = &parts.font else {
+        return Err("No hay ninguna fuente matemática instalada".to_string());
+    };
 
     // Convertir LaTeX a Typst Math
     let clean_latex = latex_input.replace('\n', "");
     let typst_math = crate::format::latex_a_typst(&clean_latex);
 
-    let font_family = parts.font.info().family.clone();
+    let font_family = font.info().family.clone();
 
     let margin = if inline {
         "0.5pt"

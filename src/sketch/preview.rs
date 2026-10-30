@@ -1,5 +1,4 @@
-use egui::{Color32, Ui};
-use rust_embed::RustEmbed;
+use egui::{Color32, RichText, Ui};
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 use time::OffsetDateTime;
@@ -10,10 +9,6 @@ use typst::text::{Font, FontBook};
 use typst::utils::LazyHash;
 use typst::{Library, World};
 
-#[derive(RustEmbed)]
-#[folder = "assets/fonts/"]
-struct Asset;
-
 struct MiniWorld {
     library: LazyHash<Library>,
     book: LazyHash<FontBook>,
@@ -23,8 +18,7 @@ struct MiniWorld {
 }
 
 impl MiniWorld {
-    fn new(source_text: String, font_data: Vec<u8>) -> Self {
-        let font = Font::new(Bytes::from(font_data), 0).expect("Fuente inválida");
+    fn new(source_text: String, font: Font) -> Self {
         let fonts = vec![font];
         let book = FontBook::from_fonts(&fonts);
         let source = Source::detached(source_text);
@@ -74,15 +68,14 @@ impl World for MiniWorld {
 }
 
 pub fn latex_a_svg(latex: &str, color: Color32) -> Result<String, String> {
-    let font_file =
-        Asset::get("NotoSansMath-Regular.ttf").ok_or("No se encontró la fuente NotoSansMath")?;
-    let font_data = font_file.data.to_vec();
+    let font = crate::math_font::system_math_font()
+        .cloned()
+        .ok_or("No hay ninguna fuente matemática instalada")?;
 
     let clean = latex.replace('\n', " ");
     let typst_math = crate::format::latex_a_typst(&clean);
 
     let hex = format!("#{:02x}{:02x}{:02x}", color.r(), color.g(), color.b());
-    let font = Font::new(Bytes::from(font_data.clone()), 0).ok_or("Fuente inválida")?;
     let familia = font.info().family.clone();
 
     let typst_code = format!(
@@ -95,7 +88,7 @@ pub fn latex_a_svg(latex: &str, color: Color32) -> Result<String, String> {
         familia, hex, familia, hex, typst_math
     );
 
-    let world = MiniWorld::new(typst_code, font_data);
+    let world = MiniWorld::new(typst_code, font);
 
     match typst::compile(&world).output {
         Ok(document) => document
@@ -120,6 +113,17 @@ pub fn mostrar_preview(
     latex: &str,
 ) {
     if latex.trim().is_empty() {
+        return;
+    }
+
+    if crate::math_font::system_math_font().is_none() {
+        ui.vertical_centered(|ui| {
+            ui.label(
+                RichText::new(latex)
+                    .monospace()
+                    .color(ui.visuals().weak_text_color()),
+            );
+        });
         return;
     }
 

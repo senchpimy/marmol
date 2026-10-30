@@ -28,6 +28,7 @@ pub mod iconize;
 pub mod income;
 pub mod kanban;
 pub mod main_area;
+pub mod math_font;
 pub mod screens;
 pub mod search;
 pub mod server;

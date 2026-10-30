@@ -34,7 +34,6 @@ walkdir = "2.3.1"
 regex = "1.7.2"
 fstream = "0.1.2"
 egui-twemoji = "0.8"
-rust-embed = "8.9.0"
 zip = "7.0.0"
 reqwest = { version = "0.11", default-features = false, features = ["blocking", "rustls-tls"] }
 log = "0.4"
