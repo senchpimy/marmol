@@ -110,13 +110,15 @@ pub fn render(ui: &mut Ui, cache: &mut CommonMarkCache, latex: &str, inline: boo
     } else {
         match render_to_svg(latex, inline, &color_hex, font_size) {
             Ok(svg) => {
-                cache.latex_cache.insert(cache_key.clone(), svg.clone());
+                super::misc::insert_cached(&mut cache.latex_cache, cache_key.clone(), svg.clone());
                 Some(svg)
             }
             Err(err) => {
-                cache
-                    .latex_error_cache
-                    .insert(cache_key.clone(), err.clone());
+                super::misc::insert_cached(
+                    &mut cache.latex_error_cache,
+                    cache_key.clone(),
+                    err.clone(),
+                );
                 ui.label(RichText::new(format!("LaTeX error: {}", err)).color(Color32::RED));
                 None
             }

@@ -679,13 +679,13 @@ impl CodeBlock {
                     let results = get_vega_results();
                     let mut results_lock = results.lock().unwrap();
                     if let Some(svg) = results_lock.remove(&self.content) {
-                        cache_map.insert(self.content.clone(), svg);
+                        insert_cached(cache_map, self.content.clone(), svg);
                     }
                 } else if is_tikz {
                     let results = get_tikz_results();
                     let mut results_lock = results.lock().unwrap();
                     if let Some(svg) = results_lock.remove(&self.content) {
-                        cache_map.insert(self.content.clone(), svg);
+                        insert_cached(cache_map, self.content.clone(), svg);
                     }
                 }
 
@@ -718,7 +718,7 @@ impl CodeBlock {
                                 if let Some(start) = svg.find("<svg") {
                                     svg = svg[start..].to_string();
                                 }
-                                cache_map.insert(self.content.clone(), svg.clone());
+                                insert_cached(cache_map, self.content.clone(), svg.clone());
                                 Some(svg)
                             }
                             Err(err) => {
@@ -731,7 +731,7 @@ impl CodeBlock {
                         }
                     } else if is_tikz {
                         // Marcar como cargando para evitar peticiones infinitas cada frame
-                        cache_map.insert(self.content.clone(), "LOADING".to_string());
+                        insert_cached(cache_map, self.content.clone(), "LOADING".to_string());
 
                         // TikZ rendering local via rust_tikz (tikzjax)
                         let content = self.content.clone();
@@ -770,14 +770,14 @@ impl CodeBlock {
                             let result =
                                 rendered.unwrap_or_else(|e| format!("ERROR: TikZ task: {}", e));
                             let mut res_lock = results.lock().unwrap();
-                            res_lock.insert(content, result);
+                            insert_cached(&mut res_lock, content, result);
                             ctx.request_repaint();
                         });
 
                         None
                     } else {
                         // Marcar como cargando para evitar peticiones infinitas cada frame
-                        cache_map.insert(self.content.clone(), "LOADING".to_string());
+                        insert_cached(cache_map, self.content.clone(), "LOADING".to_string());
 
                         // Vega/Vega-Lite rendering local via vl-convert-rs
                         let content = self.content.clone();
@@ -854,11 +854,12 @@ impl CodeBlock {
                                             }
                                             
                                             let mut res_lock = results.lock().unwrap();
-                                            res_lock.insert(content, svg);
+                                            insert_cached(&mut res_lock, content, svg);
                                         }
                                         Err(e) => {
                                             let mut res_lock = results.lock().unwrap();
-                                            res_lock.insert(
+                                            insert_cached(
+                                                &mut res_lock,
                                                 content,
                                                 format!("ERROR: Vega conversion: {}", e),
                                             );
@@ -867,7 +868,8 @@ impl CodeBlock {
                                 }
                                 Err(e) => {
                                     let mut res_lock = results.lock().unwrap();
-                                    res_lock.insert(
+                                    insert_cached(
+                                        &mut res_lock,
                                         content,
                                         format!("ERROR: Invalid JSON for Vega: {}", e),
                                     );
@@ -1037,16 +1039,49 @@ fn default_theme(ui: &Ui) -> &str {
     }
 }
 
+/// Límite de entradas para las cachés de contenido renderizado (SVG/LaTeX).
+/// Al superarlo se vacía la caché completa para acotar la memoria.
+pub(crate) const RENDER_CACHE_LIMIT: usize = 64;
+
+/// Inserta en una caché acotada. Si ya está llena se vacía antes de insertar,
+/// de forma que la memoria no crezca sin límite al navegar muchos documentos.
+pub(crate) fn insert_cached<K: std::hash::Hash + Eq, V>(
+    map: &mut HashMap<K, V>,
+    key: K,
+    value: V,
+) {
+    if map.len() >= RENDER_CACHE_LIMIT && !map.contains_key(&key) {
+        map.clear();
+    }
+    map.insert(key, value);
+}
+
+/// `SyntaxSet` compartido por todas las pestañas: cargarlo es caro y el conjunto
+/// de definiciones es idéntico para todos los documentos.
+#[cfg(feature = "better_syntax_highlighting")]
+fn shared_syntax_set() -> Arc<SyntaxSet> {
+    static SET: OnceLock<Arc<SyntaxSet>> = OnceLock::new();
+    SET.get_or_init(|| Arc::new(SyntaxSet::load_defaults_newlines()))
+        .clone()
+}
+
+/// `ThemeSet` compartido por todas las pestañas (misma razón que `shared_syntax_set`).
+#[cfg(feature = "better_syntax_highlighting")]
+fn shared_theme_set() -> Arc<ThemeSet> {
+    static SET: OnceLock<Arc<ThemeSet>> = OnceLock::new();
+    SET.get_or_init(|| Arc::new(ThemeSet::load_defaults())).clone()
+}
+
 /// A cache used for storing content such as images.
 #[derive(Debug)]
 pub struct CommonMarkCache {
     // Everything stored in `CommonMarkCache` must take into account that
     // the cache is for multiple `CommonMarkviewer`s with different source_ids.
     #[cfg(feature = "better_syntax_highlighting")]
-    ps: SyntaxSet,
+    ps: Arc<SyntaxSet>,
 
     #[cfg(feature = "better_syntax_highlighting")]
-    ts: ThemeSet,
+    ts: Arc<ThemeSet>,
 
     link_hooks: HashMap<String, bool>,
 
@@ -1072,9 +1107,9 @@ impl Default for CommonMarkCache {
     fn default() -> Self {
         Self {
             #[cfg(feature = "better_syntax_highlighting")]
-            ps: SyntaxSet::load_defaults_newlines(),
+            ps: shared_syntax_set(),
             #[cfg(feature = "better_syntax_highlighting")]
-            ts: ThemeSet::load_defaults(),
+            ts: shared_theme_set(),
             link_hooks: HashMap::new(),
             scroll: Default::default(),
             has_installed_loaders: false,
@@ -1091,16 +1126,16 @@ impl Default for CommonMarkCache {
 impl CommonMarkCache {
     #[cfg(feature = "better_syntax_highlighting")]
     pub fn add_syntax_from_folder(&mut self, path: &str) {
-        let mut builder = self.ps.clone().into_builder();
+        let mut builder = (*self.ps).clone().into_builder();
         let _ = builder.add_from_folder(path, true);
-        self.ps = builder.build();
+        self.ps = Arc::new(builder.build());
     }
 
     #[cfg(feature = "better_syntax_highlighting")]
     pub fn add_syntax_from_str(&mut self, s: &str, fallback_name: Option<&str>) {
-        let mut builder = self.ps.clone().into_builder();
+        let mut builder = (*self.ps).clone().into_builder();
         let _ = SyntaxDefinition::load_from_str(s, true, fallback_name).map(|d| builder.add(d));
-        self.ps = builder.build();
+        self.ps = Arc::new(builder.build());
     }
 
     #[cfg(feature = "better_syntax_highlighting")]
@@ -1111,7 +1146,12 @@ impl CommonMarkCache {
         &mut self,
         path: impl AsRef<std::path::Path>,
     ) -> Result<(), syntect::LoadingError> {
-        self.ts.add_from_folder(path)
+        let mut themes = ThemeSet {
+            themes: self.ts.themes.clone(),
+        };
+        themes.add_from_folder(path)?;
+        self.ts = Arc::new(themes);
+        Ok(())
     }
 
     #[cfg(feature = "better_syntax_highlighting")]
@@ -1124,9 +1164,12 @@ impl CommonMarkCache {
         bytes: &[u8],
     ) -> Result<(), syntect::LoadingError> {
         let mut cursor = std::io::Cursor::new(bytes);
-        self.ts
-            .themes
-            .insert(name.into(), ThemeSet::load_from_reader(&mut cursor)?);
+        let theme = ThemeSet::load_from_reader(&mut cursor)?;
+        let mut themes = ThemeSet {
+            themes: self.ts.themes.clone(),
+        };
+        themes.themes.insert(name.into(), theme);
+        self.ts = Arc::new(themes);
         Ok(())
     }
 
