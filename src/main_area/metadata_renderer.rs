@@ -10,10 +10,10 @@ fn emitted_cache() -> &'static Mutex<HashMap<String, Arc<str>>> {
     CACHE.get_or_init(|| Mutex::new(HashMap::new()))
 }
 
-pub fn create_metadata(metadata: String, ui: &mut egui::Ui) {
+pub fn create_metadata(metadata: &str, ui: &mut egui::Ui) {
     let emitted: Option<Arc<str>> = {
         let cache = emitted_cache();
-        if let Some(s) = cache.lock().unwrap().get(&metadata) {
+        if let Some(s) = cache.lock().unwrap().get(metadata) {
             Some(s.clone())
         } else {
             None
@@ -46,10 +46,11 @@ pub fn create_metadata(metadata: String, ui: &mut egui::Ui) {
             let mut emitter = YamlEmitter::new(&mut out_str);
             emitter.dump(&docs[0]).unwrap();
             let s: Arc<str> = out_str.into();
-            emitted_cache()
-                .lock()
-                .unwrap()
-                .insert(metadata, s.clone());
+            let mut cache = emitted_cache().lock().unwrap();
+            if cache.len() >= 256 {
+                cache.clear();
+            }
+            cache.insert(metadata.to_string(), s.clone());
             s
         }
     };

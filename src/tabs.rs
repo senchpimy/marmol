@@ -691,11 +691,18 @@ impl TabViewer for MTabViewer<'_> {
                 }
                 
                 TabContent::Markdown { editor, cache, scroll_offset } => {
-                    if editor.code.is_empty() && !tab.path.is_empty() {
+                    if tab.ctype != Content::View
+                        && editor.code.is_empty()
+                        && !tab.path.is_empty()
+                    {
                         editor.code = files::read_file(&tab.path);
                     }
-                    editor.vault_path = self.vault.to_string();
-                    editor.file_path = tab.path.clone();
+                    if editor.vault_path != self.vault {
+                        editor.vault_path = self.vault.to_string();
+                    }
+                    if editor.file_path != tab.path {
+                        editor.file_path = tab.path.clone();
+                    }
 
                     let width = ui.available_width();
                     let height = ui.available_height();
@@ -704,8 +711,14 @@ impl TabViewer for MTabViewer<'_> {
                     let tab_id = tab.id;
 
                     if tab.ctype == Content::View {
-                        editor.code = files::read_file_cached(&tab.path);
-                        let (markdown_content, metadata) = files::contents(&editor.code);
+                        // Leer a través de la caché en `Arc<str>`: evita clonar el
+                        // documento completo en cada frame. Solo se copia en
+                        // `editor.code` cuando el contenido cambió de verdad.
+                        let cached = files::read_file_cached_arc(&tab.path);
+                        if editor.code.as_str() != &*cached {
+                            editor.code = cached.to_string();
+                        }
+                        let (markdown_content, metadata) = files::contents_borrowed(&editor.code);
 
                         let cont = StripBuilder::new(ui)
                             .size(Size::relative(margin_ratio))
@@ -1228,8 +1241,8 @@ impl Tabs {
         } else {
             editor.code.clone()
         };
-        let (markdown_content, _metadata) = files::contents(&code);
-        let headings = parse_toc(&markdown_content);
+        let (markdown_content, _metadata) = files::contents_borrowed(&code);
+        let headings = parse_toc(markdown_content);
         let result: Vec<(usize, String)> =
             headings.into_iter().map(|h| (h.level, h.text)).collect();
         self.toc_cache = Some((tab_path, mtime, result.clone()));
