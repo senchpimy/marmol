@@ -1,122 +1,29 @@
-use egui::{Color32, RichText, Ui};
-use std::collections::hash_map::DefaultHasher;
-use std::hash::{Hash, Hasher};
-use time::OffsetDateTime;
-use typst::diag::{FileError, FileResult};
-use typst::foundations::{Bytes, Datetime};
-use typst::syntax::{FileId, Source};
-use typst::text::{Font, FontBook};
-use typst::utils::LazyHash;
-use typst::{Library, World};
+use crate::latex_math::MathBox;
+use egui::{RichText, Sense, Ui};
 
-struct MiniWorld {
-    library: LazyHash<Library>,
-    book: LazyHash<FontBook>,
-    fonts: Vec<Font>,
-    source: Source,
-    time: OffsetDateTime,
-}
-
-impl MiniWorld {
-    fn new(source_text: String, font: Font) -> Self {
-        let fonts = vec![font];
-        let book = FontBook::from_fonts(&fonts);
-        let source = Source::detached(source_text);
-
-        Self {
-            library: LazyHash::new(Library::default()),
-            book: LazyHash::new(book),
-            fonts,
-            source,
-            time: OffsetDateTime::now_utc(),
-        }
-    }
-}
-
-impl World for MiniWorld {
-    fn library(&self) -> &LazyHash<Library> {
-        &self.library
-    }
-
-    fn book(&self) -> &LazyHash<FontBook> {
-        &self.book
-    }
-
-    fn main(&self) -> FileId {
-        self.source.id()
-    }
-
-    fn source(&self, id: FileId) -> FileResult<Source> {
-        if id == self.source.id() {
-            Ok(self.source.clone())
-        } else {
-            Err(FileError::NotFound(std::path::PathBuf::new()))
-        }
-    }
-
-    fn file(&self, _id: FileId) -> FileResult<Bytes> {
-        Err(FileError::NotFound(std::path::PathBuf::new()))
-    }
-
-    fn font(&self, index: usize) -> Option<Font> {
-        self.fonts.get(index).cloned()
-    }
-
-    fn today(&self, _offset: Option<i64>) -> Option<Datetime> {
-        Some(Datetime::Date(self.time.date()))
-    }
-}
-
-pub fn latex_a_svg(latex: &str, color: Color32) -> Result<String, String> {
-    let font = crate::math_font::system_math_font()
-        .cloned()
-        .ok_or("No hay ninguna fuente matemática instalada")?;
-
-    let clean = latex.replace('\n', " ");
-    let typst_math = crate::format::latex_a_typst(&clean);
-
-    let hex = format!("#{:02x}{:02x}{:02x}", color.r(), color.g(), color.b());
-    let familia = font.info().family.clone();
-
-    let typst_code = format!(
-        r#"
-        #set page(width: auto, height: auto, margin: 4pt, fill: none)
-        #set text(font: "{}", size: 22pt, fill: rgb("{}"))
-        #show math.equation: set text(font: "{}", fill: rgb("{}"))
-        $ {} $
-        "#,
-        familia, hex, familia, hex, typst_math
-    );
-
-    let world = MiniWorld::new(typst_code, font);
-
-    match typst::compile(&world).output {
-        Ok(document) => document
-            .pages
-            .first()
-            .map(typst_svg::svg)
-            .ok_or_else(|| "El documento no generó páginas".to_string()),
-        Err(errors) => {
-            let mut msg = String::new();
-            for err in errors {
-                msg.push_str(&err.message);
-                msg.push('\n');
-            }
-            Err(msg)
-        }
-    }
+pub fn latex_a_box(ui: &Ui, latex: &str, font_size: f32) -> Result<MathBox, String> {
+    let node = crate::latex_math::parse_latex(latex)
+        .ok_or_else(|| "LaTeX no soportado por el motor nativo".to_string())?;
+    let family = egui::FontFamily::Name(crate::math_font::EGUI_FAMILY.into());
+    let mut measurer = crate::latex_math::EguiMeasurer::new(ui, family);
+    Ok(crate::latex_math::layout(
+        &node,
+        font_size,
+        true,
+        &mut measurer,
+    ))
 }
 
 pub fn mostrar_preview(
     ui: &mut Ui,
-    cache: &mut Option<(String, Result<String, String>)>,
+    cache: &mut Option<(String, Result<MathBox, String>)>,
     latex: &str,
 ) {
     if latex.trim().is_empty() {
         return;
     }
 
-    if crate::math_font::system_math_font().is_none() {
+    if crate::math_font::system_math_font_data().is_none() {
         ui.vertical_centered(|ui| {
             ui.label(
                 RichText::new(latex)
@@ -130,26 +37,23 @@ pub fn mostrar_preview(
     let cambiar = cache.as_ref().map(|(k, _)| k != latex).unwrap_or(true);
 
     if cambiar {
-        *cache = Some((
-            latex.to_string(),
-            latex_a_svg(latex, ui.visuals().text_color()),
-        ));
+        *cache = Some((latex.to_string(), latex_a_box(ui, latex, 22.0)));
     }
 
     if let Some((_, resultado)) = cache.as_ref() {
         match resultado {
-            Ok(svg) => {
-                let mut hasher = DefaultHasher::new();
-                latex.hash(&mut hasher);
-                let uri = format!("bytes://sketch_preview_{:016x}.svg", hasher.finish());
-                let img =
-                    egui::Image::from_bytes(uri, svg.as_bytes().to_vec()).fit_to_original_size(1.0);
-                ui.vertical_centered(|ui| {
-                    ui.add(img.max_width(ui.available_width()));
-                });
+            Ok(math_box) => {
+                let size = egui::vec2(math_box.width.max(1.0), math_box.height.max(1.0));
+                let (rect, _) = ui.allocate_exact_size(size, Sense::hover());
+                crate::latex_math::render::draw(
+                    ui,
+                    math_box,
+                    rect.min,
+                    ui.visuals().text_color(),
+                );
             }
             Err(e) => {
-                ui.colored_label(Color32::RED, format!("Error en el preview: {}", e));
+                ui.colored_label(egui::Color32::RED, format!("Error en el preview: {}", e));
             }
         }
     }

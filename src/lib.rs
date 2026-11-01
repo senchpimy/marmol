@@ -27,6 +27,7 @@ pub mod graph;
 pub mod iconize;
 pub mod income;
 pub mod kanban;
+pub mod latex_math;
 pub mod main_area;
 pub mod math_font;
 pub mod screens;

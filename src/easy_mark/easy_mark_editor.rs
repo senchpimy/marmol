@@ -26,7 +26,7 @@ pub struct EasyMarkEditor {
     highlighter: super::MemoizedEasymarkHighlighter,
 
     #[serde(skip)]
-    latex_preview_cache: Option<(String, Result<String, String>)>,
+    latex_preview_cache: Option<(String, Result<crate::latex_math::MathBox, String>)>,
 
     #[serde(skip)]
     wiki_files: Vec<String>,

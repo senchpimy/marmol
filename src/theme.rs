@@ -59,7 +59,10 @@ fn get_theme_path() -> Option<PathBuf> {
 pub fn load_and_apply_theme(ctx: &Context) -> Style {
     let theme_path = match get_theme_path() {
         Some(path) => path,
-        None => return Style::from_egui(ctx.style_of(ctx.theme()).as_ref()),
+        None => {
+            install_default_fonts(ctx);
+            return Style::from_egui(ctx.style_of(ctx.theme()).as_ref());
+        }
     };
 
     println!("Intentando cargar tema desde: {:?}", theme_path);
@@ -101,6 +104,8 @@ pub fn load_and_apply_theme(ctx: &Context) -> Style {
 
     if let Some(font_name) = &theme_config.font_family {
         load_system_font(ctx, font_name);
+    } else {
+        install_default_fonts(ctx);
     }
 
     if let Some(size) = theme_config.base_font_size {
@@ -253,6 +258,15 @@ fn hex_to_color(hex: &str) -> Color32 {
     }
 }
 
+/// Instala las fuentes por defecto de egui junto con la fuente matemática del
+/// sistema (necesaria para dibujar LaTeX sin incrustar ninguna fuente).
+fn install_default_fonts(ctx: &Context) {
+    let mut fonts = FontDefinitions::default();
+    if crate::math_font::install_in_font_definitions(&mut fonts) {
+        ctx.set_fonts(fonts);
+    }
+}
+
 fn load_system_font(ctx: &Context, font_family_name: &str) {
     #[cfg(not(target_os = "android"))]
     {
@@ -274,15 +288,17 @@ fn load_system_font(ctx: &Context, font_family_name: &str) {
                 .entry(FontFamily::Monospace)
                 .or_default()
                 .insert(0, font_family_name.to_owned());
+            crate::math_font::install_in_font_definitions(&mut fonts);
             ctx.set_fonts(fonts);
             println!("Fuente cargada: {}", font_family_name);
         } else {
             eprintln!("Fuente NO encontrada: {}", font_family_name);
+            install_default_fonts(ctx);
         }
     }
     #[cfg(target_os = "android")]
     {
-        let _ = ctx;
+        install_default_fonts(ctx);
         let _ = font_family_name;
     }
 }

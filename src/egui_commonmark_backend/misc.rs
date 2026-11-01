@@ -1090,7 +1090,7 @@ pub struct CommonMarkCache {
     pub mermaid_cache: HashMap<String, String>,
     pub vega_cache: HashMap<String, String>,
     pub tikz_cache: HashMap<String, String>,
-    pub latex_cache: HashMap<String, String>,
+    pub latex_cache: HashMap<String, Arc<crate::latex_math::MathBox>>,
     pub latex_error_cache: HashMap<String, String>,
 
     pub parsed_events: HashMap<

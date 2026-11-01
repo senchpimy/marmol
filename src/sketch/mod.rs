@@ -32,7 +32,7 @@ pub struct SketchGui {
     receptor: Option<Mutex<mpsc::Receiver<Result<String, String>>>>,
     ultimo_png: Option<Vec<u8>>,
     latex_text: String,
-    preview_cache: Option<(String, Result<String, String>)>,
+    preview_cache: Option<(String, Result<crate::latex_math::MathBox, String>)>,
     confirmado: bool,
 
     pub target_path: String,

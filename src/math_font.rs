@@ -1,15 +1,15 @@
 //! Carga de una fuente matemática instalada en el sistema.
 //!
-//! Sustituye a la fuente que antes se incrustaba en el binario. Si no hay
-//! ninguna fuente con tabla OpenType `MATH` disponible, el render de LaTeX
-//! cae a mostrar el código fuente como texto.
+//! Si no hay ninguna fuente con tabla OpenType `MATH` disponible, el render de
+//! LaTeX cae a mostrar el código fuente como texto.
 
-use std::sync::OnceLock;
-use typst::foundations::Bytes;
-use typst::text::Font;
+use std::sync::{Arc, OnceLock};
 
 /// Variable de entorno para forzar una fuente concreta (ruta a un .ttf/.otf).
 const ENV_OVERRIDE: &str = "MARMOL_MATH_FONT";
+
+/// Nombre de la familia con la que registramos la fuente en egui.
+pub const EGUI_FAMILY: &str = "marmol_math";
 
 /// Familias habituales de fuentes matemáticas, en orden de preferencia.
 #[cfg(not(target_os = "android"))]
@@ -27,14 +27,50 @@ const CANDIDATES: &[&str] = &[
     "Noto Sans Math",
 ];
 
-/// Devuelve la fuente matemática del sistema ya parseada, o `None` si no hay
-/// ninguna instalada. Se resuelve una sola vez por proceso.
-pub fn system_math_font() -> Option<&'static Font> {
-    static FONT: OnceLock<Option<Font>> = OnceLock::new();
+struct LoadedFont {
+    data: Vec<u8>,
+    #[allow(dead_code)]
+    name: String,
+}
+
+fn loaded() -> Option<&'static LoadedFont> {
+    static FONT: OnceLock<Option<LoadedFont>> = OnceLock::new();
     FONT.get_or_init(load).as_ref()
 }
 
-fn load() -> Option<Font> {
+/// Bytes de la fuente matemática del sistema, o `None` si no hay ninguna.
+pub fn system_math_font_data() -> Option<&'static [u8]> {
+    loaded().map(|font| font.data.as_slice())
+}
+
+/// Registra la fuente matemática del sistema en las definiciones de egui.
+/// Devuelve `true` si se añadió.
+pub fn install_in_font_definitions(fonts: &mut egui::FontDefinitions) -> bool {
+    let Some(data) = system_math_font_data() else {
+        return false;
+    };
+    let key = EGUI_FAMILY.to_string();
+    fonts.font_data.insert(
+        key.clone(),
+        Arc::new(egui::FontData::from_owned(data.to_vec())),
+    );
+    // La fuente matemática primero y la proporcional como fallback para
+    // símbolos que no estén en la primera (p. ej. ✓ o ■).
+    let mut chain = vec![key];
+    if let Some(defaults) = fonts
+        .families
+        .get(&egui::FontFamily::Proportional)
+        .cloned()
+    {
+        chain.extend(defaults);
+    }
+    fonts
+        .families
+        .insert(egui::FontFamily::Name(EGUI_FAMILY.into()), chain);
+    true
+}
+
+fn load() -> Option<LoadedFont> {
     if let Some(font) = load_override() {
         return Some(font);
     }
@@ -47,10 +83,11 @@ fn load() -> Option<Font> {
             let property = FontPropertyBuilder::new().family(*family).build();
             if let Some((data, _)) = system_fonts::get(&property) {
                 if has_math_table(&data) {
-                    if let Some(font) = parse(data) {
-                        println!("Marmol: usando fuente matemática del sistema: {family}");
-                        return Some(font);
-                    }
+                    println!("Marmol: usando fuente matemática del sistema: {family}");
+                    return Some(LoadedFont {
+                        data,
+                        name: (*family).to_string(),
+                    });
                 }
             }
         }
@@ -60,10 +97,8 @@ fn load() -> Option<Font> {
     {
         for (name, data) in android_font_candidates() {
             if has_math_table(&data) {
-                if let Some(font) = parse(data) {
-                    println!("Marmol: usando fuente matemática del sistema: {name}");
-                    return Some(font);
-                }
+                println!("Marmol: usando fuente matemática del sistema: {name}");
+                return Some(LoadedFont { data, name });
             }
         }
     }
@@ -74,19 +109,16 @@ fn load() -> Option<Font> {
     None
 }
 
-fn load_override() -> Option<Font> {
+fn load_override() -> Option<LoadedFont> {
     let path = std::env::var(ENV_OVERRIDE).ok()?;
     match std::fs::read(&path) {
-        Ok(data) if has_math_table(&data) => match parse(data) {
-            Some(font) => {
-                println!("Marmol: usando fuente matemática de {ENV_OVERRIDE}: {path}");
-                Some(font)
-            }
-            None => {
-                eprintln!("Marmol: {ENV_OVERRIDE} no apunta a una fuente válida: {path}");
-                None
-            }
-        },
+        Ok(data) if has_math_table(&data) => {
+            println!("Marmol: usando fuente matemática de {ENV_OVERRIDE}: {path}");
+            Some(LoadedFont {
+                data,
+                name: path,
+            })
+        }
         Ok(_) => {
             eprintln!("Marmol: {ENV_OVERRIDE} no contiene una tabla MATH: {path}");
             None
@@ -96,13 +128,6 @@ fn load_override() -> Option<Font> {
             None
         }
     }
-}
-
-fn parse(data: Vec<u8>) -> Option<Font> {
-    if data.is_empty() {
-        return None;
-    }
-    Font::new(Bytes::from(data), 0)
 }
 
 #[cfg(target_os = "android")]

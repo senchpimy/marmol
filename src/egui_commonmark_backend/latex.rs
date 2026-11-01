@@ -1,49 +1,20 @@
+//! Render de LaTeX usando el motor nativo portado de Tinta (sin Typst).
+//!
+//! Si no hay ninguna fuente matemática instalada, o la fórmula usa algo que el
+//! parser no soporta, se muestra el código fuente como texto.
+
 use crate::egui_commonmark_backend::misc::CommonMarkCache;
-use egui::{Color32, RichText, Ui};
-use std::path::PathBuf;
-use std::sync::OnceLock;
-use time::OffsetDateTime;
-use typst::diag::{FileError, FileResult};
-use typst::foundations::{Bytes, Datetime};
-use typst::syntax::{FileId, Source};
-use typst::text::{Font, FontBook};
-use typst::utils::LazyHash;
-use typst::{Library, World};
-
-/// Partes del `World` de Typst que son idénticas para todas las fórmulas:
-/// la librería estándar, el índice de fuentes y la fuente ya parseada.
-///
-/// Se construyen una sola vez. La fuente se busca en el sistema (igual que hace
-/// Tinta con Cambria Math); si no existe, `font` es `None` y las fórmulas se
-/// muestran como texto.
-struct TypstParts {
-    library: LazyHash<Library>,
-    book: LazyHash<FontBook>,
-    font: Option<Font>,
-}
-
-fn typst_parts() -> &'static TypstParts {
-    static PARTS: OnceLock<TypstParts> = OnceLock::new();
-    PARTS.get_or_init(|| {
-        let font = crate::math_font::system_math_font().cloned();
-        let book = match &font {
-            Some(font) => FontBook::from_fonts(std::slice::from_ref(font)),
-            None => FontBook::new(),
-        };
-        TypstParts {
-            library: LazyHash::new(Library::default()),
-            book: LazyHash::new(book),
-            font,
-        }
-    })
-}
+use crate::latex_math::{self, MathBox};
+use egui::{Color32, RichText, Sense, TextStyle, Ui};
+use std::sync::Arc;
 
 /// Indica si hay una fuente matemática disponible para renderizar LaTeX.
 pub fn has_math_font() -> bool {
-    crate::math_font::system_math_font().is_some()
+    crate::math_font::system_math_font_data().is_some()
 }
 
-/// Muestra el LaTeX sin renderizar cuando no hay fuente matemática.
+/// Muestra el LaTeX sin renderizar cuando no hay fuente matemática o el parser
+/// no soporta la fórmula.
 fn render_as_text(ui: &mut Ui, latex: &str, inline: bool) {
     let text = if inline {
         format!("${latex}$")
@@ -62,52 +33,34 @@ fn render_as_text(ui: &mut Ui, latex: &str, inline: bool) {
     }
 }
 
-struct MinimalWorld {
-    parts: &'static TypstParts,
-    source: Source,
-    time: time::OffsetDateTime,
+fn math_family() -> egui::FontFamily {
+    egui::FontFamily::Name(crate::math_font::EGUI_FAMILY.into())
 }
 
-impl MinimalWorld {
-    fn new(source_text: String) -> Self {
-        Self {
-            parts: typst_parts(),
-            source: Source::detached(source_text),
-            time: OffsetDateTime::now_utc(),
-        }
-    }
+fn build_math_box(ui: &Ui, latex: &str, inline: bool, font_size: f32) -> Option<MathBox> {
+    let node = latex_math::parse_latex(latex)?;
+    let mut measurer = latex_math::EguiMeasurer::new(ui, math_family());
+    Some(latex_math::layout(&node, font_size, !inline, &mut measurer))
 }
 
-impl World for MinimalWorld {
-    fn library(&self) -> &LazyHash<Library> {
-        &self.parts.library
-    }
-    fn book(&self) -> &LazyHash<FontBook> {
-        &self.parts.book
-    }
-    fn main(&self) -> FileId {
-        self.source.id()
-    }
-    fn source(&self, id: FileId) -> FileResult<Source> {
-        if id == self.source.id() {
-            Ok(self.source.clone())
-        } else {
-            Err(FileError::NotFound(PathBuf::new()))
-        }
-    }
-    fn file(&self, _id: FileId) -> FileResult<Bytes> {
-        Err(FileError::NotFound(PathBuf::new()))
-    }
-    fn font(&self, index: usize) -> Option<Font> {
-        if index == 0 {
-            self.parts.font.clone()
-        } else {
-            None
-        }
-    }
-    fn today(&self, _offset: Option<i64>) -> Option<Datetime> {
-        Some(Datetime::Date(self.time.date()))
-    }
+fn draw_inline(ui: &mut Ui, math_box: &MathBox, color: Color32) {
+    let size = egui::vec2(math_box.width.max(1.0), math_box.height.max(1.0));
+    let (rect, _) = ui.allocate_exact_size(size, Sense::hover());
+
+    // Alinear la línea base de la fórmula con la del texto que la rodea.
+    let line_height = ui.text_style_height(&TextStyle::Body);
+    let text_descent = (line_height * 0.2).max(0.0);
+    let origin = egui::pos2(
+        rect.left(),
+        rect.bottom() - text_descent - math_box.baseline,
+    );
+    latex_math::render::draw(ui, math_box, origin, color);
+}
+
+fn draw_display(ui: &mut Ui, math_box: &MathBox, color: Color32) {
+    let size = egui::vec2(math_box.width.max(1.0), math_box.height.max(1.0));
+    let (rect, _) = ui.allocate_exact_size(size, Sense::hover());
+    latex_math::render::draw(ui, math_box, rect.min, color);
 }
 
 pub fn render(ui: &mut Ui, cache: &mut CommonMarkCache, latex: &str, inline: bool, font_size: f32) {
@@ -116,104 +69,140 @@ pub fn render(ui: &mut Ui, cache: &mut CommonMarkCache, latex: &str, inline: boo
         return;
     }
 
-    let text_color = ui.visuals().text_color();
-    let color_hex = format!(
-        "#{:02x}{:02x}{:02x}",
-        text_color.r(),
-        text_color.g(),
-        text_color.b()
-    );
-    let cache_key = format!("{}_{}_{}_{}", latex, inline, color_hex, font_size);
+    let color = ui.visuals().text_color();
+    let cache_key = format!("{latex}_{inline}_{font_size}_{color:?}");
 
-    let svg_content = if let Some(svg) = cache.latex_cache.get(&cache_key) {
-        Some(svg.clone())
-    } else if let Some(err) = cache.latex_error_cache.get(&cache_key) {
-        ui.label(RichText::new(format!("LaTeX error: {}", err)).color(Color32::RED));
-        None
-    } else {
-        match render_to_svg(latex, inline, &color_hex, font_size) {
-            Ok(svg) => {
-                super::misc::insert_cached(&mut cache.latex_cache, cache_key.clone(), svg.clone());
-                Some(svg)
-            }
-            Err(err) => {
-                super::misc::insert_cached(
-                    &mut cache.latex_error_cache,
-                    cache_key.clone(),
-                    err.clone(),
-                );
-                ui.label(RichText::new(format!("LaTeX error: {}", err)).color(Color32::RED));
-                None
+    if let Some(math_box) = cache.latex_cache.get(&cache_key) {
+        if inline {
+            draw_inline(ui, math_box, color);
+        } else {
+            draw_display(ui, math_box, color);
+        }
+        return;
+    }
+    if cache.latex_error_cache.contains_key(&cache_key) {
+        render_as_text(ui, latex, inline);
+        return;
+    }
+
+    match build_math_box(ui, latex, inline, font_size) {
+        Some(math_box) => {
+            let math_box = Arc::new(math_box);
+            super::misc::insert_cached(&mut cache.latex_cache, cache_key, math_box.clone());
+            if inline {
+                draw_inline(ui, &math_box, color);
+            } else {
+                draw_display(ui, &math_box, color);
             }
         }
-    };
-
-    if let Some(svg) = svg_content {
-        let uri = format!("bytes://latex_{}.svg", egui::Id::new(&cache_key).value());
-        let mut img = egui::Image::from_bytes(uri, svg.as_bytes().to_vec());
-
-        if inline || (latex.len() < 50 && !latex.contains('\n')) {
-            // No need to fit to original size 1.3 if we are already using the correct font size
-            img = img.fit_to_original_size(1.0); 
-
-            ui.vertical(|ui| {
-                ui.add_space(1.0);
-                ui.add(img);
-            });
-        } else {
-            img = img.fit_to_original_size(1.0);
-            ui.vertical_centered(|ui| {
-                ui.add(img.max_width(ui.available_width()));
-            });
+        None => {
+            super::misc::insert_cached(
+                &mut cache.latex_error_cache,
+                cache_key,
+                "unsupported".to_string(),
+            );
+            render_as_text(ui, latex, inline);
         }
     }
 }
 
-pub fn render_to_svg(latex_input: &str, inline: bool, color_hex: &str, font_size: f32) -> Result<String, String> {
-    // Fuente + librería + índice de fuentes se reutilizan (se construyen una vez).
-    let parts = typst_parts();
-    let Some(font) = &parts.font else {
-        return Err("No hay ninguna fuente matemática instalada".to_string());
-    };
+/// Medidor aproximado para herramientas/tests que no tienen una `Ui`.
+pub struct SimpleMeasurer;
 
-    // Convertir LaTeX a Typst Math
-    let clean_latex = latex_input.replace('\n', "");
-    let typst_math = crate::format::latex_a_typst(&clean_latex);
-
-    let font_family = font.info().family.clone();
-
-    let margin = if inline {
-        "0.5pt"
-    } else {
-        "0pt"
-    };
-
-    let typst_code = format!(
-        r#"
-        #set page(width: auto, height: auto, margin: {}, fill: none)
-        #set text(font: "{}", size: {}pt, fill: rgb("{}"))
-        #show math.equation: set text(font: "{}", fill: rgb("{}"))
-        $ {} $
-        "#,
-        margin, font_family, font_size, color_hex, font_family, color_hex, typst_math
-    );
-
-    let world = MinimalWorld::new(typst_code);
-
-    match typst::compile(&world).output {
-        Ok(document) => {
-            if document.pages.is_empty() {
-                return Err("No se generaron páginas".to_string());
-            }
-            Ok(typst_svg::svg(&document.pages[0]))
+impl latex_math::Measurer for SimpleMeasurer {
+    fn measure(&mut self, text: &str, size: f32, _italic: bool, _bold: bool) -> latex_math::Metrics {
+        let width = text.chars().count() as f32 * size * 0.5;
+        latex_math::Metrics {
+            width,
+            ascent: size * 0.8,
+            descent: size * 0.2,
         }
-        Err(errors) => {
-            let mut msg = String::new();
-            for err in errors {
-                msg.push_str(&err.message);
-                msg.push('\n');
-            }
-            Err(msg)
+    }
+}
+
+/// Layout sin egui (para `examples/verificar_latex.rs` y tests).
+pub fn layout_only(latex: &str, inline: bool, font_size: f32) -> Option<MathBox> {
+    let node = latex_math::parse_latex(latex)?;
+    let mut measurer = SimpleMeasurer;
+    Some(latex_math::layout(&node, font_size, !inline, &mut measurer))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn context_with_math_font() -> Option<egui::Context> {
+        if !has_math_font() {
+            return None;
         }
+        let ctx = egui::Context::default();
+        let mut fonts = egui::FontDefinitions::default();
+        crate::math_font::install_in_font_definitions(&mut fonts);
+        ctx.set_fonts(fonts);
+        Some(ctx)
+    }
+
+    #[test]
+    fn renders_inline_and_display_math_in_egui() {
+        let Some(ctx) = context_with_math_font() else {
+            return;
+        };
+        let mut cache = CommonMarkCache::default();
+        for (tex, inline) in [
+            (r"\frac{a}{b}", true),
+            (r"\sqrt{x^2 + y^2}", true),
+            (r"\begin{pmatrix} a & b \\ c & d \end{pmatrix}", false),
+            (r"\sum_{i=0}^{n} i^2", false),
+        ] {
+            let mut output = ctx.run_ui(egui::RawInput::default(), |ui| {
+                render(ui, &mut cache, tex, inline, 16.0);
+            });
+            output.textures_delta.clear();
+        }
+        assert_eq!(cache.latex_cache.len(), 4);
+    }
+
+    #[test]
+    fn unsupported_latex_falls_back_to_source_text() {
+        let Some(ctx) = context_with_math_font() else {
+            return;
+        };
+        let mut cache = CommonMarkCache::default();
+        let mut output = ctx.run_ui(egui::RawInput::default(), |ui| {
+            render(ui, &mut cache, r"\comandoquenoexiste", true, 16.0);
+        });
+        output.textures_delta.clear();
+        assert!(cache.latex_cache.is_empty());
+        assert_eq!(cache.latex_error_cache.len(), 1);
+    }
+
+    #[test]
+    fn reported_formulas_render_in_egui() {
+        let Some(ctx) = context_with_math_font() else {
+            return;
+        };
+        let formulas = [
+            r"v - (e - 1) + (r - 1) = 2 \implies v - e + 1 + r - 1 = 2 \implies v - e + r = 2 \quad \blacksquare",
+            r"v - e + r = v - (v - 1) + 1 = v - v + 1 + 1 = 2 \quad \checkmark",
+            r"\mathbb{P}(E_1 \cup \dots \cup E_n) = \sum_{i=1}^{n} \mathbb{P}(E_i) - \sum_{i_1 < i_2} \mathbb{P}(E_{i_1} \cap E_{i_2}) \\
+\\ + \dots + (-1)^{1+r} \sum_{i_1 < i_2 < \dots < i_r} \mathbb{P}(E_{i_1} \cap E_{i_2} \cap \dots \cap E_{i_r}) \\
+\\ + \dots + (-1)^{n+1} \mathbb{P}(E_1 \cap \dots \cap E_n)",
+            r"\begin{aligned}
+\sum_{i} g(a_i) \, p(a_i) &= \sum_{j} \sum_{\{i \mid g(a_i) = y_j\}} g(a_i) \, p(a_i) \\[6pt]
+&= \sum_{j} y_j \left( \sum_{\{i \mid g(a_i) = y_j\}} p(a_i) \right) \\[6pt]
+&= \sum_{j} y_j \cdot \mathbb{P}\big(g(X) = y_j\big) \\[6pt]
+&= \sum_{j} y_j \cdot \mathbb{P}(Y = y_j) \\[6pt]
+&= \mathbb{E}[Y] = \mathbb{E}[g(X)] \quad \blacksquare
+\end{aligned}",
+        ];
+        let mut cache = CommonMarkCache::default();
+        for tex in formulas {
+            let mut output = ctx.run_ui(egui::RawInput::default(), |ui| {
+                render(ui, &mut cache, tex, false, 16.0);
+            });
+            output.textures_delta.clear();
+        }
+        assert_eq!(cache.latex_cache.len(), formulas.len());
+        assert!(cache.latex_error_cache.is_empty());
     }
 }
