@@ -41,7 +41,8 @@ duplicate = "2.0"
 paste = "1.0"
 pulldown-cmark = "0.13"
 percent-encoding = "2.3"
-vega_lite_5 = "0.8.0"
+# Compilador y renderizador Vega/Vega-Lite -> SVG en Rust puro.
+vega-svg = { path = "../vega_impl/vega-svg" }
 flate2 = "1.1.9"
 icu_calendar = "=2.1.1"
 icu_locale = "=2.1.1"
@@ -53,7 +54,6 @@ idna_adapter = "=1.2.1"
 tokio = { version = "1.36.0", features = ["rt", "rt-multi-thread"] }
 tokio-util = "=0.7.19"
 tokio-stream = "=0.1.19"
-vl-convert-rs = { git = "https://github.com/vega/vl-convert", package = "vl-convert-rs", rev = "badf31ba0ccd7098e239f7e4d09d463fc35e88b5" }
 arboard = { version = "3.6.1", features = ["image", "wayland-data-control"] }
 rust_tikz = { git = "https://github.com/siefkenj/rust-tikzjax", package = "rust-tikz", rev = "6489950f25dddecb899b86c6c00f5891b3077dd7" }
 resvg = { version = "0.45", features = ["text", "system-fonts"] }

@@ -6,18 +6,11 @@ use std::sync::{Arc, Mutex, OnceLock};
 use crate::egui_commonmark_backend::pulldown::ScrollableCache;
 
 static VEGA_RESULTS: OnceLock<Arc<Mutex<HashMap<String, String>>>> = OnceLock::new();
-static VL_CONVERTER: OnceLock<Arc<tokio::sync::Mutex<vl_convert_rs::VlConverter>>> = OnceLock::new();
 static TOKIO_RUNTIME: OnceLock<tokio::runtime::Runtime> = OnceLock::new();
 
 fn get_vega_results() -> Arc<Mutex<HashMap<String, String>>> {
     VEGA_RESULTS
         .get_or_init(|| Arc::new(Mutex::new(HashMap::new())))
-        .clone()
-}
-
-fn get_vl_converter() -> Arc<tokio::sync::Mutex<vl_convert_rs::VlConverter>> {
-    VL_CONVERTER
-        .get_or_init(|| Arc::new(tokio::sync::Mutex::new(vl_convert_rs::VlConverter::new())))
         .clone()
 }
 
@@ -36,6 +29,55 @@ fn get_tikz_results() -> Arc<Mutex<HashMap<String, String>>> {
     TIKZ_RESULTS
         .get_or_init(|| Arc::new(Mutex::new(HashMap::new())))
         .clone()
+}
+
+/// Config de Vega-Lite para el tema oscuro de Marmol. Se fusiona con la que
+/// traiga el propio spec (el usuario tiene prioridad).
+fn vega_lite_theme_config(is_dark: bool) -> serde_json::Value {
+    if !is_dark {
+        return serde_json::json!({});
+    }
+    serde_json::json!({
+        "axis": {
+            "labelColor": "#d8dee9",
+            "titleColor": "#d8dee9",
+            "gridColor": "#434c5e",
+            "domainColor": "#4c566a",
+            "tickColor": "#4c566a"
+        },
+        "legend": {
+            "labelColor": "#d8dee9",
+            "titleColor": "#d8dee9"
+        },
+        "title": { "color": "#d8dee9" },
+        "view": { "stroke": "#4c566a" }
+    })
+}
+
+/// Prepara un spec de Vega-Lite para el renderizador nativo: mezcla la config
+/// del tema con la del usuario y fuerza fondo transparente.
+fn prepare_vega_lite_spec(
+    mut spec: serde_json::Value,
+    is_dark: bool,
+) -> serde_json::Value {
+    if let Some(obj) = spec.as_object_mut() {
+        let mut merged = vega_lite_theme_config(is_dark);
+        if let Some(serde_json::Value::Object(user)) = obj.remove("config") {
+            if let Some(target) = merged.as_object_mut() {
+                for (key, value) in user {
+                    target.insert(key, value);
+                }
+            }
+        }
+        if merged.as_object().is_some_and(|m| !m.is_empty()) {
+            obj.insert("config".to_string(), merged);
+        }
+        obj.insert(
+            "background".to_string(),
+            serde_json::Value::String("transparent".to_string()),
+        );
+    }
+    spec
 }
 
 fn detectar_librerias_tikz(content: &str) -> Vec<&'static str> {
@@ -779,99 +821,66 @@ impl CodeBlock {
                         // Marcar como cargando para evitar peticiones infinitas cada frame
                         insert_cached(cache_map, self.content.clone(), "LOADING".to_string());
 
-                        // Vega/Vega-Lite rendering local via vl-convert-rs
+                        // Vega/Vega-Lite rendering local con vega-svg (Rust puro)
                         let content = self.content.clone();
                         let is_vegalite_tag = lang_lower == "vega-lite";
                         let results = get_vega_results();
-                        let converter = get_vl_converter();
                         let rt = get_tokio_runtime();
                         let ctx = ui.ctx().clone();
                         let is_dark = ui.visuals().dark_mode;
 
                         rt.spawn(async move {
-                            let vega_spec: Result<serde_json::Value, _> =
-                                serde_json::from_str(&content);
+                            let spec: serde_json::Value = match serde_json::from_str(&content) {
+                                Ok(spec) => spec,
+                                Err(e) => {
+                                    let mut res = results.lock().unwrap();
+                                    insert_cached(
+                                        &mut res,
+                                        content,
+                                        format!("ERROR: Invalid JSON for Vega: {e}"),
+                                    );
+                                    ctx.request_repaint();
+                                    return;
+                                }
+                            };
 
-                            match vega_spec {
-                                Ok(spec) => {
-                                    let mut conv = converter.lock().await;
-                                    
-                                    let theme = if is_dark {
-                                        Some("dark".to_string())
-                                    } else {
-                                        None
-                                    };
+                            // Detecta Vega-Lite también cuando el fence está mal etiquetado.
+                            let actually_vegalite = spec
+                                .get("$schema")
+                                .and_then(|s| s.as_str())
+                                .map(|schema| schema.contains("vega-lite"))
+                                .unwrap_or(is_vegalite_tag);
 
-                                    // Force transparent background via config
-                                    let mut config_map = serde_json::Map::new();
-                                    config_map.insert("background".to_string(), serde_json::Value::String("transparent".to_string()));
-                                    let config = Some(serde_json::Value::Object(config_map));
+                            let opts = vega_svg::RenderOptions {
+                                background: Some("transparent".to_string()),
+                                ..Default::default()
+                            };
 
-                                    // Detect if it's vega-lite even if tagged as vega
-                                    let actually_vegalite = if let Some(schema) = spec.get("$schema").and_then(|s| s.as_str()) {
-                                        schema.contains("vega-lite")
-                                    } else {
-                                        is_vegalite_tag
-                                    };
+                            let rendered = if actually_vegalite {
+                                let prepared = prepare_vega_lite_spec(spec, is_dark);
+                                vega_svg::vega_lite_to_svg_with_options(&prepared, &opts)
+                            } else {
+                                vega_svg::vega_to_svg_with_options(&spec, &opts)
+                            };
 
-                                    let svg_opts = vl_convert_rs::converter::SvgOpts { bundle: false };
-                                    let result = if actually_vegalite {
-                                        let opts = vl_convert_rs::converter::VlOpts {
-                                            vl_version: vl_convert_rs::VlVersion::v5_21,
-                                            config,
-                                            theme,
-                                            format_locale: None,
-                                            time_format_locale: None,
-                                            google_fonts: None,
-                                            vega_plugin: None,
-                                            background: None,
-                                            width: None,
-                                            height: None,
-                                        };
-                                        conv.vegalite_to_svg(spec, opts, svg_opts).await
-                                    } else {
-                                        let opts = vl_convert_rs::converter::VgOpts {
-                                            format_locale: None,
-                                            time_format_locale: None,
-                                            vega_plugin: None,
-                                            google_fonts: None,
-                                            config: None,
-                                            background: None,
-                                            width: None,
-                                            height: None,
-                                        };
-                                        conv.vega_to_svg(spec, opts, svg_opts).await
-                                    };
+                            match rendered {
+                                Ok(mut svg) => {
+                                    // Fix potential font issues
+                                    svg = svg.replace("\"Segoe UI\"", "'Segoe UI'");
 
-                                    match result {
-                                        Ok(mut out) => {
-                                            // Fix potential font issues
-                                            let mut svg = out.svg;
-                                            svg = svg.replace("\"Segoe UI\"", "'Segoe UI'");
-
-                                            if let Some(start) = svg.find("<svg") {
-                                                svg = svg[start..].to_string();
-                                            }
-                                            
-                                            let mut res_lock = results.lock().unwrap();
-                                            insert_cached(&mut res_lock, content, svg);
-                                        }
-                                        Err(e) => {
-                                            let mut res_lock = results.lock().unwrap();
-                                            insert_cached(
-                                                &mut res_lock,
-                                                content,
-                                                format!("ERROR: Vega conversion: {}", e),
-                                            );
-                                        }
+                                    if let Some(start) = svg.find("<svg") {
+                                        svg = svg[start..].to_string();
                                     }
+
+                                    let mut res = results.lock().unwrap();
+                                    insert_cached(&mut res, content, svg);
                                 }
                                 Err(e) => {
-                                    let mut res_lock = results.lock().unwrap();
+                                    let mut res = results.lock().unwrap();
                                     insert_cached(
-                                        &mut res_lock,
+                                        &mut res,
                                         content,
-                                        format!("ERROR: Invalid JSON for Vega: {}", e),
+                                        format!("ERROR: Vega render: {e}"),
                                     );
                                 }
                             }
@@ -1285,3 +1294,63 @@ pub fn prepare_show(cache: &mut CommonMarkCache, ctx: &egui::Context) {
     cache.deactivate_link_hooks();
 }
 
+
+#[cfg(test)]
+mod vega_lite_tests {
+    use super::*;
+
+    fn bar_spec() -> serde_json::Value {
+        serde_json::json!({
+            "data": {
+                "values": [
+                    {"categoria": "A", "valor": 28},
+                    {"categoria": "B", "valor": 55},
+                    {"categoria": "C", "valor": 43}
+                ]
+            },
+            "mark": "bar",
+            "encoding": {
+                "x": {"field": "categoria", "type": "nominal"},
+                "y": {"field": "valor", "type": "quantitative"}
+            }
+        })
+    }
+
+    fn render_vl(spec: serde_json::Value, is_dark: bool) -> Result<String, String> {
+        let prepared = prepare_vega_lite_spec(spec, is_dark);
+        let opts = vega_svg::RenderOptions {
+            background: Some("transparent".to_string()),
+            ..Default::default()
+        };
+        vega_svg::vega_lite_to_svg_with_options(&prepared, &opts)
+            .map_err(|e| e.to_string())
+    }
+
+    #[test]
+    fn renders_bar_chart_to_svg() {
+        let svg = render_vl(bar_spec(), false).expect("debe renderizar");
+        assert!(svg.contains("<svg"), "no parece SVG: {svg:.200}");
+        assert!(svg.contains("<rect"), "faltan barras: {svg:.200}");
+        assert!(svg.contains("transparent"), "falta fondo transparente");
+    }
+
+    #[test]
+    fn invalid_spec_returns_error() {
+        assert!(render_vl(serde_json::json!([1, 2, 3]), false).is_err());
+    }
+
+    #[test]
+    fn keeps_user_config_over_theme() {
+        let mut spec = bar_spec();
+        spec["config"] = serde_json::json!({"axis": {"labelColor": "#ff0000"}});
+        let prepared = prepare_vega_lite_spec(spec, true);
+        assert_eq!(
+            prepared
+                .get("config")
+                .and_then(|c| c.get("axis"))
+                .and_then(|a| a.get("labelColor"))
+                .and_then(|c| c.as_str()),
+            Some("#ff0000")
+        );
+    }
+}
